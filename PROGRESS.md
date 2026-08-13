@@ -148,3 +148,31 @@
 ```
 修改：src/pages/DailyPlan.tsx、structure.md
 ```
+
+## 2026-08-13 — 审计：模板功能的存储/读写/导入导出是否跟上
+
+### 需求
+
+任务清单模板是后续增加的功能，检查数据存储、读写、导入导出各层是否都已覆盖（有没有漏掉的表枚举、文档、测试）。
+
+### 结论（审计结果）
+
+核心链路已跟上，无功能缺口：store.ts 全部表枚举（StorageData/指纹/增量写/合并/自愈/快照/计数器）、db/index.ts（CRUD+软删除+还原）、legacy（模板无旧表属正常，mergeLegacy 以 `?? []` 兜底）、facade、Trash 标签均含 taskTemplates；templates.json 读写与空目录判定已有测试。
+
+发现并修复的缺口：
+1. 文档：store.ts 头部布局注释、备份页两处存储布局说明（`BackupRestore.tsx`）漏掉 templates.json → 补上。
+2. 测试：无「导出→导入」模板往返验证（换手机场景）→ `store.test.ts` 新增往返测试（导出备份含模板，重置后导入完整恢复）。
+3. 测试 schema 复刻：`jsonImport.test.ts` 本地 StorageData 接口与样例缺 taskItems/taskTemplates → 同步。
+4. 附带（与模板无关的旧问题）：`Trash.tsx` 的 TABLE_LABELS 漏 taskItems，回收站显示原始字符串 → 补标签「任务清单项」。
+5. structure.md 测试表 store.test.ts 行计数陈旧（28 vs 实际 35）→ 更正为 36。
+
+### 验证
+
+- `npx vitest run` **328/328 通过**（新增 1 个模板往返测试）。
+
+### 涉及文件
+
+```
+修改：src/services/store.ts（注释）、src/pages/BackupRestore.tsx（布局说明）、src/pages/Trash.tsx（标签）
+修改：test/数据存储/store.test.ts（+1 测试）、test/数据导入导出/jsonImport.test.ts（schema 同步）、structure.md（测试计数）
+```

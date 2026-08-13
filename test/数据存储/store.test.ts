@@ -537,6 +537,20 @@ describe('导出备份文件', () => {
     expect(parsed.longTermGoals).toHaveLength(1);
   });
 
+  it('导出→重置→导入往返：任务清单模板完整恢复（换手机场景）', async () => {
+    await db.saveTaskTemplate({ name: '往返模板', items: [{ id: genId(), text: '项', done: false }], createdAt: 0, updatedAt: 0 } as any);
+    await exportBackupFile();
+    const backup = blobContent;
+    expect(JSON.parse(backup).taskTemplates).toHaveLength(1); // 备份包含模板
+
+    await _resetForTest();
+    const count = await importJSONIntoStore(backup);
+    expect(count).toBe(1);
+    const list = await db.getAllTaskTemplates();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('往返模板');
+  });
+
   // 回归：浏览器里静态引入 @capacitor/app 会让 window.Capacitor 存在，
   // 但平台仍是 web，必须走浏览器下载，而不是 Capacitor Filesystem（否则抛 base64 错误）。
   it('浏览器存在 window.Capacitor 但平台=web：导出走浏览器下载，不抛 base64 错误', async () => {

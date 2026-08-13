@@ -13,6 +13,7 @@
  *     goals.json                     长期目标
  *     routines.json                  固定作息模板
  *     trash.json                     回收站
+ *     templates.json                 任务清单模板
  *
  * 写盘策略：
  *   - mutate() 先对每张表做指纹快照，变更后对比，只写"变脏"的文件

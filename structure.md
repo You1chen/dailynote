@@ -446,9 +446,9 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `test/数据导入导出/jsonImport.test.ts` | 23 | JSON 解析、BOM 处理、乱码拒绝、微信缓存检测、round-trip |
 | `test/偏好设置/preferences.test.ts` | 15 | 默认值、localStorage 存取、旧版兼容、主题应用逻辑 |
 | `test/任务清单/taskList.test.ts` | 18 | 创建、完成切换、排序、统计、日期隔离、边界情况 |
-| `test/数据存储/store.test.ts` | 28 | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份 |
+| `test/数据存储/store.test.ts` | 36 | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份（含模板导出→导入往返） |
 | `test/任务清单/taskTemplate.test.ts` | 13 | 模板 CRUD/更新、软删除进回收站与还原、templates.json 持久化、增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数 |
-| **总计** | **327** | |
+| **总计** | **328** | |
 
 运行：`npx vitest run`（偶尔需先 `rm -rf node_modules/.vite node_modules/.vitest` 清缓存）
 

@@ -26,7 +26,8 @@ interface StorageData {
   reflections: unknown[];
   harvests: unknown[];
   fixedRoutines: unknown[];
-  taskItems?: unknown[];  // v4 新增，可选（向后兼容）
+  taskItems?: unknown[];     // v4 新增，可选（向后兼容）
+  taskTemplates?: unknown[]; // 任务清单模板，可选（向后兼容）
 }
 
 /**
@@ -88,6 +89,8 @@ function makeValidJSON(overrides: Partial<StorageData> = {}): string {
     reflections: [],
     harvests: [],
     fixedRoutines: [],
+    taskItems: [],
+    taskTemplates: [],
     ...overrides,
   };
   return JSON.stringify(data, null, 2);
@@ -335,6 +338,8 @@ describe('JSON 导出 — 格式验证', () => {
     expect(parsed).toHaveProperty('reflections');
     expect(parsed).toHaveProperty('harvests');
     expect(parsed).toHaveProperty('fixedRoutines');
+    expect(parsed).toHaveProperty('taskItems');
+    expect(parsed).toHaveProperty('taskTemplates');
   });
 
   it('round-trip: 导出 → 导入应保持数据一致', () => {

@@ -138,7 +138,7 @@ export default function BackupRestorePage() {
               {getDisplayPath()}
             </p>
             <p className="backup-desc">
-              数据保存在此目录下，按「日期文件夹 + 类型文件」组织（days/&lt;日期&gt;/plan、reflections、harvests、tasks，以及 goals、routines、trash）。卸载 App 后目录保留，重新安装选择相同路径即可恢复。
+              数据保存在此目录下，按「日期文件夹 + 类型文件」组织（days/&lt;日期&gt;/plan、reflections、harvests、tasks，以及 goals、routines、templates、trash）。卸载 App 后目录保留，重新安装选择相同路径即可恢复。
             </p>
           </div>
         </div>
@@ -253,7 +253,7 @@ export default function BackupRestorePage() {
         </h4>
         <ul className="backup-guide">
           <li>数据存放在设备公共 Documents 目录，不在应用沙箱内</li>
-          <li>按日期与类型分文件存储：days/&lt;日期&gt;/{'{plan,reflections,harvests,tasks}.json'}，加上 goals.json、routines.json、trash.json</li>
+          <li>按日期与类型分文件存储：days/&lt;日期&gt;/{'{plan,reflections,harvests,tasks}.json'}，加上 goals.json、routines.json、templates.json、trash.json</li>
           <li>每次修改只写被改到的文件，立即保存（无延迟）</li>
           <li>启动时从文件读取数据，确保卸载重装不丢失</li>
           <li>重装后指定相同目录即可恢复全部数据（含回收站）</li>

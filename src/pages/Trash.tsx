@@ -7,6 +7,7 @@ const TABLE_LABELS: Record<string, string> = {
   reflections: '反思',
   harvests: '收获',
   fixedRoutines: '作息模板',
+  taskItems: '任务清单项',
   taskTemplates: '任务清单模板',
   timeBlocks: '时间块',
 };
