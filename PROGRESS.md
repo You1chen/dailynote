@@ -262,3 +262,35 @@
 新增：src/utils/holidays.ts、src/utils/courseSchedule.ts、src/pages/CoursesPage.tsx / .css、test/课程表/courseSchedule.test.ts
 修改：src/types/index.ts、src/services/store.ts、src/db/index.ts、src/pages/DailyPlan.tsx / .css、src/components/FullscreenSchedule.tsx / .css、src/components/SideMenu.tsx、src/App.tsx、src/pages/Trash.tsx、src/pages/BackupRestore.tsx、test/数据存储/store.test.ts、test/数据导入导出/jsonImport.test.ts、structure.md
 ```
+
+## 2026-08-13 — 课程表页二维课表视图 + 独立周视图
+
+### 需求
+
+课程表补上二维视图，并做好与周视图的解耦（用户两次澄清的绑定设计）：
+
+- 课程表页（/courses）内部有「视图」切换按钮，两个视图都必须在课程表页里：列表视图（课程管理 + 第 X–Y 周结构信息）与课表视图（二维模板网格，只含课程，必须单独做，不允许只留一维列表）。
+- 课程表视图 = 课程的立体结构：只有课程状态，时间跨度覆盖全学期（模板语义，不按具体周过滤，单双周靠角标提示）。
+- 周视图 = 独立的通用周日程：忠实同步课程安排（按具体周过滤，单双周/周次/节假日生效），但不只有课程（当天计划任务块同样显示）、时间跨度不限于学校周（任意周导航）。
+- 交互仅限点击课程块弹编辑弹窗；两个视图的空白格都不做新建。
+
+### 实现
+
+- **共享编辑弹窗（解耦核心）**：新增 src/components/CourseEditModal.tsx / .css，把 CoursesPage 的弹窗逻辑原样迁出（课程名/教师/地点/星期多选 chips/起止时间校验/单双周/周数范围），导出 DAY_LABELS、WEEK_TYPE_LABELS 供两页复用；Props `{ course, onClose, onSaved }`（null=新建），内部直接 saveCourse。
+- **课程表页双视图**（CoursesPage.tsx / .css）：`viewMode: 'list' | 'grid'`（默认列表），页面内「列表 / 课表」chips 与「添加课程」并排；课表视图隐藏学期设置，只显示二维模板网格——星期 × 时间（0–24h，blockRenderRect 几何 + 偏好小时高度）、显示全部课程、单/双周块带「单/双」角标、tooltip 含第 X–Y 周、点块弹共享编辑弹窗、空白格无处理；固定高度容器 + 网格内部滚动（横向 min-width 408px = 44 时间列 + 7×52）。
+- **周视图页**（新增 src/pages/WeekViewPage.tsx / .css，路由 /week）：`weekStart` 状态 + 任意周导航（‹ 上一周 / 标题点击回本周 / 下一周 ›）；课程块逐列 `computeDayCourses(courses, semester, dateStr)` 按具体周忠实过滤；任务块来自各天 getPlanByDate 只读展示（主色调，z=3 高于课程块 z=2，无点击）；表头 sticky：星期 + M/d + 第 X 周（有学期时）+ 放假角标（无学期时内置表仍生效）；无空白格新建；无学期时课程列全空但任务块仍显示。
+- **入口**：App.tsx 加 /week 路由；SideMenu 菜单「课程表」与「宏观视图」之间加「周视图」条目。
+- **架构解耦**：WeekViewPage 仅通过 db 调用 + 共享 CourseEditModal 读取课程数据，不依赖 CoursesPage 任何内部状态；课程表视图（模板）与周视图（按周过滤）语义刻意区分。
+
+### 验证
+
+- `npm run build` 通过；`npx vitest run` 386/386 全绿（无新纯逻辑，未新增单测）。
+- 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）29/29 项通过：课程表页列表/课表切换、模板网格两门课全显示（含单周课）、单/双角标、tooltip 周数跨度、列 x 位置、点块编辑改名同步、空白格无弹窗、新建弹窗取消、周视图默认本周第 1 周课程块与任务块、点课程块编辑、任务块只读、空白格无弹窗、下一周单周课消失/上一周恢复、7 次下一周到假期周（4 个放假角标 + 周四无课）、标题点击回本周。
+- 手工冒烟：移动端宽度横向滚动、时间列 sticky、深色模式配色正常。
+
+### 涉及文件
+
+```
+新增：src/pages/WeekViewPage.tsx / .css、src/components/CourseEditModal.tsx / .css
+修改：src/pages/CoursesPage.tsx / .css（视图切换 + 课表网格 + 弹窗迁出）、src/App.tsx、src/components/SideMenu.tsx、structure.md
+```

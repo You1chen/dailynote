@@ -128,55 +128,160 @@
   color: var(--color-text-muted);
 }
 
-/* ---- 编辑弹窗 ---- */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+/* ---- 课程表视图（二维课表网格，模板语义：显示全部课程，不按周过滤） ---- */
+
+/* 课表视图下的固定高度容器（同周视图/日视图模式），网格内部滚动 */
+.app-container--week {
+  padding-bottom: 16px;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 200;
-  padding-top: var(--safe-top);
+  flex-direction: column;
+  height: calc(100dvh - 64px - var(--safe-top));
 }
 
-.modal {
-  background: var(--color-surface);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
-  width: 100%;
-  max-width: 480px;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-title {
-  font-size: var(--font-lg);
-  font-weight: 700;
-  margin-bottom: 16px;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  padding-top: 8px;
-}
-
-/* 周数范围输入行 */
-.courses-week-row {
+.courses-header-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.courses-week-label {
-  font-size: var(--font-sm);
-  color: var(--color-text-secondary);
+.courses-view-toggle {
+  display: flex;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.courses-view-toggle .settings-chip {
+  border: none;
+  border-radius: 0;
+}
+
+.ct-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 44（时间列）+ 7×52（天列） */
+.ct-inner {
+  position: relative;
+  min-width: 408px;
+}
+
+.ct-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-surface);
+}
+
+.ct-head-cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+  border-left: 1px solid var(--color-border);
+  border-bottom: 2px solid var(--color-border);
+}
+
+.ct-hour-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ct-hour-label {
+  width: 44px;
+  padding: 2px 6px 0 0;
+  text-align: right;
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  background: var(--color-surface);
+  z-index: 2;
+  user-select: none;
+}
+
+.ct-hour-line {
+  flex: 1;
+}
+
+.ct-course-block {
+  position: absolute;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  border-left: 3px solid var(--color-warning);
+  cursor: pointer;
+  overflow: hidden;
+  z-index: 2;
+  min-height: 20px;
+}
+
+.ct-course-block:active {
+  opacity: 0.9;
+}
+
+.ct-block-inner {
+  padding: 3px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ct-block-time {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--color-warning);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-block-name {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.courses-week-input {
-  width: 64px;
-  text-align: center;
+.ct-block-loc {
+  font-size: 0.5625rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+/* 单/双周角标（模板不绑定具体周，用角标提示） */
+.ct-block-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.5rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: 3px;
+  color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.25);
+}
+

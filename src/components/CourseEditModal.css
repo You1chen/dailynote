@@ -1,0 +1,59 @@
+/* ============ 课程新建/编辑弹窗（课程表页与周视图共用） ============ */
+
+/* 表单校验错误 */
+.cem-error {
+  font-size: var(--font-sm);
+  color: var(--color-danger);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-top: var(--safe-top);
+}
+
+.modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+/* 周数范围输入行 */
+.courses-week-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.courses-week-label {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.courses-week-input {
+  width: 64px;
+  text-align: center;
+}

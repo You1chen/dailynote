@@ -1,0 +1,198 @@
+/* ============ 周视图（独立通用周日程） ============ */
+
+/* 固定高度容器（同日视图 .app-container--day 模式），网格内部滚动 */
+.app-container--week {
+  padding-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 64px - var(--safe-top));
+}
+
+/* 周导航条 */
+.wv-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0 10px;
+}
+
+.wv-nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 6px 4px;
+}
+
+.wv-nav-title:hover {
+  color: var(--color-primary);
+}
+
+/* 滚动容器（横向 7 列 + 纵向 24h） */
+.wv-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 44（时间列）+ 7×52（天列） */
+.wv-inner {
+  position: relative;
+  min-width: 408px;
+}
+
+/* ---- 表头（sticky top） ---- */
+.wv-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-surface);
+}
+
+.wv-head-cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-left: 1px solid var(--color-border);
+  border-bottom: 2px solid var(--color-border);
+}
+
+.wv-head-cell--today {
+  background: var(--color-primary-bg);
+}
+
+.wv-head-day {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.wv-head-date {
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wv-head-week {
+  font-size: 0.5625rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.wv-head-holiday {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.12);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+/* ---- 小时行 ---- */
+.wv-hour-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.wv-hour-label {
+  width: 44px;
+  padding: 2px 6px 0 0;
+  text-align: right;
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  background: var(--color-surface);
+  z-index: 2;
+  user-select: none;
+}
+
+.wv-hour-line {
+  flex: 1;
+}
+
+/* ---- 课程块（琥珀色，点击弹编辑） ---- */
+.wv-course-block {
+  position: absolute;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  border-left: 3px solid var(--color-warning);
+  cursor: pointer;
+  overflow: hidden;
+  z-index: 2; /* 低于任务块（3），重叠时任务块在上 */
+  min-height: 20px;
+}
+
+.wv-course-block:active {
+  opacity: 0.9;
+}
+
+/* ---- 任务块（主色调，只读展示） ---- */
+.wv-task-block {
+  position: absolute;
+  border-radius: 6px;
+  background: var(--color-primary-bg);
+  border-left: 3px solid var(--color-primary);
+  overflow: hidden;
+  z-index: 3;
+  min-height: 20px;
+}
+
+.wv-block-inner {
+  padding: 3px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.wv-block-time {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--color-warning);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.wv-task-block .wv-block-time {
+  color: var(--color-primary);
+}
+
+.wv-block-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wv-block-loc {
+  font-size: 0.5625rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
