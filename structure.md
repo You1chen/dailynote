@@ -53,7 +53,7 @@ dailynote/
     │   └── index.ts                          # 所有数据模型类型 & genId/todayStr & normalizeCourseDayOfWeek
     │
     ├── utils/
-    │   ├── time.ts                           # 时间工具函数（toMinutes, sleep判断, blockRenderRect 块渲染矩形）
+    │   ├── time.ts                           # 时间工具函数（toMinutes, sleep判断, blockRenderRect 块渲染矩形, foldedGrid 多段折叠网格）
     │   ├── avatarCrop.ts                     # 头像裁剪纯函数（cover/钳制/缩放/裁剪矩形 + canvas 输出）
     │   ├── holidays.ts                       # 内置法定节假日表（2026 精确/2027 部分推定，需逐年更新）
     │   └── courseSchedule.ts                 # 课程表日程计算纯函数（周次/单双周/节假日/当日课程）
@@ -322,7 +322,7 @@ Hook 返回 `{ prefs, updatePrefs, resetPrefs }`。修改时实时写 localStora
 - **列表 / 课表双视图**：页面内「视图」chips 切换——列表视图 = 课程管理与结构展示（课程状态 + 第 X–Y 周跨度）；课表视图 = 二维模板网格（只含课程，隐藏学期设置）
 - **学期设置**：开学时间（`type=date`，保存即写 semester.json；未设置时提示课程不会显示）；手动特殊日期列表（放假/补课，同一天重复添加替换类型，删除有确认）
 - **课程列表**：按周日→周六分组（多星期课程在每个所选星期分组中出现），卡片显示 `时间 课程名 · 地点 · 第X-Y周 · 每周/单周/双周`
-- **课程表视图（二维模板网格）**：星期 × 时间（0–24h，`blockRenderRect` 几何 + 偏好小时高度），显示**全部课程**（模板语义，不按周过滤）；单/双周课程块带「单/双」角标，tooltip 含第 X–Y 周；点课程块弹编辑弹窗（共享 CourseEditModal），空白格不新建
+- **课程表视图（二维模板网格）**：星期 × 时间（0–24h，`blockRenderRect` 几何 + 偏好小时高度），显示**全部课程**（模板语义，不按周过滤）；单/双周课程块带「单/双」角标，tooltip 含第 X–Y 周；点课程块弹编辑弹窗（共享 CourseEditModal），空白格不新建；**默认折叠**凌晨 0:00–7:00 / 午休 12:00–13:00 / 深夜 22:00–24:00 三段为折叠条（`foldedGrid` 多段折叠几何，仅展示不点击，chip「折叠不重要时段」可展开回完整 0–24h，组件状态不持久化）
 - **新建/编辑弹窗（共享 CourseEditModal）**：课程名（必填）/教师/地点、星期 chips（**可多选**，至少保留一个）、起止时间（校验结束>开始）、单双周 chips、起始周/持续周数（clamp 1-30）；删除走回收站
 
 ### WeekViewPage.tsx — 周视图（`/week`）
@@ -494,6 +494,7 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | ------------------------------------------------- | :-----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test/时间网格点击映射/clickMapping.test.ts`    |      207      | 睡眠折叠下的像素→时间正反映射，跨夜/不跨夜/不同密度，真实点击坐标换算层回归                                                                                                                                                                                                                          |
 | `test/时间网格点击映射/blockRenderRect.test.ts` |      16      | 时间块渲染矩形：睡眠折叠时段内的块贴边界可见（⚡即时任务夜场景回归）、跨夜/不跨夜、边界时刻、非法时间                                                                                                                                                                                                 |
+| `test/时间网格点击映射/foldedGrid.test.ts`   |      18      | 多段折叠网格（课程表视图）：三段折叠条几何/分钟映射、跨折叠段块、整段内贴条 20px、边界时刻、跨夜、密度参数、乱序输入、非法时间                                                                                                                                                                          |
 | `test/数据导入导出/jsonImport.test.ts`          |      23      | JSON 解析、BOM 处理、乱码拒绝、微信缓存检测、round-trip                                                                                                                                                                                                                                               |
 | `test/偏好设置/preferences.test.ts`             |      15      | 默认值、localStorage 存取、旧版兼容、主题应用逻辑                                                                                                                                                                                                                                                     |
 | `test/偏好设置/avatarCrop.test.ts`              |      17      | 头像裁剪纯函数：cover 缩放、平移钳制、围绕点缩放像素不动、裁剪矩形映射（含随机模糊）                                                                                                                                                                                                                  |
@@ -501,7 +502,7 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `test/数据存储/store.test.ts`                   |      45      | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份（含模板导出→导入往返）、课程表存储（CRUD 往返、semester 恒 1、回收站还原原 id、导出导入含 courses+semester、仅课程数据目录回归、旧版单数字 dayOfWeek 归一化） |
 | `test/任务清单/taskTemplate.test.ts`            |      13      | 模板 CRUD/更新、软删除进回收站与还原、templates.json 持久化、增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数                                                                                                                                                               |
 | `test/课程表/courseSchedule.test.ts`            |      32      | weekdayOf/mondayOf、weekIndex（周一/周中开学、早于开学、跨年）、isCourseActiveOnWeek（单双周+区间边界）、内置节假日表（2026/2027、无重复）、isDayHoliday（手动>内置、补课覆盖）、computeDayCourses（星期多选/周次/节假日/排序/多天课程）、dayOfWeek 旧数据归一化                                      |
-| **总计**                                    | **386** |                                                                                                                                                                                                                                                                                                       |
+| **总计**                                    | **404** |                                                                                                                                                                                                                                                                                                       |
 
 运行：`npx vitest run`（偶尔需先 `rm -rf node_modules/.vite node_modules/.vitest` 清缓存）
 

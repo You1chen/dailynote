@@ -141,3 +141,83 @@ export function blockRenderRect(
 
   return { top, height: Math.max(20, btm - top) };
 }
+
+// ============ 多段折叠网格（课程表视图） ============
+
+/** 折叠时段（要求非重叠、不跨夜；内部会按开始时间排序） */
+export interface FoldRange {
+  start: string;
+  end: string;
+}
+
+/** 多段折叠网格几何：折叠条顶部偏移 + 分钟→top 映射 + 块渲染矩形 */
+export interface FoldedGridGeometry {
+  gridHeight: number;                          // 网格总高（含全部折叠条）
+  barTops: number[];                           // 每条折叠条的网格 top（不含表头偏移）
+  mapMinute: (m: number) => number;            // 折叠时段内返回 -1
+  rect: (start: string, end: string) => { top: number; height: number } | null;
+}
+
+/**
+ * 构建多段折叠时间网格（与 blockRenderRect 贴边/最小 20px 语义对齐）：
+ * 起止落入折叠段的边贴到该段边界（起点贴条下方、终点贴条顶部；末段起点贴网格底部），
+ * 整块在折叠段内时贴在该段折叠条下方 20px。返回 null 表示时间非法。
+ */
+export function foldedGrid(
+  folds: FoldRange[],
+  hourHeight: number,
+  barHeight: number,
+): FoldedGridGeometry {
+  const sorted = [...folds].sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+  const list = sorted.map(f => ({ s: timeToMinutes(f.start), e: timeToMinutes(f.end) }));
+
+  // 各折叠条顶部：位于其之前所有已折叠时长与折叠条之后
+  const barTops: number[] = [];
+  let foldedBefore = 0;
+  let totalFolded = 0;
+  list.forEach((f, i) => {
+    barTops.push(((f.s - foldedBefore) / 60) * hourHeight + i * barHeight);
+    foldedBefore += f.e - f.s;
+    totalFolded += f.e - f.s;
+  });
+  const gridHeight = ((1440 - totalFolded) / 60) * hourHeight + list.length * barHeight;
+
+  // 分钟 → 网格 top：每个已结束（fe <= m）的折叠段扣除时长并累加折叠条偏移；段内 → -1
+  const mapMinute = (m: number): number => {
+    let visibleBefore = 0;
+    let barsBefore = 0;
+    for (const f of list) {
+      if (m >= f.e) {
+        visibleBefore += f.e - f.s;
+        barsBefore += 1;
+      } else if (m >= f.s) {
+        return -1;
+      }
+    }
+    return ((m - visibleBefore) / 60) * hourHeight + barsBefore * barHeight;
+  };
+
+  // 分钟所在折叠段下标（-1 = 不在任何段内）
+  const foldAt = (m: number): number => list.findIndex(f => m >= f.s && m < f.e);
+
+  const rect = (start: string, end: string): { top: number; height: number } | null => {
+    const startMin = timeToMinutes(start);
+    const endMin = timeToMinutes(end);
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin)) return null;
+
+    let top = mapMinute(startMin);
+    let btm = mapMinute(endMin);
+    // 贴边：起点贴所在折叠条下方（末段即网格底部），终点贴所在折叠条顶部
+    if (top < 0) top = barTops[foldAt(startMin)] + barHeight;
+    if (btm < 0) btm = barTops[foldAt(endMin)];
+    // 整块在折叠段内：贴在该段折叠条下方 20px；贴到网格底部时收进网格内
+    if (btm <= top) {
+      const atBottom = top >= gridHeight || btm >= gridHeight;
+      top = atBottom ? gridHeight - 20 : top;
+      btm = top + 20;
+    }
+    return { top, height: Math.max(20, btm - top) };
+  };
+
+  return { gridHeight, barTops, mapMinute, rect };
+}

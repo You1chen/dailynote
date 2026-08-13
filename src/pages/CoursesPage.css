@@ -285,3 +285,29 @@
   background: rgba(245, 158, 11, 0.25);
 }
 
+/* ---- 不重要时段折叠 ---- */
+.ct-fold-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 0 8px;
+}
+
+/* 折叠条（仅展示不点击）：z=4 高于课程块/时间标签（2）、低于 sticky 表头（5） */
+.ct-fold-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #f0f0f8 0%, #e8e8f0 100%);
+  border-bottom: 1px dashed var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+
+.ct-fold-bar-text {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+

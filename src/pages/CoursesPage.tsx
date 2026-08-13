@@ -5,7 +5,7 @@ import { getAllCourses, deleteCourse, getSemester, saveSemester } from '../db';
 import type { Course, SemesterRecord } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { usePreferences } from '../hooks/usePreferences';
-import { blockRenderRect } from '../utils/time';
+import { blockRenderRect, foldedGrid } from '../utils/time';
 import CourseEditModal, { DAY_LABELS, WEEK_TYPE_LABELS } from '../components/CourseEditModal';
 // settings-section / settings-field / settings-chip 等通用表单样式复用设置页
 import './SettingsPage.css';
@@ -26,6 +26,14 @@ const TIME_COL_W = 44;
 const COL_W = 52;
 const GRID_HEADER_H = 34;
 
+// 不重要时段折叠（课程表视图专属，整点对齐；展开时走 blockRenderRect 全 0-24h 路径）
+const UNIMPORTANT_FOLDS = [
+  { start: '00:00', end: '07:00', label: '凌晨' },
+  { start: '12:00', end: '13:00', label: '午休' },
+  { start: '22:00', end: '24:00', label: '深夜' },
+];
+const FOLD_BAR_H = 24;
+
 export default function CoursesPage() {
   const navigate = useNavigate();
   const { prefs } = usePreferences();
@@ -35,6 +43,9 @@ export default function CoursesPage() {
 
   // 视图：列表（课程管理）/ 课表（二维模板网格）
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  // 课表视图：是否折叠不重要时段（默认折叠，仅组件状态不持久化）
+  const [foldUnimportant, setFoldUnimportant] = useState(true);
 
   // 编辑弹窗：undefined=关闭，null=新建，Course=编辑
   const [editingCourse, setEditingCourse] = useState<Course | null | undefined>(undefined);
@@ -128,7 +139,12 @@ export default function CoursesPage() {
     (a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime),
   );
   const hourHeight = prefs.hourHeight;
-  const gridHeight = 24 * hourHeight;
+  // 折叠态：多段折叠几何；展开态：全 0-24h（现有 blockRenderRect 路径不变）
+  const fg =
+    viewMode === 'grid' && foldUnimportant
+      ? foldedGrid(UNIMPORTANT_FOLDS, hourHeight, FOLD_BAR_H)
+      : null;
+  const gridHeight = fg ? fg.gridHeight : 24 * hourHeight;
   const gridGeo = { hideSleep: false, sleepStart: '', sleepEnd: '', hourHeight, barHeight: 0, gridHeight };
 
   if (loading) {
@@ -266,7 +282,16 @@ export default function CoursesPage() {
             </div>
           ) : (
             /* === 课程表视图：星期 × 时间的二维模板网格，显示全部课程 === */
-            <div className="ct-scroll">
+            <>
+              <div className="ct-fold-toggle-row">
+                <button
+                  className={`settings-chip${foldUnimportant ? ' settings-chip--active' : ''}`}
+                  onClick={() => setFoldUnimportant(v => !v)}
+                >
+                  折叠不重要时段
+                </button>
+              </div>
+              <div className="ct-scroll">
               <div className="ct-inner" style={{ height: GRID_HEADER_H + gridHeight }}>
                 {/* 表头（星期，模板不绑定具体日期） */}
                 <div className="ct-head" style={{ height: GRID_HEADER_H }}>
@@ -280,21 +305,40 @@ export default function CoursesPage() {
                     </div>
                   ))}
                 </div>
-                {/* 小时行 */}
-                {Array.from({ length: 24 }, (_, h) => (
-                  <div
-                    key={h}
-                    className="ct-hour-row"
-                    style={{ top: GRID_HEADER_H + h * hourHeight, height: hourHeight }}
-                  >
-                    <span className="ct-hour-label">{String(h).padStart(2, '0')}:00</span>
-                    <div className="ct-hour-line" />
-                  </div>
-                ))}
+                {/* 小时行：折叠态跳过整点落入折叠段的小时（折叠段整点对齐） */}
+                {Array.from({ length: 24 }, (_, h) => {
+                  const rowTop = fg ? fg.mapMinute(h * 60) : h * hourHeight;
+                  if (fg && rowTop < 0) return null;
+                  return (
+                    <div
+                      key={h}
+                      className="ct-hour-row"
+                      style={{ top: GRID_HEADER_H + rowTop, height: hourHeight }}
+                    >
+                      <span className="ct-hour-label">{String(h).padStart(2, '0')}:00</span>
+                      <div className="ct-hour-line" />
+                    </div>
+                  );
+                })}
+                {/* 折叠条（仅展示，不点击；z=4 高于课程块、低于 sticky 表头） */}
+                {fg &&
+                  UNIMPORTANT_FOLDS.map((fold, i) => (
+                    <div
+                      key={fold.start}
+                      className="ct-fold-bar"
+                      style={{ top: GRID_HEADER_H + fg.barTops[i], height: FOLD_BAR_H }}
+                    >
+                      <span className="ct-fold-bar-text">
+                        {fold.label} {fold.start}–{fold.end}
+                      </span>
+                    </div>
+                  ))}
                 {/* 课程块：模板语义，周次/单双周以角标与 tooltip 呈现 */}
                 {gridCourses.map(c =>
                   c.dayOfWeek.map(dw => {
-                    const rect = blockRenderRect(c.startTime, c.endTime, gridGeo);
+                    const rect = fg
+                      ? fg.rect(c.startTime, c.endTime)
+                      : blockRenderRect(c.startTime, c.endTime, gridGeo);
                     if (!rect) return null;
                     return (
                       <div
@@ -325,7 +369,8 @@ export default function CoursesPage() {
                   }),
                 )}
               </div>
-            </div>
+              </div>
+            </>
           )
         ) : (
           <>

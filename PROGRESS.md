@@ -294,3 +294,27 @@
 新增：src/pages/WeekViewPage.tsx / .css、src/components/CourseEditModal.tsx / .css
 修改：src/pages/CoursesPage.tsx / .css（视图切换 + 课表网格 + 弹窗迁出）、src/App.tsx、src/components/SideMenu.tsx、structure.md
 ```
+
+## 2026-08-13 — 课程表视图折叠不重要时段
+
+### 需求
+
+课表视图（课程表页的二维网格）把不重要时段折叠起来：「0到7点，12到13点，22点到0点，可以折叠起来，根本就不重要」；澄清范围仅限课程表的视图（不涉及周视图/日视图）。
+
+### 实现
+
+- **多段折叠几何**（src/utils/time.ts 新增 `foldedGrid(folds, hourHeight, barHeight)`，不动 blockRenderRect 及其调用方）：返回 `{ gridHeight, barTops, mapMinute, rect }`——每个已结束折叠段扣除时长并累加折叠条偏移；rect 贴边/最小 20px 语义与 blockRenderRect 对齐（起点落入折叠段贴该条下方、终点贴该条顶部、整段内贴条下方 20px、末段贴网格底部）；折叠段要求非重叠、不跨夜，内部按开始时间排序。
+- **课表视图**（CoursesPage.tsx / .css）：`UNIMPORTANT_FOLDS` 凌晨 0:00–7:00 / 午休 12:00–13:00 / 深夜 22:00–24:00 三段，`foldUnimportant` 组件状态**默认折叠**（不持久化）；折叠态走 foldedGrid（小时行跳过整点落入折叠段的小时，剩 14 行；3 条 `.ct-fold-bar` 折叠条仅展示不点击，z=4 高于课程块、低于 sticky 表头；网格上方 chip「折叠不重要时段」切换），展开态走原有 blockRenderRect 全 0–24h 路径（零回归面）；折叠态在列表↔课表切换间保留。
+
+### 验证
+
+- `npx vitest run` 404/404 通过（新增 test/时间网格点击映射/foldedGrid.test.ts 18 项：三段几何、分钟映射、跨段块、整段贴条 20px、边界时刻、跨夜、密度参数、乱序输入、非法时间）；`npm run build` 通过。
+- 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）19/19 项通过：默认折叠 3 条折叠条文案正确、14 行小时标签（07..11 + 13..21）、08:00 块 top=122 高 106.7、午课块贴午休条下方 top=402 高 20、晚课块止于深夜条顶高 64、chip 展开回 24h 块恢复全高、再折叠、列表↔课表切换保留折叠态、点课程块弹共享编辑弹窗、空白格无弹窗。
+- 手工冒烟：移动端宽度横向滚动、折叠态滚动折叠条不盖 sticky 表头、深色模式配色正常。
+
+### 涉及文件
+
+```
+修改：src/utils/time.ts（foldedGrid）、src/pages/CoursesPage.tsx / .css（折叠 chip + 折叠条 + 折叠态几何）、structure.md
+新增：test/时间网格点击映射/foldedGrid.test.ts
+```
