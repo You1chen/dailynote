@@ -11,14 +11,29 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// 记录 Filesystem.writeFile 的每次调用（原生路径）
+// 记录 Filesystem.writeFile 的每次调用（原生路径）+ 内存文件盘（模拟磁盘）
 const writeFileCalls = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const memFiles = vi.hoisted(() => new Map<string, string>());
 vi.mock('@capacitor/filesystem', () => ({
   Filesystem: {
-    writeFile: async (opts: Record<string, unknown>) => { writeFileCalls.push(opts); },
-    readFile: async () => ({ data: null }),
-    readdir: async () => ({ files: [] }),
-    deleteFile: async () => { /* 无文件可删 */ },
+    writeFile: async (opts: Record<string, unknown>) => {
+      writeFileCalls.push(opts);
+      memFiles.set(opts.path as string, opts.data as string);
+    },
+    readFile: async (opts: Record<string, unknown>) => ({ data: memFiles.get(opts.path as string) ?? null }),
+    readdir: async (opts: Record<string, unknown>) => {
+      // 模拟磁盘目录：列出 path 下的直接子项（子目录按前缀推导）
+      const prefix = `${opts.path as string}/`;
+      const names = new Set<string>();
+      for (const k of memFiles.keys()) {
+        if (!k.startsWith(prefix)) continue;
+        const rest = k.slice(prefix.length);
+        const seg = rest.split('/')[0];
+        if (seg) names.add(seg);
+      }
+      return { files: [...names].map(name => ({ name, type: 'directory' as const })) };
+    },
+    deleteFile: async (opts: Record<string, unknown>) => { memFiles.delete(opts.path as string); },
   },
   Directory: { Documents: 'DOCUMENTS' },
   Encoding: { UTF8: 'utf8' },
@@ -32,7 +47,7 @@ import {
   _resetForTest,
 } from '../../src/services/store';
 import * as db from '../../src/db';
-import type { LongTermGoal } from '../../src/types';
+import type { DailyPlan, LongTermGoal } from '../../src/types';
 
 // ---- 模拟 localStorage（Node 环境没有）----
 const memStore: Record<string, string> = {};
@@ -51,6 +66,7 @@ beforeEach(async () => {
   // 模拟原生环境：isNativePlatform() = true → 走 Capacitor Filesystem
   (globalThis as any).window = { Capacitor: { isNativePlatform: () => true } };
   writeFileCalls.length = 0;
+  memFiles.clear();
   await _resetForTest();
   (globalThis as any).localStorage.clear();
   setStoragePath('DailyNote');
@@ -85,5 +101,29 @@ describe('Android 原生写入编码', () => {
     const data = call.data as string;
     expect(data.startsWith('{')).toBe(true);
     expect(JSON.parse(data)).toHaveProperty('version', 1);
+  });
+
+  it('原生后端完整往返：写盘 → 重置内存 → 从「磁盘」读回数据一致', async () => {
+    // 通过内存文件盘模拟真实磁盘：写入的每个文件都落盘，重置后必须能读回
+    await db.saveGoal(makeGoal('往返目标'));
+    await db.savePlan({ date: '2026-08-13', timeBlocks: [], createdAt: 1, updatedAt: 1 } as DailyPlan);
+    await flush();
+
+    // 磁盘上应有 days/2026-08-13/plan.json 与 goals.json，且都是合法 JSON 文本
+    const planText = memFiles.get('DailyNote/days/2026-08-13/plan.json');
+    const goalsText = memFiles.get('DailyNote/goals.json');
+    expect(planText).toBeDefined();
+    expect(JSON.parse(planText!)).toHaveProperty('date', '2026-08-13');
+    expect(JSON.parse(goalsText!)).toHaveLength(1);
+
+    // 模拟重装：内存清零，从磁盘重新加载
+    await _resetForTest();
+    await initStore();
+
+    const goals = await db.getAllGoals();
+    expect(goals).toHaveLength(1);
+    expect(goals[0].title).toBe('往返目标');
+    const plan = await db.getPlanByDate('2026-08-13');
+    expect(plan).toBeDefined();
   });
 });

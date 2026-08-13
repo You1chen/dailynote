@@ -436,7 +436,7 @@
 
 ### 验证
 
-- 新增 `test/数据存储/nativeWriteEncoding.test.ts` 2 项（vi.mock @capacitor/filesystem + 模拟原生平台）：增量写盘必须带 `encoding: 'utf8'` 且 data 是 JSON 文本本身（以 `[` 开头、可解析、中文原样）；导出备份同样带 utf8 且 data 以 `{` 开头含 version。`npx vitest run` **435/435** 通过。
+- 新增 `test/数据存储/nativeWriteEncoding.test.ts` 3 项（vi.mock @capacitor/filesystem + 模拟原生平台）：增量写盘必须带 `encoding: 'utf8'` 且 data 是 JSON 文本本身（以 `[` 开头、可解析、中文原样）；导出备份同样带 utf8 且 data 以 `{` 开头含 version；内存文件盘模拟磁盘的完整往返（写→重置→读回一致，原生分支从此纳入端到端测试覆盖）。`npx vitest run` **436/436** 通过。
 - `npm run build:apk` 全流程成功；合并后 manifest 确认 versionCode 5 / versionName 1.2.2 + MANAGE_EXTERNAL_STORAGE。
 - 待真机验证（1.2.2）：写出的 json 用文本查看器应是可读 JSON；卸载重装 + 授予「所有文件访问」后能读回；导出→导入正常。注：此前被写成乱码的文件无法恢复（宽容解码有损），旧有效数据若在盘上可被恢复；浏览器版 IndexedDB 中的数据可导出→导入到手机兜底。
 
