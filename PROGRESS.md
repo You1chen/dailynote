@@ -202,3 +202,27 @@
 新增：src/utils/avatarCrop.ts、src/components/AvatarCropper.tsx / .css、test/偏好设置/avatarCrop.test.ts
 修改：src/pages/SettingsPage.tsx / .css、src/hooks/usePreferences.ts（注释）、structure.md
 ```
+
+## 2026-08-13 — 修复：规划模式切换时时间被重置（小 bug）
+
+### 需求
+
+在编辑面板从即时切到预规划（或反向）时，时间会被重置为 08:00 或当前时刻；应保留当前时间状态不重置。
+
+### 实现
+
+- `src/pages/DailyPlan.tsx`：删除两个模式切换按钮里的时间覆盖逻辑（预规划按钮原本对未保存新块重置 08:00-09:00，即时按钮原本重置为当前时刻）。
+- 切到「⚡ 即时」时置 `manualStartRef.current = true` 冻结每 30 秒的自动跟随——否则 ticker 会在 30 秒内把保留的时间覆盖回当前时刻（新建即时块时由各创建入口置 false，仍从当前时刻开始并跟随）。
+- 即时整块模式的提示文案改为随冻结状态变化（与清单模式一致）：冻结后显示「已手动微调，不再随时间更新」。
+- `structure.md`：规划模式条目补充「模式切换保留时间」说明。
+
+### 验证
+
+- `npx vitest run` 345/345 通过；`npm run build` 通过。
+- 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）：新建默认 08:00 → 切即时保留 08:00（不再变当前时刻）→ 切回预规划保留 → 手动设 15:00 双向切换均保留 → 关闭后重新添加（全局即时模式）仍默认当前时刻（创建默认值不受影响）→ 越过 30 秒 ticker 周期后保留的手动时间 09:30 未被自动重置。8/8 断言通过。
+
+### 涉及文件
+
+```
+修改：src/pages/DailyPlan.tsx、structure.md
+```

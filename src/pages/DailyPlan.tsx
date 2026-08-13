@@ -576,26 +576,14 @@ export default function DailyPlanPage() {
                 <div className="bs-time-mode">
                   <button
                     className={`bs-mode-btn ${planningMode === 'pre' ? 'bs-mode-btn--active' : ''}`}
-                    onClick={() => {
-                      setPlanningMode('pre');
-                      if (!editingBlock.id) {
-                        setEditingBlock({ ...editingBlock, startTime: '08:00', endTime: '09:00' });
-                      }
-                    }}
+                    onClick={() => setPlanningMode('pre')}
                   >📅 预规划</button>
                   <button
                     className={`bs-mode-btn ${planningMode === 'instant' ? 'bs-mode-btn--active' : ''}`}
                     onClick={() => {
                       setPlanningMode('instant');
-                      manualStartRef.current = false; // 重新跟随当前时刻
-                      if (!editingBlock.id) {
-                        const now = getNowRounded();
-                        setEditingBlock({
-                          ...editingBlock,
-                          startTime: now,
-                          endTime: computeEndTime(now, durationMinutes),
-                        });
-                      }
+                      // 保留切换前的开始时间，并冻结每30秒的自动跟随，避免时间被重置为当前时刻
+                      manualStartRef.current = true;
                     }}
                   >⚡ 即时</button>
                 </div>
@@ -666,7 +654,11 @@ export default function DailyPlanPage() {
                       readOnly
                       style={{ color: 'var(--color-text-muted)', background: 'var(--color-bg)' }}
                     />
-                    <p className="bs-instant-hint">开始时间已锁定为当前时刻</p>
+                    <p className="bs-instant-hint">
+                      {manualStartRef.current
+                        ? '已手动微调，不再随时间更新'
+                        : '开始时间已锁定为当前时刻'}
+                    </p>
                   </div>
                 )}
 
