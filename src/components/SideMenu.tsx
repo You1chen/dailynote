@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Target, BarChart3, Trash2, Database, ListTodo, CalendarDays, CalendarRange, X } from 'lucide-react';
+import { Target, BarChart3, Trash2, Database, ListTodo, CalendarDays, CalendarRange, CalendarClock, X } from 'lucide-react';
 import { useEffect } from 'react';
 import './SideMenu.css';
 
@@ -11,6 +11,7 @@ interface Props {
 const menuItems = [
   { to: '/goals', icon: Target, label: '长期目标' },
   { to: '/tasks', icon: ListTodo, label: '任务清单' },
+  { to: '/ddl', icon: CalendarClock, label: 'DDL' },
   { to: '/courses', icon: CalendarDays, label: '课程表' },
   { to: '/week', icon: CalendarRange, label: '周视图' },
   { to: '/dashboard', icon: BarChart3, label: '宏观视图' },

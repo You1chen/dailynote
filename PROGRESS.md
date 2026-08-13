@@ -318,3 +318,32 @@
 修改：src/utils/time.ts（foldedGrid）、src/pages/CoursesPage.tsx / .css（折叠 chip + 折叠条 + 折叠态几何）、structure.md
 新增：test/时间网格点击映射/foldedGrid.test.ts
 ```
+
+## 2026-08-13 — DDL 截止清单
+
+### 需求
+
+「加入新功能——"ddl"，里面可以专门收录一些含有ddl的事件，有ddl事件的名称，有截止时间精确到分钟，有备注，备注可以涵盖若干张图片或文字内容，可以足够长」。
+
+独立页面「DDL」（SideMenu 入口，路由 /ddl），只做收录：名称、截止日期+时间（精确到分钟）、备注（长文字 + 最多 9 张压缩图片）。宁少勿多：不做日程集成、不做通知、不做完成勾选；TabBar 不动。
+
+### 实现
+
+- **类型与存储**：src/types/index.ts 加 `DdlItem`（name / deadlineDate "YYYY-MM-DD" / deadlineTime "HH:mm" / notes / images≤9 / createdAt / updatedAt）；store.ts 完整镜像 courses 管道 21 点（CATEGORY_FILES 联合类型、StorageData/StoreShape、NumericTable、nextId/resetNextId、clearStore/countData、parseStorageData 旧备份缺字段兜底、hasAny、readNewStructure 三处（含仅 ddls.json 目录不被当首次使用）、DEFAULT_WRITE_ORDER、snapshot/全量写/指纹/增量写、mergeIntoStore/mergeLegacy、liveArr（回收站自愈依赖）、applyData）；db/index.ts 加 getAllDdls（截止时间升序：日期→时间→id）、saveDdl、deleteDdl（回收站标题 `DDL - 名称`、writeOrder 先写回收站）、TRASH_TARGET + restoreFromTrash `case 'ddls'`（重复 id 守卫）。
+- **图片压缩**（src/utils/avatarCrop.ts 追加，模块顶层保持 DOM-free）：`compressImageToDataURL`（等比 fit 非方形，naturalWidth 取原始尺寸，JPEG q0.8，maxDim 1280）+ `fileToCompressedDataURL`（FileReader→Image，>4096px 先走现有 downscaleImage）；9 张 × 约 100-300KB ≈ 单条最多约 3MB，可接受。
+- **截止时间纯函数**（新增 src/utils/ddl.ts）：`minutesUntilDeadline`（本地零点解析，格式+范围校验非法→null，floor 到分钟，负值=过期；**不用 UTC 的 todayStr()**，UTC+8 晚间会差一天）+ `ddlRemainText`（≤0→已过期、<60→剩 X 分钟、<1440→剩 X 小时、否则剩 X 天）。
+- **页面**（新增 src/pages/DdlPage.tsx / .css，路由 /ddl，SideMenu「任务清单」后加 CalendarClock 条目）：列表卡片 = 名称 + `2026年8月13日 18:30` 截止 + 剩余徽章（过期红色）+ 备注两行预览 + 🖼N；页面内联弹窗（名称必填≤30字、date/time 必填、备注无长度限制、64px 缩略图网格 + 移除、隐藏 file input 选择后立即重置 value 允许重复选同一文件、压缩期间 busyImages 禁用保存防丢图）；删除 confirm 后进回收站；Android 返回键先关弹窗再退页。
+- 回收站标签 `ddls: 'DDL'`；备份说明两处文件清单加 ddls.json。
+
+### 验证
+
+- `npm run build` 通过；`npx vitest run` **424/424** 全绿（新增 test/DDL清单/ddlTime.test.ts 13 项 + test/数据存储/store.test.ts「DDL 存储」7 项：升序往返、同日同时刻 id 兜底、images/长备注往返、回收站还原原 id、id 不复用、导出→重置→导入往返、仅 ddls.json 目录回归）。
+- 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）全部通过：种子 3 条（已过期/今日带图/三天后）列表升序过期在前、已过期红色徽章、备注预览、🖼1；新建（长多行备注）出现在列表且时间格式正确；编辑改名改时间同步；1×1 PNG setInputFiles → 压缩缩略图出现 → 保存 → reload 后图片仍在（ddls.json 往返）；删除确认进回收站（DDL 标签）→ 还原后列表与图片恢复；空名称保存报「请输入名称」；全程无页面 JS 错误。
+- 手工冒烟：移动端宽度、深色模式配色正常。
+
+### 涉及文件
+
+```
+新增：src/pages/DdlPage.tsx / .css、src/utils/ddl.ts、test/DDL清单/ddlTime.test.ts
+修改：src/types/index.ts（DdlItem）、src/services/store.ts（ddls 管道 21 点）、src/db/index.ts（CRUD+回收站）、src/utils/avatarCrop.ts（图片压缩）、src/App.tsx（/ddl 路由）、src/components/SideMenu.tsx（DDL 条目）、src/pages/Trash.tsx（DDL 标签）、src/pages/BackupRestore.tsx（备份说明）、test/数据存储/store.test.ts（DDL 存储 7 项）、test/数据导入导出/jsonImport.test.ts（ddls 字段）、structure.md
+```

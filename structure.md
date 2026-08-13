@@ -40,8 +40,9 @@ dailynote/
 │   ├── 偏好设置/avatarCrop.test.ts           # 17 tests
 │   ├── 任务清单/taskList.test.ts             # 18 tests
 │   ├── 任务清单/taskTemplate.test.ts         # 13 tests
-│   ├── 数据存储/store.test.ts                # 45 tests
-│   └── 课程表/courseSchedule.test.ts         # 32 tests
+│   ├── 数据存储/store.test.ts                # 52 tests
+│   ├── 课程表/courseSchedule.test.ts         # 32 tests
+│   └── DDL清单/ddlTime.test.ts               # 13 tests
 │
 └── src/
     ├── main.tsx                              # React 挂载入口（Boot → SetupPage 或 App）
@@ -54,7 +55,8 @@ dailynote/
     │
     ├── utils/
     │   ├── time.ts                           # 时间工具函数（toMinutes, sleep判断, blockRenderRect 块渲染矩形, foldedGrid 多段折叠网格）
-    │   ├── avatarCrop.ts                     # 头像裁剪纯函数（cover/钳制/缩放/裁剪矩形 + canvas 输出）
+    │   ├── avatarCrop.ts                     # 头像裁剪纯函数（cover/钳制/缩放/裁剪矩形 + canvas 输出）+ 备注图片压缩（DDL）
+    │   ├── ddl.ts                            # DDL 截止时间纯函数（minutesUntilDeadline / ddlRemainText）
     │   ├── holidays.ts                       # 内置法定节假日表（2026 精确/2027 部分推定，需逐年更新）
     │   └── courseSchedule.ts                 # 课程表日程计算纯函数（周次/单双周/节假日/当日课程）
     │
@@ -100,6 +102,7 @@ dailynote/
         ├── CoursesPage.tsx / .css            # 课程表：周课表 CRUD（星期多选/单双周/周数）+ 学期设置 + 特殊日期 + 列表/课表双视图
         ├── WeekViewPage.tsx / .css           # 周视图：独立通用周日程（课程按周同步 + 当天计划任务块，任意周导航）
         ├── TaskListPage.tsx / .css           # 任务清单：按日浏览、添加/勾选/删除
+        ├── DdlPage.tsx / .css                # DDL 截止清单：名称+分钟级截止+多图长备注，删除进回收站
         ├── LongTermGoals.tsx / .css          # 长期目标 & 子任务拆解 & 作息模板
         ├── Reflection.tsx / .css             # 反思记录
         ├── Harvest.tsx / .css                # 每日收获
@@ -115,19 +118,20 @@ dailynote/
 
 DailyNote 是一款**面向个人日程管理与复盘**的移动端应用（PWA + Android APK）。核心理念为"计划 → 执行 → 反思 → 收获"的闭环：
 
-| 模块               | 功能                                                                                          | 路由            |
-| ------------------ | --------------------------------------------------------------------------------------------- | --------------- |
-| **每日计划** | 24h 时间网格，睡眠时段折叠，全屏视图，即时/预规划双模式，清单子任务                           | `/`           |
-| **任务清单** | 按日待办列表，添加/勾选/删除，待完成与已完成分组                                              | `/tasks`      |
+| 模块               | 功能                                                                                                               | 路由            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------- |
+| **每日计划** | 24h 时间网格，睡眠时段折叠，全屏视图，即时/预规划双模式，清单子任务                                                | `/`           |
+| **任务清单** | 按日待办列表，添加/勾选/删除，待完成与已完成分组                                                                   | `/tasks`      |
 | **课程表**   | 周课表（星期多选、单双周、周数）、开学时间、特殊日期（放假/补课）、列表/二维课表双视图；当天有课直接显示在日程网格 | `/courses`    |
-| **周视图**   | 独立通用周日程（任意周导航）：课程按具体周忠实过滤同步 + 当天计划任务块只读展示 + 节假日角标 | `/week`       |
-| **长期目标** | 目标分类、子任务拆解、进度追踪、作息模板                                                      | `/goals`      |
-| **反思**     | 上午/下午/晚上三段式反思（问题→原因→改进）                                                  | `/reflection` |
-| **收获**     | 每日知识收获，支持`#标签` 分类                                                              | `/harvest`    |
-| **宏观视图** | 统计卡片、热力图、趋势图、高频词                                                              | `/dashboard`  |
-| **回收站**   | 30天软删除、还原、永久删除                                                                    | `/trash`      |
-| **备份恢复** | 文件导入导出、存储路径设置                                                                    | `/backup`     |
-| **设置**     | 主题（浅色/深色/跟随系统）、头像、用户名、默认偏好                                            | `/settings`   |
+| **周视图**   | 独立通用周日程（任意周导航）：课程按具体周忠实过滤同步 + 当天计划任务块只读展示 + 节假日角标                       | `/week`       |
+| **DDL 截止清单** | 收录带截止时间的事项：名称、截止日期+时间（精确到分钟）、备注（长文字 + 最多 9 张压缩图片）；按截止升序、过期红色徽章；删除进回收站 | `/ddl`     |
+| **长期目标** | 目标分类、子任务拆解、进度追踪、作息模板                                                                           | `/goals`      |
+| **反思**     | 上午/下午/晚上三段式反思（问题→原因→改进）                                                                       | `/reflection` |
+| **收获**     | 每日知识收获，支持`#标签` 分类                                                                                   | `/harvest`    |
+| **宏观视图** | 统计卡片、热力图、趋势图、高频词                                                                                   | `/dashboard`  |
+| **回收站**   | 30天软删除、还原、永久删除                                                                                         | `/trash`      |
+| **备份恢复** | 文件导入导出、存储路径设置                                                                                         | `/backup`     |
+| **设置**     | 主题（浅色/深色/跟随系统）、头像、用户名、默认偏好                                                                 | `/settings`   |
 
 ---
 
@@ -153,6 +157,7 @@ Documents/<dir>/
 ├─ templates.json             ← 任务清单模板（数组）
 ├─ courses.json               ← 课程表课程（数组）
 ├─ semester.json              ← 学期设置（单记录数组，id 恒 1）
+├─ ddls.json                  ← DDL 截止清单（数组）
 └─ trash.json                 ← 回收站（数组）
 ```
 
@@ -175,7 +180,7 @@ Documents/<dir>/
 - **加载自愈**：回收站条目若其原数据已在原表存在（删除/还原半提交），加载时丢弃该副本，数据不丢
 - 所有删除操作**软删除**：深拷贝 `originalData` 到 `trashItems`，再删原表
 - 每表**单调递增 id 计数器**（不复用已删除 id，杜绝与回收站还原撞 id）
-- `restoreFromTrash` 按 `originalTable` 分发还原（longTermGoals, reflections, harvests, fixedRoutines, taskItems, taskTemplates, courses, timeBlocks）
+- `restoreFromTrash` 按 `originalTable` 分发还原（longTermGoals, reflections, harvests, fixedRoutines, taskItems, taskTemplates, courses, ddls, timeBlocks）
 - 时间块还原特殊处理：存入 `date + blockData`，还原时找到对应 `DailyPlan` 并 push 回去
 - 每次写回收站自动清理超过 30 天的记录
 - **卸载重装恢复**：重新指定同一目录 → `initStore()` 从该目录恢复全部数据（含回收站）
@@ -201,8 +206,9 @@ Documents/<dir>/
 | `Course`         | `id?, name, teacher, location, dayOfWeek(number[]，可多选), startTime, endTime, weekType(all/odd/even), startWeek, weekCount, createdAt, updatedAt` | 课程（每周固定时间上课，删除进回收站）                                                                          |
 | `SpecialDate`    | `id, date, kind(holiday/makeup)`                                                                                                                    | 手动特殊日期：放假（抑制课程）或补课（按正常上课日对待，覆盖内置节假日）                                        |
 | `SemesterRecord` | `id(恒为1), startDate(string\|null), specialDates[], updatedAt`                                                                                      | 学期设置（单记录数组表，不可删除）                                                                              |
+| `DdlItem`        | `id?, name, deadlineDate("YYYY-MM-DD"), deadlineTime("HH:mm"), notes, images(dataURL[]，≤9张), createdAt, updatedAt`                                  | DDL 截止事件（删除进回收站）                                                                                    |
 
-工具函数：`genId()`、`todayStr()`、`PERIODS`（上午/下午/晚上常量）、`normalizeCourseDayOfWeek()`（旧数据单数字 dayOfWeek 兼容归一化为数组）。
+工具函数：`genId()`、`todayStr()`、`PERIODS`（上午/下午/晚上常量）、`normalizeCourseDayOfWeek()`（旧数据单数字 dayOfWeek 兼容归一化为数组）、`minutesUntilDeadline()` / `ddlRemainText()`（src/utils/ddl.ts，本地时间语义）。
 
 ---
 
@@ -282,8 +288,8 @@ Hook 返回 `{ prefs, updatePrefs, resetPrefs }`。修改时实时写 localStora
 | ---------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | **TabBar**             | 底部三标签导航（计划/反思/收获）                                                    | App.tsx                                                          |
 | **SideNav**            | 左侧导航栏：菜单按钮 + 设置按钮（56px 宽）                                          | App.tsx                                                          |
-| **SideMenu**           | 左侧滑出菜单：长期目标/任务清单/课程表/周视图/宏观视图/回收站/备份恢复              | App.tsx                                                          |
-| **CourseEditModal**    | 课程新建/编辑弹窗（表单校验 + saveCourse；导出 DAY_LABELS/WEEK_TYPE_LABELS） | CoursesPage, WeekViewPage                                        |
+| **SideMenu**           | 左侧滑出菜单：长期目标/任务清单/DDL/课程表/周视图/宏观视图/回收站/备份恢复         | App.tsx                                                          |
+| **CourseEditModal**    | 课程新建/编辑弹窗（表单校验 + saveCourse；导出 DAY_LABELS/WEEK_TYPE_LABELS）        | CoursesPage, WeekViewPage                                        |
 | **DayNavigator**       | 月历日期选择器，支持`compact` 模式                                                | DailyPlan, Reflection, Harvest, FullscreenSchedule, TaskListPage |
 | **CalendarHeatmap**    | 84天热力图                                                                          | Dashboard                                                        |
 | **FullscreenEditor**   | 全屏编辑器（标题+正文分离）                                                         | Harvest                                                          |
@@ -350,6 +356,13 @@ Hook 返回 `{ prefs, updatePrefs, resetPrefs }`。修改时实时写 localStora
 - 已完成组可折叠
 - 勾选切换状态、悬停删除
 - 页头「模板」按钮 → 任务清单模板管理面板：新建/重命名/删除模板，逐项可勾选、编辑、增删（编辑文本 onBlur 提交）
+
+### DdlPage.tsx — DDL 截止清单（`/ddl`）
+
+- **列表按截止时间升序**（已过期自然在前）：卡片 = 名称 + `2026年8月13日 18:30` 截止 + 剩余徽章（`minutesUntilDeadline`，过期红色 `ddl-badge--expired`）+ 备注预览（两行截断）+ 🖼N 图片数；点击卡片编辑
+- **新建/编辑弹窗（页面内联）**：名称（必填，≤30字）、截止日期/时间（`type=date/time`，必填，精确到分钟）、备注 textarea（无长度限制，可任意长）、备注图片（最多 9 张，`fileToCompressedDataURL` 等比压缩 JPEG ≤1280px；处理中禁用保存防丢图）
+- **删除**：确认后进回收站（originalTable=ddls，标题 `DDL - 名称`）；Android 返回键先关弹窗再退页
+- 无日程集成/通知/完成勾选（宁少勿多）
 
 ### LongTermGoals.tsx — 长期目标（`/goals`）
 
@@ -435,6 +448,11 @@ main.tsx
      │           │             ├─ DayNavigator
      │           │             ├─ useTaskList → db
      │           │             └─ useRegisterBackHandler
+     │           ├─ "/ddl" → DdlPage
+     │           │             ├─ getAllDdls / saveDdl / deleteDdl → db
+     │           │             ├─ minutesUntilDeadline / ddlRemainText → utils/ddl
+     │           │             ├─ fileToCompressedDataURL → utils/avatarCrop
+     │           │             └─ useRegisterBackHandler
      │           ├─ "/courses" → CoursesPage
      │           │               ├─ CourseEditModal → saveCourse → db
      │           │               ├─ getAllCourses / getSemester → db
@@ -482,9 +500,9 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `changeStoragePath()`       | 更改存储位置：新位置有数据则恢复，无数据则把当前数据搬过去                                                                                         |
 | `normalizePath()`           | 规范化并校验路径（拒绝`..`、绝对路径、非法字符）                                                                                                 |
 
-**后端**：Capacitor → 用户目录分文件 JSON（`days/<日期>/*.json` + `goals/routines/templates/courses/semester/trash.json`）；Web → IndexedDB KV（key = 相对路径，与原生文件一一对应）。
+**后端**：Capacitor → 用户目录分文件 JSON（`days/<日期>/*.json` + `goals/routines/templates/courses/semester/ddls/trash.json`）；Web → IndexedDB KV（key = 相对路径，与原生文件一一对应）。
 
-**导入策略**：纯合并。按 natural key 匹配（dailyPlans 按 date，其余按 id），存在则更新，不存在则新增，永不删除已有数据，并保留文件内的时间戳（不重置 createdAt/updatedAt）。`taskItems`/`taskTemplates` 支持旧版 JSON 缺失的向后兼容（parseStorageData 兜底为空数组）。
+**导入策略**：纯合并。按 natural key 匹配（dailyPlans 按 date，其余按 id），存在则更新，不存在则新增，永不删除已有数据，并保留文件内的时间戳（不重置 createdAt/updatedAt）。`taskItems`/`taskTemplates`/`ddls` 支持旧版 JSON 缺失的向后兼容（parseStorageData 兜底为空数组）。
 
 ---
 
@@ -494,15 +512,16 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | ------------------------------------------------- | :-----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test/时间网格点击映射/clickMapping.test.ts`    |      207      | 睡眠折叠下的像素→时间正反映射，跨夜/不跨夜/不同密度，真实点击坐标换算层回归                                                                                                                                                                                                                          |
 | `test/时间网格点击映射/blockRenderRect.test.ts` |      16      | 时间块渲染矩形：睡眠折叠时段内的块贴边界可见（⚡即时任务夜场景回归）、跨夜/不跨夜、边界时刻、非法时间                                                                                                                                                                                                 |
-| `test/时间网格点击映射/foldedGrid.test.ts`   |      18      | 多段折叠网格（课程表视图）：三段折叠条几何/分钟映射、跨折叠段块、整段内贴条 20px、边界时刻、跨夜、密度参数、乱序输入、非法时间                                                                                                                                                                          |
+| `test/时间网格点击映射/foldedGrid.test.ts`      |      18      | 多段折叠网格（课程表视图）：三段折叠条几何/分钟映射、跨折叠段块、整段内贴条 20px、边界时刻、跨夜、密度参数、乱序输入、非法时间                                                                                                                                                                        |
 | `test/数据导入导出/jsonImport.test.ts`          |      23      | JSON 解析、BOM 处理、乱码拒绝、微信缓存检测、round-trip                                                                                                                                                                                                                                               |
 | `test/偏好设置/preferences.test.ts`             |      15      | 默认值、localStorage 存取、旧版兼容、主题应用逻辑                                                                                                                                                                                                                                                     |
 | `test/偏好设置/avatarCrop.test.ts`              |      17      | 头像裁剪纯函数：cover 缩放、平移钳制、围绕点缩放像素不动、裁剪矩形映射（含随机模糊）                                                                                                                                                                                                                  |
 | `test/任务清单/taskList.test.ts`                |      18      | 创建、完成切换、排序、统计、日期隔离、边界情况                                                                                                                                                                                                                                                        |
-| `test/数据存储/store.test.ts`                   |      45      | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份（含模板导出→导入往返）、课程表存储（CRUD 往返、semester 恒 1、回收站还原原 id、导出导入含 courses+semester、仅课程数据目录回归、旧版单数字 dayOfWeek 归一化） |
+| `test/数据存储/store.test.ts`                   |      52      | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份（含模板导出→导入往返）、课程表存储（CRUD 往返、semester 恒 1、回收站还原原 id、导出导入含 courses+semester、仅课程数据目录回归、旧版单数字 dayOfWeek 归一化）、DDL 存储（CRUD 往返升序、同日同时刻 id 兜底、images/长备注往返、回收站还原原 id、id 不复用、导出导入、仅 ddls.json 目录回归） |
+| `test/DDL清单/ddlTime.test.ts`                 |      13      | minutesUntilDeadline（未来/过期/恰为截止/跨零点/格式与范围非法→null）、ddlRemainText（分钟/小时/天边界、0→已过期）                                                                                                                       |
 | `test/任务清单/taskTemplate.test.ts`            |      13      | 模板 CRUD/更新、软删除进回收站与还原、templates.json 持久化、增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数                                                                                                                                                               |
 | `test/课程表/courseSchedule.test.ts`            |      32      | weekdayOf/mondayOf、weekIndex（周一/周中开学、早于开学、跨年）、isCourseActiveOnWeek（单双周+区间边界）、内置节假日表（2026/2027、无重复）、isDayHoliday（手动>内置、补课覆盖）、computeDayCourses（星期多选/周次/节假日/排序/多天课程）、dayOfWeek 旧数据归一化                                      |
-| **总计**                                    | **404** |                                                                                                                                                                                                                                                                                                       |
+| **总计**                                    | **424** |                                                                                                                                                                                                                                                                                                       |
 
 运行：`npx vitest run`（偶尔需先 `rm -rf node_modules/.vite node_modules/.vitest` 清缓存）
 

@@ -16,6 +16,7 @@
  *     templates.json                 任务清单模板
  *     courses.json                   课程表课程
  *     semester.json                  学期设置（单记录数组，id 恒 1）
+ *     ddls.json                      DDL 截止清单
  *
  * 写盘策略：
  *   - mutate() 先对每张表做指纹快照，变更后对比，只写"变脏"的文件
@@ -24,7 +25,7 @@
  *   - 启动时若发现旧版单文件 dailynote-data.json → 迁移到新布局并删除旧文件（提交标记）
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 
@@ -43,6 +44,7 @@ export interface StorageData {
   trashItems: TrashItem[];
   courses: Course[];
   semester: SemesterRecord[];
+  ddls: DdlItem[];
 }
 
 export interface StoreShape {
@@ -56,6 +58,7 @@ export interface StoreShape {
   trashItems: TrashItem[];
   courses: Course[];
   semester: SemesterRecord[];
+  ddls: DdlItem[];
 }
 
 export type AnyStoreTable = keyof StoreShape;
@@ -72,13 +75,14 @@ function oldSingleRel(): string {
 }
 const DAY_DIR = 'days';
 const DAY_TYPES = ['reflections', 'harvests', 'tasks'] as const;
-const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 'taskTemplates' | 'courses' | 'semester', string> = {
+const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 'taskTemplates' | 'courses' | 'semester' | 'ddls', string> = {
   longTermGoals: 'goals.json',
   fixedRoutines: 'routines.json',
   trashItems: 'trash.json',
   taskTemplates: 'templates.json',
   courses: 'courses.json',
   semester: 'semester.json',
+  ddls: 'ddls.json',
 };
 
 function dayPlan(date: string): string {
@@ -91,7 +95,7 @@ function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks'): 
 const KV_DB = 'dailynote_kv';
 const KV_STORE = 'kv';
 
-type NumericTable = 'dailyPlans' | 'longTermGoals' | 'reflections' | 'harvests' | 'fixedRoutines' | 'taskTemplates' | 'trashItems' | 'courses' | 'semester';
+type NumericTable = 'dailyPlans' | 'longTermGoals' | 'reflections' | 'harvests' | 'fixedRoutines' | 'taskTemplates' | 'trashItems' | 'courses' | 'semester' | 'ddls';
 
 // ============ 内存 store ============
 
@@ -106,6 +110,7 @@ const store: StoreShape = {
   trashItems: [],
   courses: [],
   semester: [],
+  ddls: [],
 };
 
 /**
@@ -122,6 +127,7 @@ const nextId: Record<NumericTable, number> = {
   trashItems: 1,
   courses: 1,
   semester: 1,
+  ddls: 1,
 };
 
 export function allocId(table: NumericTable): number {
@@ -129,7 +135,7 @@ export function allocId(table: NumericTable): number {
 }
 
 function resetNextId(): void {
-  const tables: NumericTable[] = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines', 'taskTemplates', 'trashItems', 'courses', 'semester'];
+  const tables: NumericTable[] = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines', 'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls'];
   for (const t of tables) {
     let max = 0;
     for (const rec of store[t] as { id?: number }[]) {
@@ -150,12 +156,13 @@ function clearStore(): void {
   store.trashItems = [];
   store.courses = [];
   store.semester = [];
+  store.ddls = [];
 }
 
 function countData(): number {
   return store.dailyPlans.length + store.longTermGoals.length + store.reflections.length
     + store.harvests.length + store.fixedRoutines.length + store.taskItems.length + store.taskTemplates.length + store.trashItems.length
-    + store.courses.length + store.semester.length;
+    + store.courses.length + store.semester.length + store.ddls.length;
 }
 
 // ============ 路径管理 ============
@@ -374,6 +381,7 @@ function parseStorageData(text: string): StorageData | null {
       trashItems: Array.isArray(data.trashItems) ? data.trashItems : [],
       courses: Array.isArray(data.courses) ? data.courses.map(normalizeCourseDayOfWeek) : [],
       semester: Array.isArray(data.semester) ? data.semester : [],
+      ddls: Array.isArray(data.ddls) ? data.ddls : [],
     };
   } catch {
     return null;
@@ -383,7 +391,7 @@ function parseStorageData(text: string): StorageData | null {
 function hasAny(d: StorageData): boolean {
   return d.dailyPlans.length > 0 || d.longTermGoals.length > 0 || d.reflections.length > 0
     || d.harvests.length > 0 || d.fixedRoutines.length > 0 || d.taskItems.length > 0 || d.taskTemplates.length > 0 || d.trashItems.length > 0
-    || d.courses.length > 0 || d.semester.length > 0;
+    || d.courses.length > 0 || d.semester.length > 0 || d.ddls.length > 0;
 }
 
 async function readDayArray<T>(dir: string, rel: string): Promise<T[]> {
@@ -437,7 +445,8 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const taskTemplates = await readCategory<TaskTemplate>(dir, CATEGORY_FILES.taskTemplates);
   const courses = await readCategory<Course>(dir, CATEGORY_FILES.courses);
   const semester = await readCategory<SemesterRecord>(dir, CATEGORY_FILES.semester);
-  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester) return null;
+  const ddls = await readCategory<DdlItem>(dir, CATEGORY_FILES.ddls);
+  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls) return null;
   return {
     version: 1,
     savedAt: 0,
@@ -451,6 +460,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     trashItems: trashItems ?? [],
     courses: (courses ?? []).map(normalizeCourseDayOfWeek),
     semester: semester ?? [],
+    ddls: ddls ?? [],
   };
 }
 
@@ -491,7 +501,7 @@ interface FileWrite {
   table: AnyStoreTable;
 }
 
-const DEFAULT_WRITE_ORDER: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems', 'longTermGoals', 'fixedRoutines', 'taskTemplates', 'courses', 'semester', 'trashItems'];
+const DEFAULT_WRITE_ORDER: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems', 'longTermGoals', 'fixedRoutines', 'taskTemplates', 'courses', 'semester', 'ddls', 'trashItems'];
 
 function snapshot(): StorageData {
   return {
@@ -507,6 +517,7 @@ function snapshot(): StorageData {
     trashItems: store.trashItems,
     courses: store.courses,
     semester: store.semester,
+    ddls: store.ddls,
   };
 }
 
@@ -564,6 +575,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
   writes.push({ relPath: CATEGORY_FILES.taskTemplates, json: JSON.stringify(store.taskTemplates, null, 2), table: 'taskTemplates' });
   writes.push({ relPath: CATEGORY_FILES.courses, json: JSON.stringify(store.courses, null, 2), table: 'courses' });
   writes.push({ relPath: CATEGORY_FILES.semester, json: JSON.stringify(store.semester, null, 2), table: 'semester' });
+  writes.push({ relPath: CATEGORY_FILES.ddls, json: JSON.stringify(store.ddls, null, 2), table: 'ddls' });
   writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
   return { writes, deletes: [] };
 }
@@ -578,6 +590,7 @@ interface Fp {
   taskTemplates: string;
   courses: string;
   semester: string;
+  ddls: string;
   trashItems: string;
 }
 
@@ -604,6 +617,7 @@ function fingerprint(): Fp {
     taskTemplates: JSON.stringify(store.taskTemplates),
     courses: JSON.stringify(store.courses),
     semester: JSON.stringify(store.semester),
+    ddls: JSON.stringify(store.ddls),
     trashItems: JSON.stringify(store.trashItems),
   };
 }
@@ -654,6 +668,9 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
   }
   if (a.semester !== b.semester) {
     writes.push({ relPath: CATEGORY_FILES.semester, json: JSON.stringify(store.semester, null, 2), table: 'semester' });
+  }
+  if (a.ddls !== b.ddls) {
+    writes.push({ relPath: CATEGORY_FILES.ddls, json: JSON.stringify(store.ddls, null, 2), table: 'ddls' });
   }
   if (a.trashItems !== b.trashItems) {
     writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
@@ -732,6 +749,7 @@ function mergeIntoStore(data: StorageData): number {
     { key: 'taskTemplates', items: data.taskTemplates, numeric: true },
     { key: 'courses', items: data.courses, numeric: true },
     { key: 'semester', items: data.semester, numeric: true },
+    { key: 'ddls', items: data.ddls, numeric: true },
     { key: 'trashItems', items: data.trashItems, numeric: true },
   ];
   for (const { key, items, numeric } of tables) {
@@ -773,6 +791,7 @@ function mergeLegacy(legacy: Partial<StoreShape>): void {
     { key: 'taskTemplates', items: legacy.taskTemplates },
     { key: 'courses', items: legacy.courses },
     { key: 'semester', items: legacy.semester },
+    { key: 'ddls', items: legacy.ddls },
     { key: 'trashItems', items: legacy.trashItems },
   ];
   for (const { key, items } of tables) {
@@ -800,6 +819,7 @@ function liveArr(table: string): any[] {
     case 'taskItems': return store.taskItems;
     case 'taskTemplates': return store.taskTemplates;
     case 'courses': return store.courses;
+    case 'ddls': return store.ddls;
     default: return [];
   }
 }
@@ -885,6 +905,7 @@ function applyData(data: StorageData): void {
   store.trashItems = data.trashItems;
   store.courses = data.courses;
   store.semester = data.semester;
+  store.ddls = data.ddls;
 }
 
 async function readLegacyTablesSafe(): Promise<Partial<StoreShape> | null> {

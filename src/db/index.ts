@@ -6,7 +6,7 @@
  * 保持与旧版完全一致的导出函数签名，页面/Hook 无需改动。
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
 
@@ -269,6 +269,49 @@ export async function saveSemester(record: SemesterRecord): Promise<number> {
   return 1;
 }
 
+// ============ DDL 截止清单 CRUD ============
+
+export async function getAllDdls(): Promise<DdlItem[]> {
+  // 按截止时间升序（日期 → 时间 → id），已过期的自然排在最前
+  return [...store.ddls].sort((a, b) =>
+    a.deadlineDate.localeCompare(b.deadlineDate)
+    || a.deadlineTime.localeCompare(b.deadlineTime)
+    || (a.id ?? 0) - (b.id ?? 0));
+}
+
+export async function saveDdl(ddl: DdlItem): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (ddl.id != null) {
+      const idx = store.ddls.findIndex(d => d.id === ddl.id);
+      if (idx >= 0) store.ddls[idx] = { ...ddl, updatedAt: Date.now() };
+      resultId = ddl.id;
+      return;
+    }
+    resultId = allocId('ddls');
+    store.ddls.push({ ...ddl, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteDdl(id: number): Promise<void> {
+  await mutate(() => {
+    const ddl = store.ddls.find(d => d.id === id);
+    if (ddl) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'ddls',
+        originalId: id,
+        originalData: deepClone(ddl),
+        title: `DDL - ${ddl.name}`,
+        deletedAt: Date.now(),
+      });
+      store.ddls = store.ddls.filter(d => d.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'ddls'] });
+}
+
 // ============ 回收站 CRUD ============
 
 export async function getTrashItems(): Promise<TrashItem[]> {
@@ -284,6 +327,7 @@ const TRASH_TARGET: Record<string, AnyStoreTable> = {
   taskItems: 'taskItems',
   taskTemplates: 'taskTemplates',
   courses: 'courses',
+  ddls: 'ddls',
   timeBlocks: 'dailyPlans',
 };
 
@@ -340,6 +384,12 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
           const rec = originalData as Course;
           if (rec.id != null && store.courses.some(c => c.id === rec.id)) { ok = false; return; }
           store.courses.push(normalizeCourseDayOfWeek(rec));
+          break;
+        }
+        case 'ddls': {
+          const rec = originalData as DdlItem;
+          if (rec.id != null && store.ddls.some(d => d.id === rec.id)) { ok = false; return; }
+          store.ddls.push(rec);
           break;
         }
         case 'timeBlocks':

@@ -14,6 +14,7 @@ import SettingsPage from './pages/SettingsPage';
 import TaskListPage from './pages/TaskListPage';
 import CoursesPage from './pages/CoursesPage';
 import WeekViewPage from './pages/WeekViewPage';
+import DdlPage from './pages/DdlPage';
 import { BackButtonProvider, useRegisterBackHandler } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import './App.css';
@@ -73,6 +74,7 @@ function AppShell() {
           <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/week" element={<WeekViewPage />} />
+          <Route path="/ddl" element={<DdlPage />} />
         </Routes>
       </div>
       <TabBar />

@@ -10,6 +10,7 @@ const TABLE_LABELS: Record<string, string> = {
   taskItems: '任务清单项',
   taskTemplates: '任务清单模板',
   courses: '课程',
+  ddls: 'DDL',
   timeBlocks: '时间块',
 };
 

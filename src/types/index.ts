@@ -155,6 +155,20 @@ export interface SemesterRecord {
   updatedAt: number;
 }
 
+// ============ DDL 截止清单 ============
+
+/** DDL 事件（专门收录带截止时间的事项） */
+export interface DdlItem {
+  id?: number;
+  name: string;            // 事件名称
+  deadlineDate: string;    // "YYYY-MM-DD"
+  deadlineTime: string;    // "HH:mm"（精确到分钟）
+  notes: string;           // 长文字备注（可为空）
+  images: string[];        // 压缩后 JPEG dataURL（≤9 张，单条约 ≤3MB）
+  createdAt: number;
+  updatedAt: number;
+}
+
 // ============ 统计相关 ============
 
 export interface DayStats {

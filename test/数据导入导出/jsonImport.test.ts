@@ -30,6 +30,7 @@ interface StorageData {
   taskTemplates?: unknown[]; // 任务清单模板，可选（向后兼容）
   courses?: unknown[];       // 课程表，可选（向后兼容）
   semester?: unknown[];      // 学期设置（恒单记录），可选（向后兼容）
+  ddls?: unknown[];          // DDL 截止清单，可选（向后兼容）
 }
 
 /**
@@ -95,6 +96,7 @@ function makeValidJSON(overrides: Partial<StorageData> = {}): string {
     taskTemplates: [],
     courses: [],
     semester: [],
+    ddls: [],
     ...overrides,
   };
   return JSON.stringify(data, null, 2);
@@ -346,6 +348,7 @@ describe('JSON 导出 — 格式验证', () => {
     expect(parsed).toHaveProperty('taskTemplates');
     expect(parsed).toHaveProperty('courses');
     expect(parsed).toHaveProperty('semester');
+    expect(parsed).toHaveProperty('ddls');
   });
 
   it('round-trip: 导出 → 导入应保持数据一致', () => {

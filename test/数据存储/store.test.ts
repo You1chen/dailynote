@@ -67,7 +67,7 @@ async function kvPut(key: string, value: string): Promise<void> {
   });
 }
 
-import type { DailyPlan, LongTermGoal, TaskItem, Course, SemesterRecord } from '../../src/types';
+import type { DailyPlan, LongTermGoal, TaskItem, Course, SemesterRecord, DdlItem } from '../../src/types';
 import { genId } from '../../src/types';
 import {
   initStore,
@@ -106,6 +106,10 @@ function makeCourse(name: string, createdAt = 0): Course {
 
 function makeSemester(startDate: string | null): SemesterRecord {
   return { id: 1, startDate, specialDates: [], updatedAt: 0 } as SemesterRecord;
+}
+
+function makeDdl(name: string, deadlineDate = '2026-08-20', deadlineTime = '18:30', createdAt = 0): DdlItem {
+  return { name, deadlineDate, deadlineTime, notes: '', images: [], createdAt, updatedAt: createdAt } as DdlItem;
 }
 
 beforeEach(async () => {
@@ -756,5 +760,104 @@ describe('课程表存储', () => {
     const list = await db.getAllCourses();
     expect(list).toHaveLength(1);
     expect(list[0].dayOfWeek).toEqual([4]);
+  });
+});
+
+describe('DDL 存储', () => {
+  it('DDL CRUD 与持久化往返（initStore 重读），按截止时间升序', async () => {
+    const id = await db.saveDdl(makeDdl('高数作业'));
+    expect(id).toBe(1);
+    await db.saveDdl(makeDdl('实验报告', '2026-08-15', '09:00')); // 日期更早 → 排最前
+    await db.saveDdl(makeDdl('英语作文', '2026-08-20', '08:00')); // 同日更早 → 排在高数作业前
+    let list = await db.getAllDdls();
+    expect(list.map(d => d.name)).toEqual(['实验报告', '英语作文', '高数作业']);
+
+    await initStore(); // 从文件重读
+    list = await db.getAllDdls();
+    expect(list).toHaveLength(3);
+    expect(list.map(d => d.name)).toEqual(['实验报告', '英语作文', '高数作业']);
+  });
+
+  it('同日同刻：按 id 升序兜底稳定', async () => {
+    await db.saveDdl(makeDdl('a'));
+    await db.saveDdl(makeDdl('b'));
+    const list = await db.getAllDdls();
+    expect(list.map(d => d.name)).toEqual(['a', 'b']);
+  });
+
+  it('带 id 保存 = 更新不新增，images/notes 数组与长文本往返', async () => {
+    const id = await db.saveDdl(makeDdl('高数作业'));
+    const img = 'data:image/jpeg;base64,/9j/4AAQ';
+    await db.saveDdl({
+      ...makeDdl('高数作业'),
+      id,
+      name: '高等数学作业',
+      notes: '第一行\n第二行\n'.repeat(50), // 足够长的多行备注
+      images: [img, img],
+    });
+    const list = await db.getAllDdls();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高等数学作业');
+    expect(list[0].notes).toContain('第一行');
+    expect(list[0].images).toEqual([img, img]);
+
+    await initStore(); // 持久化后重读，dataURL 完整保留
+    const reread = await db.getAllDdls();
+    expect(reread[0].images).toEqual([img, img]);
+  });
+
+  it('删除 DDL → 回收站（originalTable=ddls，标题 DDL - 名称）→ 还原原 id', async () => {
+    const id = await db.saveDdl(makeDdl('高数作业'));
+    await db.deleteDdl(id);
+    expect(await db.getAllDdls()).toHaveLength(0);
+    const trash = await db.getTrashItems();
+    expect(trash).toHaveLength(1);
+    expect(trash[0].originalTable).toBe('ddls');
+    expect(trash[0].title).toBe('DDL - 高数作业');
+    const ok = await db.restoreFromTrash(trash[0].id!);
+    expect(ok).toBe(true);
+    const list = await db.getAllDdls();
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe(id);
+  });
+
+  it('删除后 id 不复用（与回收站还原不撞）', async () => {
+    const id1 = await db.saveDdl(makeDdl('a'));
+    await db.deleteDdl(id1);
+    const id2 = await db.saveDdl(makeDdl('b'));
+    expect(id2).toBeGreaterThan(id1);
+  });
+
+  it('导出→重置→导入往返：DDL 完整恢复（换手机场景）', async () => {
+    let blobContent = '';
+    (globalThis as any).document = {
+      createElement: () => ({ href: '', download: '', click: vi.fn(), remove: vi.fn() }),
+      body: { appendChild: vi.fn() },
+    };
+    (globalThis as any).Blob = class Blob {
+      constructor(public parts: string[]) { blobContent = parts[0]; }
+    };
+    (globalThis as any).URL = { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() };
+
+    await db.saveDdl({ ...makeDdl('高数作业'), notes: '带备注', images: ['data:image/jpeg;base64,AAAA'] });
+    await exportBackupFile();
+    const backup = blobContent;
+    expect(JSON.parse(backup).ddls).toHaveLength(1);
+
+    await _resetForTest();
+    const count = await importJSONIntoStore(backup);
+    expect(count).toBe(1);
+    const list = await db.getAllDdls();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高数作业');
+    expect(list[0].images).toEqual(['data:image/jpeg;base64,AAAA']);
+  });
+
+  it('仅 ddls.json 目录（无任何计划）不被当首次使用丢弃（回归）', async () => {
+    await kvPut('ddls.json', JSON.stringify([{ ...makeDdl('高数作业'), id: 1 }]));
+    await initStore();
+    const list = await db.getAllDdls();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高数作业');
   });
 });
