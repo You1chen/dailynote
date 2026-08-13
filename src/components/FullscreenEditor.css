@@ -1,0 +1,75 @@
+.fs-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+}
+
+.fs-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.fs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.fs-header-title {
+  font-size: var(--font-base);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.fs-title-input {
+  border: none;
+  font-size: var(--font-xl);
+  font-weight: 700;
+  padding: 20px 20px 12px;
+  background: transparent;
+  color: var(--color-text);
+  outline: none;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.fs-title-input::placeholder {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.fs-body-input {
+  flex: 1;
+  border: none;
+  font-size: var(--font-base);
+  padding: 0 20px 20px;
+  background: transparent;
+  color: var(--color-text);
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.8;
+  min-height: 200px;
+}
+
+.fs-body-input::placeholder {
+  color: var(--color-text-muted);
+  line-height: 1.8;
+}
+
+.fs-extra {
+  padding: 0 20px 20px;
+  flex-shrink: 0;
+}

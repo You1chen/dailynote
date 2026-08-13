@@ -1,0 +1,45 @@
+{
+  "name": "dailynote",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npx tsc --noEmit && vite build",
+    "build:android": "powershell -ExecutionPolicy Bypass -File scripts/build-apk.ps1 -SyncOnly",
+    "build:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-apk.ps1",
+    "preview": "vite preview",
+    "cap:add": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open": "npx cap open android",
+    "cap:assets": "node scripts/svg2png.mjs && npx capacitor-assets generate --android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/filesystem": "^8.1.2",
+    "date-fns": "^3.6.0",
+    "dexie": "^4.0.4",
+    "lucide-react": "^0.441.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "cross-env": "^10.1.0",
+    "fake-indexeddb": "^6.2.5",
+    "sharp": "^0.35.3",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.0",
+    "vite-plugin-pwa": "^0.20.0",
+    "vitest": "^4.1.10"
+  }
+}

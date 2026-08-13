@@ -1,0 +1,148 @@
+.goal-card .card-header {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  margin-bottom: 0;
+}
+
+.goal-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.goal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.goal-category-tag {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.goal-title {
+  font-size: var(--font-base);
+  font-weight: 600;
+}
+
+.goal-expand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.goal-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goal-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.goal-progress-fill {
+  height: 100%;
+  background: var(--color-success);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.goal-progress-text {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.goal-detail {
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.goal-desc {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+}
+
+.task-list {
+  margin-bottom: 12px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.task-item:last-child {
+  border-bottom: none;
+}
+
+.task-item--done .task-title {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+.task-title {
+  flex: 1;
+  font-size: var(--font-sm);
+}
+
+.add-task-row {
+  display: flex;
+  gap: 8px;
+}
+
+.add-task-row .input {
+  flex: 1;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-top: var(--safe-top);
+}
+
+.modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 8px;
+}

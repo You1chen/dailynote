@@ -1,0 +1,438 @@
+/**
+ * 内存 CRUD 层
+ *
+ * 所有读写直接作用于权威内存 store（src/services/store.ts），
+ * 每次变更立即写回用户目录文件（file-authoritative）。
+ * 保持与旧版完全一致的导出函数签名，页面/Hook 无需改动。
+ */
+
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem } from '../types';
+import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
+
+// ============ 每日计划 CRUD ============
+
+export async function getPlanByDate(date: string): Promise<DailyPlan | undefined> {
+  const found = store.dailyPlans.find(p => p.date === date);
+  return found ? { ...found, timeBlocks: [...found.timeBlocks] } : undefined;
+}
+
+export async function savePlan(plan: DailyPlan): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    const idx = store.dailyPlans.findIndex(p => p.date === plan.date);
+    if (idx >= 0) {
+      resultId = store.dailyPlans[idx].id!;
+      store.dailyPlans[idx] = { ...plan, id: resultId, updatedAt: Date.now() };
+    } else {
+      resultId = allocId('dailyPlans');
+      store.dailyPlans.push({ ...plan, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+    }
+  });
+  return resultId;
+}
+
+export async function getAllPlans(): Promise<DailyPlan[]> {
+  return [...store.dailyPlans].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// ============ 长期目标 CRUD ============
+
+export async function getAllGoals(): Promise<LongTermGoal[]> {
+  return [...store.longTermGoals].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function saveGoal(goal: LongTermGoal): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (goal.id != null) {
+      const idx = store.longTermGoals.findIndex(g => g.id === goal.id);
+      if (idx >= 0) store.longTermGoals[idx] = { ...goal, updatedAt: Date.now() };
+      resultId = goal.id;
+      return;
+    }
+    resultId = allocId('longTermGoals');
+    store.longTermGoals.push({ ...goal, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteGoal(id: number): Promise<void> {
+  await mutate(() => {
+    const goal = store.longTermGoals.find(g => g.id === id);
+    if (goal) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'longTermGoals',
+        originalId: id,
+        originalData: deepClone(goal),
+        title: goal.title,
+        deletedAt: Date.now(),
+      });
+      store.longTermGoals = store.longTermGoals.filter(g => g.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'longTermGoals'] });
+}
+
+// ============ 反思 CRUD ============
+
+export async function getReflectionsByDate(date: string): Promise<Reflection[]> {
+  return store.reflections.filter(r => r.date === date);
+}
+
+export async function saveReflection(r: Reflection): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (r.id != null) {
+      const idx = store.reflections.findIndex(x => x.id === r.id);
+      if (idx >= 0) store.reflections[idx] = r;
+      resultId = r.id;
+      return;
+    }
+    resultId = allocId('reflections');
+    store.reflections.push({ ...r, id: resultId, createdAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteReflection(id: number): Promise<void> {
+  await mutate(() => {
+    const r = store.reflections.find(x => x.id === id);
+    if (r) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'reflections',
+        originalId: id,
+        originalData: deepClone(r),
+        title: `反思 - ${r.problem?.slice(0, 30) || '无标题'}`,
+        deletedAt: Date.now(),
+      });
+      store.reflections = store.reflections.filter(x => x.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'reflections'] });
+}
+
+export async function getAllReflections(): Promise<Reflection[]> {
+  return [...store.reflections].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// ============ 收获 CRUD ============
+
+export async function getHarvestsByDate(date: string): Promise<Harvest[]> {
+  return store.harvests.filter(h => h.date === date);
+}
+
+export async function saveHarvest(h: Harvest): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (h.id != null) {
+      const idx = store.harvests.findIndex(x => x.id === h.id);
+      if (idx >= 0) store.harvests[idx] = h;
+      resultId = h.id;
+      return;
+    }
+    resultId = allocId('harvests');
+    store.harvests.push({ ...h, id: resultId, createdAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteHarvest(id: number): Promise<void> {
+  await mutate(() => {
+    const h = store.harvests.find(x => x.id === id);
+    if (h) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'harvests',
+        originalId: id,
+        originalData: deepClone(h),
+        title: `收获 - ${h.content?.slice(0, 30) || '无标题'}`,
+        deletedAt: Date.now(),
+      });
+      store.harvests = store.harvests.filter(x => x.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'harvests'] });
+}
+
+export async function getAllHarvests(): Promise<Harvest[]> {
+  return [...store.harvests].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// ============ 固定作息 CRUD ============
+
+export async function getAllRoutines(): Promise<FixedRoutine[]> {
+  return [...store.fixedRoutines];
+}
+
+export async function getActiveRoutine(): Promise<FixedRoutine | undefined> {
+  return store.fixedRoutines.find(r => r.isActive);
+}
+
+export async function saveRoutine(r: FixedRoutine): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (r.id != null) {
+      const idx = store.fixedRoutines.findIndex(x => x.id === r.id);
+      if (idx >= 0) store.fixedRoutines[idx] = { ...r } as FixedRoutine;
+      resultId = r.id;
+      return;
+    }
+    resultId = allocId('fixedRoutines');
+    store.fixedRoutines.push({ ...r, id: resultId, createdAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function setActiveRoutine(id: number): Promise<void> {
+  await mutate(() => {
+    store.fixedRoutines = store.fixedRoutines.map(r => ({ ...r, isActive: r.id === id }));
+  });
+}
+
+export async function deleteRoutine(id: number): Promise<void> {
+  await mutate(() => {
+    const r = store.fixedRoutines.find(x => x.id === id);
+    if (r) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'fixedRoutines',
+        originalId: id,
+        originalData: deepClone(r),
+        title: `作息模板 - ${r.name || '未命名'}`,
+        deletedAt: Date.now(),
+      });
+      store.fixedRoutines = store.fixedRoutines.filter(x => x.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'fixedRoutines'] });
+}
+
+// ============ 回收站 CRUD ============
+
+export async function getTrashItems(): Promise<TrashItem[]> {
+  return [...store.trashItems].sort((a, b) => b.deletedAt - a.deletedAt);
+}
+
+/** 回收站条目对应的原表（timeBlocks 还原到当天计划） */
+const TRASH_TARGET: Record<string, AnyStoreTable> = {
+  longTermGoals: 'longTermGoals',
+  reflections: 'reflections',
+  harvests: 'harvests',
+  fixedRoutines: 'fixedRoutines',
+  taskItems: 'taskItems',
+  taskTemplates: 'taskTemplates',
+  timeBlocks: 'dailyPlans',
+};
+
+export async function restoreFromTrash(trashId: number): Promise<boolean> {
+  const item = store.trashItems.find(t => t.id === trashId);
+  if (!item) return false;
+  // 先写"新增"侧（原表），再写"移除"侧（回收站），崩溃中断不丢数据
+  const target = TRASH_TARGET[item.originalTable];
+  const writeOrder: AnyStoreTable[] | undefined = target ? [target, 'trashItems'] : undefined;
+  let ok = false;
+  await mutate(() => {
+    const it = store.trashItems.find(t => t.id === trashId);
+    if (!it) return;
+    const { originalTable, originalData } = it;
+    try {
+      switch (originalTable) {
+        case 'longTermGoals': {
+          const rec = originalData as LongTermGoal;
+          if (rec.id != null && store.longTermGoals.some(g => g.id === rec.id)) { ok = false; return; }
+          store.longTermGoals.push(rec);
+          break;
+        }
+        case 'reflections': {
+          const rec = originalData as Reflection;
+          if (rec.id != null && store.reflections.some(x => x.id === rec.id)) { ok = false; return; }
+          store.reflections.push(rec);
+          break;
+        }
+        case 'harvests': {
+          const rec = originalData as Harvest;
+          if (rec.id != null && store.harvests.some(x => x.id === rec.id)) { ok = false; return; }
+          store.harvests.push(rec);
+          break;
+        }
+        case 'fixedRoutines': {
+          const rec = originalData as FixedRoutine;
+          if (rec.id != null && store.fixedRoutines.some(x => x.id === rec.id)) { ok = false; return; }
+          store.fixedRoutines.push(rec);
+          break;
+        }
+        case 'taskItems': {
+          const rec = originalData as TaskItem;
+          if (rec.id && store.taskItems.some(t => t.id === rec.id)) { ok = false; return; }
+          store.taskItems.push(rec);
+          break;
+        }
+        case 'taskTemplates': {
+          const rec = originalData as TaskTemplate;
+          if (rec.id != null && store.taskTemplates.some(x => x.id === rec.id)) { ok = false; return; }
+          store.taskTemplates.push(rec);
+          break;
+        }
+        case 'timeBlocks':
+          restoreTimeBlockSync(originalData);
+          break;
+        default:
+          return;
+      }
+      store.trashItems = store.trashItems.filter(t => t.id !== trashId);
+      ok = true;
+    } catch {
+      ok = false;
+    }
+  }, { writeOrder });
+  return ok;
+}
+
+/** 还原时间块到对应日期的 DailyPlan */
+function restoreTimeBlockSync(block: any): void {
+  const { date, ...blockData } = block;
+  if (!date) return;
+  const idx = store.dailyPlans.findIndex(p => p.date === date);
+  if (idx >= 0) {
+    store.dailyPlans[idx] = {
+      ...store.dailyPlans[idx],
+      timeBlocks: [...store.dailyPlans[idx].timeBlocks, blockData],
+      updatedAt: Date.now(),
+    };
+  } else {
+    store.dailyPlans.push({
+      date,
+      timeBlocks: [blockData],
+      id: allocId('dailyPlans'),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  }
+}
+
+export async function permanentlyDelete(trashId: number): Promise<void> {
+  await mutate(() => {
+    store.trashItems = store.trashItems.filter(t => t.id !== trashId);
+  });
+}
+
+export async function clearAllTrash(): Promise<void> {
+  await mutate(() => {
+    store.trashItems = [];
+  });
+}
+
+/** 清理超过30天的回收站项 */
+export async function cleanOldTrash(): Promise<void> {
+  await mutate(() => {
+    cleanOldTrashSync();
+  });
+}
+
+function cleanOldTrashSync(): void {
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  store.trashItems = store.trashItems.filter(t => t.deletedAt >= cutoff);
+}
+
+/** 将时间块移入回收站 */
+export async function moveTimeBlockToTrash(date: string, block: any, title: string): Promise<void> {
+  await mutate(() => {
+    store.trashItems.push({
+      id: allocId('trashItems'),
+      originalTable: 'timeBlocks',
+      originalId: block.id,
+      originalData: deepClone({ date, ...block }),
+      title,
+      deletedAt: Date.now(),
+    });
+    cleanOldTrashSync();
+  });
+}
+
+// ============ 任务清单 CRUD ============
+
+export async function getTaskItemsByDate(date: string): Promise<TaskItem[]> {
+  return store.taskItems
+    .filter(t => t.date === date)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+export async function saveTaskItem(item: TaskItem): Promise<void> {
+  await mutate(() => {
+    const idx = store.taskItems.findIndex(t => t.id === item.id);
+    if (idx >= 0) {
+      store.taskItems[idx] = { ...item, updatedAt: Date.now() };
+    } else {
+      store.taskItems.push({ ...item, createdAt: Date.now(), updatedAt: Date.now() });
+    }
+  });
+}
+
+export async function toggleTaskItem(id: string): Promise<void> {
+  await mutate(() => {
+    const idx = store.taskItems.findIndex(t => t.id === id);
+    if (idx >= 0) {
+      const cur = store.taskItems[idx];
+      store.taskItems[idx] = { ...cur, completed: !cur.completed, updatedAt: Date.now() };
+    }
+  });
+}
+
+export async function deleteTaskItem(id: string): Promise<void> {
+  await mutate(() => {
+    const item = store.taskItems.find(t => t.id === id);
+    if (item) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'taskItems',
+        originalId: id,
+        originalData: deepClone(item),
+        title: `任务清单项 - ${item.title?.slice(0, 30) || '无标题'}`,
+        deletedAt: Date.now(),
+      });
+      store.taskItems = store.taskItems.filter(t => t.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'taskItems'] });
+}
+
+// ============ 任务清单模板 CRUD ============
+
+export async function getAllTaskTemplates(): Promise<TaskTemplate[]> {
+  return [...store.taskTemplates];
+}
+
+export async function saveTaskTemplate(t: TaskTemplate): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (t.id != null) {
+      const idx = store.taskTemplates.findIndex(x => x.id === t.id);
+      if (idx >= 0) store.taskTemplates[idx] = { ...t, updatedAt: Date.now() };
+      resultId = t.id;
+      return;
+    }
+    resultId = allocId('taskTemplates');
+    store.taskTemplates.push({ ...t, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteTaskTemplate(id: number): Promise<void> {
+  await mutate(() => {
+    const t = store.taskTemplates.find(x => x.id === id);
+    if (t) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'taskTemplates',
+        originalId: id,
+        originalData: deepClone(t),
+        title: `任务模板 - ${t.name || '未命名'}`,
+        deletedAt: Date.now(),
+      });
+      store.taskTemplates = store.taskTemplates.filter(x => x.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'taskTemplates'] });
+}

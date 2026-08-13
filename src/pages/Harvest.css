@@ -1,0 +1,79 @@
+.harvest-add-btn {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 14px;
+  font-size: var(--font-base);
+  border-radius: var(--radius-lg);
+}
+
+.harvest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.harvest-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  padding: 14px;
+  display: flex;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+  animation: fadeInUp 0.25s ease-out both;
+}
+
+.harvest-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.harvest-card-title {
+  font-size: var(--font-base);
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--color-text);
+}
+
+.harvest-text {
+  font-size: var(--font-base);
+  line-height: 1.7;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.harvest-tag-inline {
+  color: var(--color-primary);
+  font-weight: 600;
+  background: var(--color-primary-bg);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.harvest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.harvest-tag-chip {
+  font-size: var(--font-xs);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.harvest-delete {
+  flex-shrink: 0;
+  align-self: flex-start;
+  color: var(--color-text-muted);
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+
+.harvest-card:active .harvest-delete {
+  opacity: 0.8;
+}

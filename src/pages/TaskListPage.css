@@ -1,0 +1,288 @@
+/* ============ 任务清单页面 ============ */
+
+.taskpage-add-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.taskpage-add-row .input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: var(--font-base);
+}
+
+.taskpage-add-row .btn {
+  flex-shrink: 0;
+  padding: 10px 18px;
+}
+
+/* 分组 */
+.taskpage-group {
+  margin-bottom: 20px;
+}
+
+.taskpage-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  margin-bottom: 6px;
+  user-select: none;
+}
+
+.taskpage-group-header--done {
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.taskpage-group-title {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.taskpage-group-count {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+/* 任务项 */
+.taskpage-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.taskpage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  transition: all 0.15s;
+}
+
+.taskpage-item:hover {
+  border-color: var(--color-primary-light);
+}
+
+.taskpage-item--done {
+  opacity: 0.65;
+}
+
+.taskpage-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.taskpage-check:hover {
+  border-color: var(--color-primary);
+}
+
+.taskpage-check--done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.taskpage-item-text {
+  flex: 1;
+  font-size: var(--font-base);
+  color: var(--color-text);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.taskpage-item-text--done {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+.taskpage-delete {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.taskpage-item:hover .taskpage-delete {
+  opacity: 1;
+}
+
+.taskpage-delete:hover {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* ============ 任务清单模板管理面板 ============ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding-top: var(--safe-top);
+}
+
+.modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.tpl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.tpl-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+}
+
+.tpl-hint {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  margin: 0 0 14px;
+}
+
+.tpl-create {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tpl-create .input {
+  flex: 1;
+}
+
+.tpl-empty {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+}
+
+.tpl-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.tpl-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.tpl-name-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tpl-count {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.tpl-items {
+  border-top: 1px solid var(--color-border);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tpl-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tpl-item .input {
+  flex: 1;
+}
+
+.tpl-item-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  transition: all 0.15s;
+  color: transparent;
+}
+
+.tpl-item-check:hover {
+  border-color: var(--color-primary);
+}
+
+.tpl-item-check--done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+}
+
+.tpl-item-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.tpl-item-add:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}

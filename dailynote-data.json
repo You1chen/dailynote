@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "savedAt": 1784986734568,
+  "dailyPlans": [
+    {
+      "id": 1,
+      "date": "2026-07-25",
+      "timeBlocks": [
+        {
+          "id": "a1b2c3d4",
+          "startTime": "08:00",
+          "endTime": "10:00",
+          "taskTitle": "背英语单词",
+          "plannedContent": "背50个新单词，复习昨天的30个",
+          "actualExecution": "背了40个，效率一般",
+          "focusScore": 7,
+          "efficiencyScore": 6,
+          "completed": true,
+          "notes": "早上有点困，明天早点睡"
+        },
+        {
+          "id": "e5f6g7h8",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "taskTitle": "做数学题",
+          "plannedContent": "完成第三章习题",
+          "actualExecution": "",
+          "focusScore": 5,
+          "efficiencyScore": 5,
+          "completed": false,
+          "notes": ""
+        },
+        {
+          "id": "i9j0k1l2",
+          "startTime": "14:00",
+          "endTime": "17:00",
+          "taskTitle": "项目开发",
+          "plannedContent": "完成用户登录模块",
+          "actualExecution": "完成了登录和注册页面",
+          "focusScore": 9,
+          "efficiencyScore": 8,
+          "completed": true,
+          "notes": "今天效率很高 👍"
+        }
+      ],
+      "createdAt": 1784986734568,
+      "updatedAt": 1784986734568
+    }
+  ],
+  "longTermGoals": [
+    {
+      "id": 1,
+      "title": "通过英语六级 🎯",
+      "description": "每天背50个单词，做1套阅读练习",
+      "category": "学习",
+      "tasks": [
+        {
+          "id": "t1",
+          "title": "买六级词汇书",
+          "completed": true,
+          "createdAt": 1784986734568
+        },
+        {
+          "id": "t2",
+          "title": "每天背50个单词",
+          "completed": false,
+          "createdAt": 1784986734568
+        },
+        {
+          "id": "t3",
+          "title": "做10套真题",
+          "completed": false,
+          "createdAt": 1784986734568
+        }
+      ],
+      "createdAt": 1784986734568,
+      "updatedAt": 1784986734568
+    },
+    {
+      "id": 2,
+      "title": "完成个人项目",
+      "description": "用 React + TypeScript 做一个日程管理 App",
+      "category": "项目",
+      "tasks": [
+        {
+          "id": "t4",
+          "title": "搭建项目框架",
+          "completed": true,
+          "createdAt": 1784986734568
+        },
+        {
+          "id": "t5",
+          "title": "实现时间网格视图",
+          "completed": true,
+          "createdAt": 1784986734568
+        },
+        {
+          "id": "t6",
+          "title": "添加数据导出导入",
+          "completed": false,
+          "createdAt": 1784986734568
+        }
+      ],
+      "createdAt": 1784986734568,
+      "updatedAt": 1784986734568
+    }
+  ],
+  "reflections": [
+    {
+      "id": 1,
+      "date": "2026-07-25",
+      "period": "上午",
+      "problem": "背单词时注意力不集中，看了好几次手机",
+      "cause": "昨晚1点才睡，睡眠不足导致精神涣散",
+      "solution": "今晚11点前必须睡觉，把手机放客厅",
+      "relatedTaskTitle": "背英语单词",
+      "resolved": false,
+      "createdAt": 1784986734568
+    },
+    {
+      "id": 2,
+      "date": "2026-07-25",
+      "period": "下午",
+      "problem": "",
+      "cause": "",
+      "solution": "",
+      "relatedTaskTitle": "",
+      "resolved": false,
+      "createdAt": 1784986734568
+    }
+  ],
+  "harvests": [
+    {
+      "id": 1,
+      "date": "2026-07-25",
+      "period": "下午",
+      "subject": "JavaScript",
+      "content": "Promise.allSettled() 不会因为某个 Promise 失败就中断，它会等所有 Promise 都 settled 后返回结果数组",
+      "createdAt": 1784986734568
+    },
+    {
+      "id": 2,
+      "date": "2026-07-25",
+      "period": "下午",
+      "subject": "CSS",
+      "content": "container queries 可以根据父容器宽度而非视口宽度来调整样式，比 media queries 更适合组件化开发",
+      "createdAt": 1784986734568
+    }
+  ],
+  "fixedRoutines": [
+    {
+      "id": 1,
+      "name": "工作日作息",
+      "timeBlocks": [
+        {
+          "startTime": "07:00",
+          "endTime": "08:00",
+          "taskTitle": "起床 + 早餐",
+          "plannedContent": ""
+        },
+        {
+          "startTime": "08:00",
+          "endTime": "12:00",
+          "taskTitle": "深度学习",
+          "plannedContent": ""
+        },
+        {
+          "startTime": "12:00",
+          "endTime": "13:00",
+          "taskTitle": "午餐 + 休息",
+          "plannedContent": ""
+        },
+        {
+          "startTime": "13:00",
+          "endTime": "18:00",
+          "taskTitle": "项目开发",
+          "plannedContent": ""
+        },
+        {
+          "startTime": "18:00",
+          "endTime": "19:00",
+          "taskTitle": "晚餐",
+          "plannedContent": ""
+        },
+        {
+          "startTime": "20:00",
+          "endTime": "22:30",
+          "taskTitle": "阅读 + 反思",
+          "plannedContent": ""
+        }
+      ],
+      "isActive": true,
+      "createdAt": 1784986734568
+    }
+  ]
+}
