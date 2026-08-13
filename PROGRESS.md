@@ -385,3 +385,33 @@
 新增：android/app/src/main/java/com/dailynote/app/DailyNoteStoragePlugin.java、test/数据存储/storageAccess.test.ts
 修改：android/app/src/main/AndroidManifest.xml（权限）、android/app/src/main/java/com/dailynote/app/MainActivity.java（注册插件）、android/app/build.gradle（版本 1.2/3）、src/services/store.ts（权限桥+守卫）、src/services/storage.ts（facade 转发）、src/main.tsx（授权引导页）、structure.md
 ```
+
+## 2026-08-13 — 修复（续）：真机仍不可读的根因确认 + 导入错误细分 + 启动页版本号
+
+### 需求
+
+用户反馈权限修复后手机上「依然不可读」：浏览器（IndexedDB）正常；手机编辑会写成 JSON，但卸载重装后指定同一目录读不回数据；且导出后再导入提示「无效的数据文件格式」。
+
+### 根因
+
+1. **Android 11+ 沙盒存储的「归属权」规则**（外部资料核实）：未授予「所有文件访问」时，裸 File API 只能访问**本次安装**创建的文件。卸载重装后新安装的 UID 不再拥有旧文件——读旧文件 EACCES、listFiles/readdir 看不到别人的文件、但**新建文件仍可写**。这正好解释「能写新 JSON、读不回旧 JSON」：用户实测的 APK 没有走授权流程（旧 APK 无授权引导页；或新版未授权——新版未授权会被引导页拦住进不了应用，能进入且无数据 = 旧 APK）。
+2. ionfilesystem-android 1.1.0 反编译核实：`listDirectory`（File.exists→isDirectory→listFiles）与 `readFile`（FileInputStream→UTF-8）同走裸 File API，无独立缺陷——未授权时两者一起被系统拒绝，与写入无关。
+3. 导入报错是笼统的「无效的数据文件格式」，实际只有两种可能：选中的不是 JSON 文本（微信缓存二进制，特征字节 0xB1 0xAB，历史已知问题）或旧版导出的备份缺 `version`/`dailyPlans` 字段。
+
+### 实现
+
+- **store.ts `importJSONIntoStore`**：错误细分——空内容 / 非 JSON 文本（提示可能选到微信缓存/二进制文件）/ 非有效 JSON（损坏或选错）/ 非 DailyNote 格式（缺 version/dailyPlans，提示可能为旧版备份）。
+- **main.tsx Boot**：启动 loading 与授权页底部显示 `DailyNote v{App.getInfo().version}`（Android 取 APK versionName），真机排查时可直接确认手机装的是哪个版本。
+- 版本号：versionCode 3→4、versionName 1.2→1.2.1；package.json / package-lock.json 同步 1.2.1。
+
+### 验证
+
+- `npx vitest run` **433/433** 通过（store.test.ts 新增「错误信息区分具体原因」1 项：空文件/空白、微信缓存特征字节、缺字段、损坏 JSON 各报对应错误）。
+- `npm run build:apk` 全流程成功；合并后 manifest 确认 versionCode 4 / versionName 1.2.1，MANAGE_EXTERNAL_STORAGE + READ/WRITE_EXTERNAL_STORAGE 均在。
+- 待真机验证步骤（1.2.1）：安装后启动页应显示 v1.2.1 → 若未授权会进入 🔓 引导页 → 去开启「所有文件访问」→ 返回自动重新检测并恢复数据；导入时直接选 Documents 里的 `dailynote-backup-*.json` 本体（勿选微信缓存文件）。
+
+### 涉及文件
+
+```
+修改：src/services/store.ts（导入错误细分）、src/main.tsx（版本号显示）、android/app/build.gradle（版本 1.2.1/4）、package.json / package-lock.json（1.2.1）、test/数据存储/store.test.ts（+1 测试）、structure.md
+```

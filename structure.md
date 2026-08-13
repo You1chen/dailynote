@@ -45,7 +45,7 @@ dailynote/
 │   └── DDL清单/ddlTime.test.ts               # 13 tests
 │
 └── src/
-    ├── main.tsx                              # React 挂载入口（Boot 四阶段 loading/setup/storagePermission/ready → SetupPage 或 App）
+    ├── main.tsx                              # React 挂载入口（Boot 四阶段 loading/setup/storagePermission/ready → SetupPage 或 App；loading/授权页显示 APK 版本号便于真机排查）
     ├── App.tsx                               # 根组件：路由 + TabBar + SideNav + 主题应用
     ├── App.css                               # 全局样式、CSS 变量、深色主题、通用工具类
     ├── vite-env.d.ts
@@ -167,7 +167,7 @@ Documents/<dir>/
  启动时 initStore() 读入 + 一次性迁移（旧单文件→新布局、旧 Dexie→文件，成功后删除旧数据源）
 ```
 
-- **模块**：[services/store.ts](src/services/store.ts) 维护内存 store、持久化队列（**只写变脏的文件**，入队时捕获 `{dir, 待写文件列表}` 快照）、双后端（Capacitor 文件 / Web IndexedDB KV）、路径管理、一次性迁移、加载自愈、**Android 存储权限守卫**（`storageAccessBlocked` 被阻塞时 `initStore` 返回 -2 且不碰内存 store）。
+- **模块**：[services/store.ts](src/services/store.ts) 维护内存 store、持久化队列（**只写变脏的文件**，入队时捕获 `{dir, 待写文件列表}` 快照）、双后端（Capacitor 文件 / Web IndexedDB KV）、路径管理、一次性迁移、加载自愈、**Android 存储权限守卫**（`storageAccessBlocked` 被阻塞时 `initStore` 返回 -2 且不碰内存 store）、**导入错误细分**（空文件 / 非 JSON 文本〔微信缓存提示〕/ 非 DailyNote 格式〔旧版提示〕）。
 - **CRUD**：[db/index.ts](src/db/index.ts) 所有读写直接作用于内存 store，每次变更立即写回对应文件（无防抖窗口；改当天只写当天文件）。
 - **旧 Dexie 库**：[db/legacy.ts](src/db/legacy.ts) 仅用于升级时一次性读取/删除，运行时不再使用。
 
@@ -520,12 +520,12 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `test/偏好设置/preferences.test.ts`             |      15      | 默认值、localStorage 存取、旧版兼容、主题应用逻辑                                                                                                                                                                                                                                                     |
 | `test/偏好设置/avatarCrop.test.ts`              |      17      | 头像裁剪纯函数：cover 缩放、平移钳制、围绕点缩放像素不动、裁剪矩形映射（含随机模糊）                                                                                                                                                                                                                  |
 | `test/任务清单/taskList.test.ts`                |      18      | 创建、完成切换、排序、统计、日期隔离、边界情况                                                                                                                                                                                                                                                        |
-| `test/数据存储/store.test.ts`                   |      52      | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份（含模板导出→导入往返）、课程表存储（CRUD 往返、semester 恒 1、回收站还原原 id、导出导入含 courses+semester、仅课程数据目录回归、旧版单数字 dayOfWeek 归一化）、DDL 存储（CRUD 往返升序、同日同时刻 id 兜底、images/长备注往返、回收站还原原 id、id 不复用、导出导入、仅 ddls.json 目录回归） |
+| `test/数据存储/store.test.ts`                   |      53      | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入（含错误信息细分：空文件/非 JSON 文本/非 DailyNote 格式/损坏）、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份（含模板导出→导入往返）、课程表存储（CRUD 往返、semester 恒 1、回收站还原原 id、导出导入含 courses+semester、仅课程数据目录回归、旧版单数字 dayOfWeek 归一化）、DDL 存储（CRUD 往返升序、同日同时刻 id 兜底、images/长备注往返、回收站还原原 id、id 不复用、导出导入、仅 ddls.json 目录回归） |
 | `test/DDL清单/ddlTime.test.ts`                 |      13      | minutesUntilDeadline（未来/过期/恰为截止/跨零点/格式与范围非法→null）、ddlRemainText（分钟/小时/天边界、0→已过期）                                                                                                                       |
 | `test/任务清单/taskTemplate.test.ts`            |      13      | 模板 CRUD/更新、软删除进回收站与还原、templates.json 持久化、增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数                                                                                                                                                               |
 | `test/课程表/courseSchedule.test.ts`            |      32      | weekdayOf/mondayOf、weekIndex（周一/周中开学、早于开学、跨年）、isCourseActiveOnWeek（单双周+区间边界）、内置节假日表（2026/2027、无重复）、isDayHoliday（手动>内置、补课覆盖）、computeDayCourses（星期多选/周次/节假日/排序/多天课程）、dayOfWeek 旧数据归一化                                      |
 | `test/数据存储/storageAccess.test.ts`         |       8      | Android 存储权限守卫：11+ 未授权阻塞/已授权放行、Android 10 不阻塞、Web 不阻塞、阻塞时 initStore 返回 -2 且零写入、授权后恢复                                                                                                                                                                         |
-| **总计**                                    | **432** |                                                                                                                                                                                                                                                                                                       |
+| **总计**                                    | **433** |                                                                                                                                                                                                                                                                                                       |
 
 运行：`npx vitest run`（偶尔需先 `rm -rf node_modules/.vite node_modules/.vitest` 清缓存）
 

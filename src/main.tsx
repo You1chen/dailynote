@@ -48,7 +48,20 @@ const permBtnGhost: React.CSSProperties = {
 function Boot() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'storagePermission' | 'ready'>('loading');
   const [statusMsg, setStatusMsg] = useState('正在初始化...');
+  const [appVersion, setAppVersion] = useState('');
   const busyRef = useRef(false);
+
+  // 显示安装的版本号（Android 取 APK versionName），便于确认手机上运行的是哪个版本
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await App.getInfo();
+        setAppVersion(info.version);
+      } catch {
+        /* 取不到就隐藏版本号 */
+      }
+    })();
+  }, []);
 
   /** 权限就绪后加载数据：被阻塞 → 授权页；成功 → 进入应用 */
   const tryLoad = useCallback(async (): Promise<void> => {
@@ -152,6 +165,7 @@ function Boot() {
           animation: 'spin 0.8s linear infinite',
         }} />
         <span>{statusMsg}</span>
+        {appVersion && <span style={{ fontSize: '0.75rem', opacity: 0.55 }}>DailyNote v{appVersion}</span>}
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
@@ -175,6 +189,7 @@ function Boot() {
         </p>
         <button style={permBtn} onClick={handleGrantAccess}>去开启权限</button>
         <button style={permBtnGhost} onClick={() => tryLoad()}>已开启，重新检测</button>
+        {appVersion && <span style={{ fontSize: '0.75rem', opacity: 0.55 }}>DailyNote v{appVersion}</span>}
       </div>
     );
   }

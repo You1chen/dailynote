@@ -361,6 +361,17 @@ describe('importJSONIntoStore', () => {
     await expect(importJSONIntoStore('\ufeff{"version":1,"dailyPlans":[],"longTermGoals":[],"reflections":[],"harvests":[],"fixedRoutines":[]}')).resolves.toBe(0);
     await expect(importJSONIntoStore('{"foo":"bar"}')).rejects.toThrow();
   });
+
+  it('错误信息区分具体原因（空文件 / 非 JSON 文本 / 非 DailyNote 格式）', async () => {
+    await expect(importJSONIntoStore('')).rejects.toThrow('文件内容为空');
+    await expect(importJSONIntoStore('   \n\t')).rejects.toThrow('文件内容为空');
+    // 微信缓存文件特征字节（0xB1 0xAB 开头）→ 提示选错文件而非笼统的格式错误
+    await expect(importJSONIntoStore('\xB1\xAB\xDE\x74\x0B\x75')).rejects.toThrow('不是 JSON 文本');
+    // 是 JSON 但缺 version/dailyPlans → 提示可能为旧版备份
+    await expect(importJSONIntoStore('{"foo":"bar"}')).rejects.toThrow('不是 DailyNote 数据文件');
+    // 形似 JSON 但实际损坏 → 提示损坏
+    await expect(importJSONIntoStore('{"version":1,"dailyPlans":[}')).rejects.toThrow('不是有效的 JSON');
+  });
 });
 
 // ============ 一次性迁移 ============

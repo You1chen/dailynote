@@ -973,8 +973,16 @@ async function readLegacyTablesSafe(): Promise<Partial<StoreShape> | null> {
 /** 从 JSON 字符串导入（备份包格式；纯合并：存在则更新、不存在则新增）。返回合并的记录数 */
 export async function importJSONIntoStore(json: string): Promise<number> {
   const clean = json.codePointAt(0) === 0xFEFF ? json.slice(1) : json;
-  const data = parseStorageData(clean);
-  if (!data) throw new Error('无效的数据文件格式');
+  const trimmed = clean.trimStart();
+  if (!trimmed) throw new Error('文件内容为空，无法导入');
+  if (!trimmed.startsWith('{')) throw new Error('文件内容不是 JSON 文本（可能选到了微信缓存/二进制文件，请选择导出的 .json 备份）');
+  try {
+    JSON.parse(trimmed);
+  } catch {
+    throw new Error('文件内容不是有效的 JSON（可能已损坏或选错文件）');
+  }
+  const data = parseStorageData(trimmed);
+  if (!data) throw new Error('不是 DailyNote 数据文件（缺少 version/dailyPlans 字段，可能是旧版本导出的备份）');
   let count = 0;
   await mutate(() => {
     count = mergeIntoStore(data);
