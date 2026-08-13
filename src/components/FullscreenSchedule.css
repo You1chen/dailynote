@@ -190,3 +190,52 @@
   flex: 1;
   border-top: 2px solid #ef4444;
 }
+
+/* ============ 课程块（只读展示，来自课程表） ============ */
+.fs-course-block {
+  position: absolute;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  border-left: 3px solid var(--color-warning);
+  cursor: pointer;
+  overflow: hidden;
+  z-index: 2; /* 低于任务块（3），重叠时任务块在上 */
+  min-height: 20px;
+}
+
+.fs-course-block:active {
+  opacity: 0.9;
+}
+
+.fs-course-block-inner {
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.fs-course-block-time {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-warning);
+  font-variant-numeric: tabular-nums;
+}
+
+.fs-course-block-name {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-course-block-loc {
+  font-size: 0.625rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

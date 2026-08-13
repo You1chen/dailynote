@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Maximize2, Settings } from 'lucide-react';
 import DayNavigator from './DayNavigator';
-import type { TimeBlock } from '../types';
+import type { TimeBlock, Course } from '../types';
 import type { UserPreferences } from '../hooks/usePreferences';
 import { timeToMinutes, isInSleepPeriod, sleepLabel, gridClickY, blockRenderRect } from '../utils/time';
 import './FullscreenSchedule.css';
@@ -17,11 +17,15 @@ interface Props {
   onGridClick: (startTime: string) => void;
   onPrefsClick: () => void;
   onClose: () => void;
+  /** 当天课程（只读展示，调用方用 computeDayCourses 算好传入） */
+  courses?: Course[];
+  onCourseClick?: (course: Course) => void;
 }
 
 export default function FullscreenSchedule({
   visible, date, blocks, prefs,
   onDateChange, onBlockClick, onGridClick, onPrefsClick, onClose,
+  courses, onCourseClick,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hourHeight = prefs.hourHeight;
@@ -91,6 +95,7 @@ export default function FullscreenSchedule({
 
   function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest('.fs-time-block')) return;
+    if ((e.target as HTMLElement).closest('.fs-course-block')) return;
     if ((e.target as HTMLElement).closest('.fs-sleep-bar')) return;
 
     // 滚动容器（.fs-grid-container）的 rect.top 不随内部滚动变化；
@@ -202,6 +207,41 @@ export default function FullscreenSchedule({
                 <div className="fs-hour-line" />
               </div>
             ))}
+
+            {/* 课程块（只读展示，z-index 低于任务块） */}
+            {(courses ?? []).map(course => {
+              const rect = blockRenderRect(course.startTime, course.endTime, {
+                hideSleep,
+                sleepStart,
+                sleepEnd,
+                hourHeight,
+                barHeight: 28,
+                gridHeight,
+              });
+              if (!rect) return null;
+              const { top, height } = rect;
+              return (
+                <div
+                  key={`fs-course-${course.id}`}
+                  className="fs-course-block"
+                  style={{ top, height, left: 52, right: 4 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCourseClick?.(course);
+                  }}
+                >
+                  <div className="fs-course-block-inner">
+                    <span className="fs-course-block-time">
+                      {course.startTime}-{course.endTime}
+                    </span>
+                    <span className="fs-course-block-name">{course.name}</span>
+                    {course.location && (
+                      <span className="fs-course-block-loc">📍 {course.location}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
 
             {/* 时间块 */}
             {blocks.map(block => {

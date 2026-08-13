@@ -6,7 +6,8 @@
  * 保持与旧版完全一致的导出函数签名，页面/Hook 无需改动。
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord } from '../types';
+import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
 
 // ============ 每日计划 CRUD ============
@@ -209,6 +210,65 @@ export async function deleteRoutine(id: number): Promise<void> {
   }, { writeOrder: ['trashItems', 'fixedRoutines'] });
 }
 
+// ============ 课程表 CRUD ============
+
+export async function getAllCourses(): Promise<Course[]> {
+  // 多星期课程按最早的一天排序（同门课在多个分组重复出现，卡片顺序仍稳定）
+  const minDay = (c: Course) => (c.dayOfWeek.length > 0 ? Math.min(...c.dayOfWeek) : 0);
+  return [...store.courses].sort((a, b) => minDay(a) - minDay(b) || a.startTime.localeCompare(b.startTime));
+}
+
+export async function saveCourse(course: Course): Promise<number> {
+  const clean = normalizeCourseDayOfWeek(course);
+  let resultId = 0;
+  await mutate(() => {
+    if (clean.id != null) {
+      const idx = store.courses.findIndex(c => c.id === clean.id);
+      if (idx >= 0) store.courses[idx] = { ...clean, updatedAt: Date.now() };
+      resultId = clean.id;
+      return;
+    }
+    resultId = allocId('courses');
+    store.courses.push({ ...clean, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteCourse(id: number): Promise<void> {
+  await mutate(() => {
+    const course = store.courses.find(c => c.id === id);
+    if (course) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'courses',
+        originalId: id,
+        originalData: deepClone(course),
+        title: `课程 - ${course.name}`,
+        deletedAt: Date.now(),
+      });
+      store.courses = store.courses.filter(c => c.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'courses'] });
+}
+
+/** 学期设置（单记录，id 恒为 1；从未设置过则返回 undefined） */
+export async function getSemester(): Promise<SemesterRecord | undefined> {
+  const rec = store.semester.find(s => s.id === 1) ?? store.semester[0];
+  return rec ? { ...rec, specialDates: rec.specialDates.map(d => ({ ...d })) } : undefined;
+}
+
+export async function saveSemester(record: SemesterRecord): Promise<number> {
+  await mutate(() => {
+    // 恒单记录：强制 id = 1，不调用 allocId（避免计数器膨胀）
+    const clean = { ...record, id: 1, updatedAt: Date.now() };
+    const idx = store.semester.findIndex(s => s.id === 1);
+    if (idx >= 0) store.semester[idx] = clean;
+    else store.semester.push(clean);
+  });
+  return 1;
+}
+
 // ============ 回收站 CRUD ============
 
 export async function getTrashItems(): Promise<TrashItem[]> {
@@ -223,6 +283,7 @@ const TRASH_TARGET: Record<string, AnyStoreTable> = {
   fixedRoutines: 'fixedRoutines',
   taskItems: 'taskItems',
   taskTemplates: 'taskTemplates',
+  courses: 'courses',
   timeBlocks: 'dailyPlans',
 };
 
@@ -273,6 +334,12 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
           const rec = originalData as TaskTemplate;
           if (rec.id != null && store.taskTemplates.some(x => x.id === rec.id)) { ok = false; return; }
           store.taskTemplates.push(rec);
+          break;
+        }
+        case 'courses': {
+          const rec = originalData as Course;
+          if (rec.id != null && store.courses.some(c => c.id === rec.id)) { ok = false; return; }
+          store.courses.push(normalizeCourseDayOfWeek(rec));
           break;
         }
         case 'timeBlocks':

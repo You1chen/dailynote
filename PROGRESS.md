@@ -226,3 +226,39 @@
 ```
 修改：src/pages/DailyPlan.tsx、structure.md
 ```
+
+## 2026-08-13 — 课程表功能
+
+### 需求
+
+加入课程表：记录周课表、开学时间、法定节假日、单双周差异、每门课的上课周数；课程表做好后，当天确实有课时直接体现在日程表上。另：课程星期支持多选（同一门课周一+周二都有课只需创建一次，无需重复建两门）。
+
+与用户确认的两项决策：
+- 节假日 = 内置中国法定节假日表（2026 精确、2027 部分推定，注释注明需逐年更新）+ 课程表页手动添加特殊日期（放假/补课）覆盖或补充。
+- 课程块 = 只读展示：渲染时按课表+日期实时计算，不写入当天 plan.json、不参与验收/统计；点击弹课程详情，修改请到课程表页。
+
+补课语义（已确认的限制）：`makeup` 只表示「该日期按正常上课日对待」（解除节假日抑制），不做「周六补周五的课」的星期映射。
+
+### 实现
+
+- **类型**（src/types/index.ts）：`Course`（dayOfWeek 为 `number[]` 可多选，0=周日）、`SpecialDate`（放假/补课）、`SemesterRecord`（id 恒 1 单记录）；`normalizeCourseDayOfWeek()` 兼容旧版单数字 dayOfWeek。
+- **纯逻辑**：`src/utils/holidays.ts`（内置节假日表 + 查询）；`src/utils/courseSchedule.ts`（weekdayOf/mondayOf、weekIndex 开学所在周=第 1 周且周一对齐、isCourseActiveOnWeek 单双周+区间、isDayHoliday 手动>内置、computeDayCourses 星期多选+周次+节假日全过滤并按开始时间排序）。全部本地日期解析，纯函数可测。
+- **存储**：courses（数字 id、删除进回收站、还原保留原 id）与 semester（恒 1、不可删除）两张新表走 CATEGORY_FILES 模式（courses.json/semester.json），写入顺序进 DEFAULT_WRITE_ORDER、空目录判定纳入两表；导出/导入备份自动携带。
+- **归一化防线**：parseStorageData（导入路径）、readNewStructure（文件/KV 读取路径）、saveCourse（写入）、restoreFromTrash（还原）四处对 dayOfWeek 统一 `normalizeCourseDayOfWeek`。
+- **课程表页**（src/pages/CoursesPage.tsx / .css，路由 /courses）：学期设置（开学时间 + 手动特殊日期放假/补课增删）；课程按周日→周六分组（多星期课程在每个所选星期分组出现）；新建/编辑弹窗支持星期 chips 多选（至少保留一个）、时间校验、单双周、起始周/持续周数；复用设置页表单样式。
+- **入口**：SideMenu 加「课程表」（任务清单与宏观视图之间）；DailyPlan 工具栏加 📅 按钮直达。
+- **日程表渲染**（DailyPlan.tsx）：挂载加载课程+学期，`computeDayCourses` 实时计算当日课程块（琥珀色，z-index 2，任务块 z-index 3 重叠时任务在上）；网格点击守卫 `closest('.course-block')` 防穿透；点击弹只读课程详情弹窗（含当前第 X 周）；全屏视图同样显示并可点击（FullscreenSchedule 加 courses/onCourseClick 可选 props）。
+- **课程详情弹窗 z-index 310**：修复全屏视图下弹窗被 fs-overlay（300）遮挡的问题（原 300 同级被 Portal 到 body 的 overlay 盖住）。
+- **标签同步**：Trash.tsx 表格标签加「课程」；BackupRestore.tsx 布局说明补 courses.json、semester.json。
+
+### 验证
+
+- `npx vitest run` 386/386 通过（新增 test/课程表/courseSchedule.test.ts 32 项 + store.test.ts 追加课程表存储 9 项 + jsonImport.test.ts 同步）；`npm run build` 通过。
+- 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）13/13 项通过：页面打开、设学期、多天课程创建一次出现在两个分组、当天课程块显示课程名/时间/地点、只读详情弹窗（不打开编辑面板）、无课日不显示、多天课程周一/周四均显示、节假日抑制+移除恢复、全屏视图课程块+详情弹窗、删除→回收站→还原、任务块与课程块重叠时任务在上。
+
+### 涉及文件
+
+```
+新增：src/utils/holidays.ts、src/utils/courseSchedule.ts、src/pages/CoursesPage.tsx / .css、test/课程表/courseSchedule.test.ts
+修改：src/types/index.ts、src/services/store.ts、src/db/index.ts、src/pages/DailyPlan.tsx / .css、src/components/FullscreenSchedule.tsx / .css、src/components/SideMenu.tsx、src/App.tsx、src/pages/Trash.tsx、src/pages/BackupRestore.tsx、test/数据存储/store.test.ts、test/数据导入导出/jsonImport.test.ts、structure.md
+```

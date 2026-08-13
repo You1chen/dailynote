@@ -9,6 +9,7 @@ const TABLE_LABELS: Record<string, string> = {
   fixedRoutines: '作息模板',
   taskItems: '任务清单项',
   taskTemplates: '任务清单模板',
+  courses: '课程',
   timeBlocks: '时间块',
 };
 

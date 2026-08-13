@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Target, BarChart3, Trash2, Database, ListTodo, X } from 'lucide-react';
+import { Target, BarChart3, Trash2, Database, ListTodo, CalendarDays, X } from 'lucide-react';
 import { useEffect } from 'react';
 import './SideMenu.css';
 
@@ -11,6 +11,7 @@ interface Props {
 const menuItems = [
   { to: '/goals', icon: Target, label: '长期目标' },
   { to: '/tasks', icon: ListTodo, label: '任务清单' },
+  { to: '/courses', icon: CalendarDays, label: '课程表' },
   { to: '/dashboard', icon: BarChart3, label: '宏观视图' },
   { to: '/trash', icon: Trash2, label: '回收站' },
   { to: '/backup', icon: Database, label: '备份与恢复' },

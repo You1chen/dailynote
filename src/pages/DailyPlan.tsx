@@ -1,16 +1,26 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, X, Save, Trash2, CheckCircle2, Settings, Maximize2, ClipboardList } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Plus, X, Save, Trash2, CheckCircle2, Settings, Maximize2, ClipboardList, CalendarDays } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import FullscreenSchedule from '../components/FullscreenSchedule';
 import PreferencePanel from '../components/PreferencePanel';
 import { useDailyPlan } from '../hooks/useDailyPlan';
 import { usePreferences } from '../hooks/usePreferences';
-import { getAllRoutines, getAllTaskTemplates, savePlan } from '../db';
+import { getAllRoutines, getAllTaskTemplates, savePlan, getAllCourses, getSemester } from '../db';
 import { todayStr, genId, appendTemplateItems } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { timeToMinutes, isInSleepPeriod, sleepLabel, gridClickY, blockRenderRect } from '../utils/time';
-import type { TimeBlock, TaskTemplate } from '../types';
+import { computeDayCourses, weekIndex } from '../utils/courseSchedule';
+import type { TimeBlock, TaskTemplate, Course, SemesterRecord } from '../types';
 import './DailyPlan.css';
+
+/** 星期几 → 中文（0=周日，与课程表约定一致） */
+const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const WEEK_TYPE_LABELS: Record<Course['weekType'], string> = {
+  all: '每周',
+  odd: '单周',
+  even: '双周',
+};
 
 /** 清单型即时任务的占位时长（分钟）：不知道何时结束前先占位，保证时间表可见 */
 const CHECKLIST_PLACEHOLDER_MIN = 10;
@@ -31,6 +41,7 @@ function formatHM(d: Date): string {
 }
 
 export default function DailyPlanPage() {
+  const navigate = useNavigate();
   const [date, setDate] = useState(todayStr());
   const { plan, loading, addFullBlock, updateBlock, removeBlock, reload } = useDailyPlan(date);
   const { prefs, updatePrefs, resetPrefs } = usePreferences();
@@ -53,6 +64,10 @@ export default function DailyPlanPage() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [templateList, setTemplateList] = useState<TaskTemplate[]>([]);
   const [acceptingBlock, setAcceptingBlock] = useState<TimeBlock | null>(null);
+  // 课程表（只读展示：渲染时按日期实时计算，不写入当天计划）
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
+  const [viewingCourse, setViewingCourse] = useState<Course | null>(null);
   const checklistDoneAtRef = useRef(0);
   /** 即时任务开始时间是否被手动微调过（微调后冻结，不再随每30秒刷新） */
   const manualStartRef = useRef(false);
@@ -99,6 +114,14 @@ export default function DailyPlanPage() {
   // 每次打开新的时间块时清空上次的完成时刻记录与手动微调标记
   useEffect(() => { checklistDoneAtRef.current = 0; manualStartRef.current = false; }, [editingBlock?.id]);
 
+  // 加载课程表与学期设置（每次进入本页重新加载，课程表页修改后返回自动生效）
+  useEffect(() => {
+    Promise.all([getAllCourses(), getSemester()]).then(([cs, sem]) => {
+      setCourses(cs);
+      setSemester(sem);
+    });
+  }, []);
+
   // 动态偏好值
   const HOUR_HEIGHT = prefs.hourHeight;
   const hideSleep = prefs.hideSleepHours;
@@ -126,8 +149,9 @@ export default function DailyPlanPage() {
     if (showPrefs) { setShowPrefs(false); return true; }
     if (acceptingBlock) { setAcceptingBlock(null); return true; }
     if (editingBlock) { setEditingBlock(null); return true; }
+    if (viewingCourse) { setViewingCourse(null); return true; }
     return false;
-  }, [editingBlock, acceptingBlock, fullscreen, showPrefs]);
+  }, [editingBlock, acceptingBlock, fullscreen, showPrefs, viewingCourse]);
 
   // 当前时间每分钟更新
   useEffect(() => {
@@ -191,6 +215,7 @@ export default function DailyPlanPage() {
   // --- 网格点击处理 ---
   const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('.time-block')) return;
+    if ((e.target as HTMLElement).closest('.course-block')) return;
     if ((e.target as HTMLElement).closest('.sleep-bar')) return;
 
     // 滚动容器（.time-grid-container）的 rect.top 不随内部滚动变化；
@@ -373,6 +398,11 @@ export default function DailyPlanPage() {
   };
 
   const blocks = plan?.timeBlocks ?? [];
+  // 当天课程（按课表+学期实时计算：星期/周次/单双周/节假日全部过滤完毕，按开始时间排序）
+  const courseBlocks = useMemo(
+    () => computeDayCourses(courses, semester, date),
+    [courses, semester, date],
+  );
   const isToday = date === todayStr();
   const showNowLine = isToday && !(hideSleep && isInSleepPeriod(nowMinutes, prefs.sleepStart, prefs.sleepEnd));
   const hourLabels = getVisibleHourLabels();
@@ -396,6 +426,9 @@ export default function DailyPlanPage() {
         <div className="day-toolbar-actions">
           <button className="btn btn-ghost btn-sm btn-icon-only" title="偏好设置" onClick={() => setShowPrefs(true)}>
             <Settings size={17} />
+          </button>
+          <button className="btn btn-ghost btn-sm btn-icon-only" title="课程表" onClick={() => navigate('/courses')}>
+            <CalendarDays size={17} />
           </button>
           <button className="btn btn-ghost btn-sm btn-icon-only" title="全屏视图" onClick={() => setFullscreen(true)}>
             <Maximize2 size={17} />
@@ -462,6 +495,41 @@ export default function DailyPlanPage() {
               ))}
             </div>
           ))}
+
+          {/* 课程块（只读展示，z-index 低于任务块，重叠时任务块在上） */}
+          {courseBlocks.map(course => {
+            const rect = blockRenderRect(course.startTime, course.endTime, {
+              hideSleep,
+              sleepStart: prefs.sleepStart,
+              sleepEnd: prefs.sleepEnd,
+              hourHeight: HOUR_HEIGHT,
+              barHeight: SLEEP_BAR_H,
+              gridHeight: GRID_HEIGHT,
+            });
+            if (!rect) return null;
+            const { top, height } = rect;
+            return (
+              <div
+                key={`course-${course.id}`}
+                className="course-block"
+                style={{ top, height, left: 48, right: 4 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setViewingCourse(course);
+                }}
+              >
+                <div className="course-block-inner">
+                  <span className="course-block-time">
+                    {course.startTime}-{course.endTime}
+                  </span>
+                  <span className="course-block-name">{course.name}</span>
+                  {course.location && (
+                    <span className="course-block-loc">📍 {course.location}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
           {/* 时间块 */}
           {blocks.map(block => {
@@ -549,6 +617,8 @@ export default function DailyPlanPage() {
         onGridClick={handleFullscreenGridClick}
         onPrefsClick={() => { /* 直接打开偏好，不关闭全屏 */ setShowPrefs(true); }}
         onClose={() => setFullscreen(false)}
+        courses={courseBlocks}
+        onCourseClick={setViewingCourse}
       />
 
       {/* 偏好设置面板 */}
@@ -977,6 +1047,48 @@ export default function DailyPlanPage() {
           </div>
         </div>
       )}
+
+      {/* 课程详情弹窗（只读，修改请到课程表页） */}
+      {viewingCourse && (() => {
+        const week = semester?.startDate ? weekIndex(date, semester.startDate) : 0;
+        const lastWeek = viewingCourse.startWeek + viewingCourse.weekCount - 1;
+        return (
+          <div className="course-modal-overlay" onClick={() => setViewingCourse(null)}>
+            <div className="course-modal" onClick={e => e.stopPropagation()}>
+              <h3 className="course-modal-title">📚 课程详情</h3>
+              <div className="course-modal-name">{viewingCourse.name}</div>
+              <div className="course-modal-row">
+                <span className="course-modal-label">时间</span>
+                <span>
+                  {viewingCourse.dayOfWeek.map(d => WEEKDAY_LABELS[d]).join('、')} {viewingCourse.startTime}-{viewingCourse.endTime}
+                </span>
+              </div>
+              <div className="course-modal-row">
+                <span className="course-modal-label">教师</span>
+                <span>{viewingCourse.teacher || '未填'}</span>
+              </div>
+              <div className="course-modal-row">
+                <span className="course-modal-label">地点</span>
+                <span>{viewingCourse.location || '未填'}</span>
+              </div>
+              <div className="course-modal-row">
+                <span className="course-modal-label">周次</span>
+                <span>
+                  第{viewingCourse.startWeek}-{lastWeek}周 · {WEEK_TYPE_LABELS[viewingCourse.weekType]}
+                </span>
+              </div>
+              <div className="course-modal-row">
+                <span className="course-modal-label">当前</span>
+                <span>{week > 0 ? `第 ${week} 周` : '未开学或未设置开学时间'}</span>
+              </div>
+              <p className="course-modal-hint">课程为只读展示，如需修改请到「课程表」页</p>
+              <div className="course-modal-actions">
+                <button className="btn btn-ghost" onClick={() => setViewingCourse(null)}>关闭</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

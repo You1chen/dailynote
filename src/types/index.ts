@@ -114,6 +114,47 @@ export interface TaskItem {
   updatedAt: number;
 }
 
+// ============ 课程表 ============
+
+/** 课程（每周固定时间上课） */
+export interface Course {
+  id?: number;
+  name: string;            // 课程名
+  teacher: string;         // 教师（可空）
+  location: string;        // 上课地点（可空）
+  dayOfWeek: number[];     // 0-6，0=周日，可多选（同一门课多个星期只建一次）
+  startTime: string;       // "HH:mm"
+  endTime: string;         // "HH:mm"
+  weekType: 'all' | 'odd' | 'even'; // 每周 / 单周 / 双周
+  startWeek: number;       // 起始周（1 起，相对开学时间）
+  weekCount: number;       // 持续周数
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 课程星期归一化：兼容旧数据（曾为单个数字），统一为数组；缺失时兜底周日 */
+export function normalizeCourseDayOfWeek(c: Course): Course {
+  const days = Array.isArray(c.dayOfWeek)
+    ? c.dayOfWeek
+    : [typeof c.dayOfWeek === 'number' ? c.dayOfWeek : 0];
+  return { ...c, dayOfWeek: days };
+}
+
+/** 手动特殊日期：放假（抑制课程）或补课（按正常上课日对待） */
+export interface SpecialDate {
+  id: number;
+  date: string;            // "YYYY-MM-DD"
+  kind: 'holiday' | 'makeup';
+}
+
+/** 学期设置（单记录数组表，id 恒为 1） */
+export interface SemesterRecord {
+  id: number;              // 恒为 1
+  startDate: string | null; // 开学时间 "YYYY-MM-DD"；null=未设置（不显示课程）
+  specialDates: SpecialDate[];
+  updatedAt: number;
+}
+
 // ============ 统计相关 ============
 
 export interface DayStats {

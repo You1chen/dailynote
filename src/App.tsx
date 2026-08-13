@@ -12,6 +12,7 @@ import TrashPage from './pages/Trash';
 import BackupRestorePage from './pages/BackupRestore';
 import SettingsPage from './pages/SettingsPage';
 import TaskListPage from './pages/TaskListPage';
+import CoursesPage from './pages/CoursesPage';
 import { BackButtonProvider, useRegisterBackHandler } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import './App.css';
@@ -69,6 +70,7 @@ function AppShell() {
           <Route path="/backup" element={<BackupRestorePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/tasks" element={<TaskListPage />} />
+          <Route path="/courses" element={<CoursesPage />} />
         </Routes>
       </div>
       <TabBar />

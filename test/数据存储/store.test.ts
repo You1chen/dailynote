@@ -67,7 +67,7 @@ async function kvPut(key: string, value: string): Promise<void> {
   });
 }
 
-import type { DailyPlan, LongTermGoal, TaskItem } from '../../src/types';
+import type { DailyPlan, LongTermGoal, TaskItem, Course, SemesterRecord } from '../../src/types';
 import { genId } from '../../src/types';
 import {
   initStore,
@@ -95,6 +95,17 @@ function makePlan(date: string, createdAt = 0): DailyPlan {
 
 function makeGoal(title: string, createdAt = 0): LongTermGoal {
   return { title, description: '', category: '学习', tasks: [], createdAt, updatedAt: createdAt } as LongTermGoal;
+}
+
+function makeCourse(name: string, createdAt = 0): Course {
+  return {
+    name, teacher: '', location: '', dayOfWeek: [1], startTime: '08:00', endTime: '09:40',
+    weekType: 'all', startWeek: 1, weekCount: 18, createdAt, updatedAt: createdAt,
+  } as Course;
+}
+
+function makeSemester(startDate: string | null): SemesterRecord {
+  return { id: 1, startDate, specialDates: [], updatedAt: 0 } as SemesterRecord;
 }
 
 beforeEach(async () => {
@@ -635,5 +646,115 @@ describe('isCapacitor 平台判定', () => {
       if (prevWin === undefined) delete (globalThis as any).window;
       else (globalThis as any).window = prevWin;
     }
+  });
+});
+
+// ============ 课程表存储 ============
+
+describe('课程表存储', () => {
+  it('课程 CRUD 与持久化往返（initStore 重读）', async () => {
+    const id = await db.saveCourse(makeCourse('高数'));
+    expect(id).toBe(1);
+    await db.saveCourse({ ...makeCourse('英语'), dayOfWeek: [2], startTime: '10:00' });
+    let list = await db.getAllCourses();
+    expect(list).toHaveLength(2);
+    expect(list[0].name).toBe('高数'); // dayOfWeek 1 排在 dayOfWeek 2 前
+
+    await initStore(); // 从文件重读
+    list = await db.getAllCourses();
+    expect(list).toHaveLength(2);
+    expect(list[0].name).toBe('高数');
+  });
+
+  it('带 id 保存 = 更新不新增', async () => {
+    const id = await db.saveCourse(makeCourse('高数'));
+    await db.saveCourse({ ...makeCourse('高数'), id, name: '高等数学' });
+    const list = await db.getAllCourses();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高等数学');
+  });
+
+  it('学期设置：id 恒为 1、二次保存不重复', async () => {
+    await db.saveSemester(makeSemester('2026-08-10'));
+    await db.saveSemester({ ...makeSemester('2026-09-01'), id: 7 }); // 传入其他 id 也强制为 1
+    const sem = await db.getSemester();
+    expect(sem?.id).toBe(1);
+    expect(sem?.startDate).toBe('2026-09-01');
+    expect((getStore() as any).semester).toHaveLength(1);
+  });
+
+  it('未设置过学期 → undefined；startDate 可为 null（未开学）', async () => {
+    expect(await db.getSemester()).toBeUndefined();
+    await db.saveSemester(makeSemester(null));
+    const sem = await db.getSemester();
+    expect(sem?.startDate).toBeNull();
+  });
+
+  it('删除课程 → 回收站 → 还原（原 id 恢复）', async () => {
+    const id = await db.saveCourse(makeCourse('高数'));
+    await db.deleteCourse(id);
+    expect(await db.getAllCourses()).toHaveLength(0);
+    const trash = await db.getTrashItems();
+    expect(trash).toHaveLength(1);
+    expect(trash[0].originalTable).toBe('courses');
+    expect(trash[0].title).toBe('课程 - 高数');
+    const ok = await db.restoreFromTrash(trash[0].id!);
+    expect(ok).toBe(true);
+    const list = await db.getAllCourses();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高数');
+    expect(list[0].id).toBe(id);
+  });
+
+  it('删除后 id 不复用（与回收站还原不撞）', async () => {
+    const id1 = await db.saveCourse(makeCourse('a'));
+    await db.deleteCourse(id1);
+    const id2 = await db.saveCourse(makeCourse('b'));
+    expect(id2).toBeGreaterThan(id1);
+  });
+
+  it('导出→重置→导入往返：课程与学期完整恢复（换手机场景）', async () => {
+    let blobContent = '';
+    (globalThis as any).document = {
+      createElement: () => ({ href: '', download: '', click: vi.fn(), remove: vi.fn() }),
+      body: { appendChild: vi.fn() },
+    };
+    (globalThis as any).Blob = class Blob {
+      constructor(public parts: string[]) { blobContent = parts[0]; }
+    };
+    (globalThis as any).URL = { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() };
+
+    await db.saveCourse(makeCourse('高数'));
+    await db.saveSemester({ ...makeSemester('2026-08-10'), specialDates: [{ id: 1, date: '2026-10-01', kind: 'makeup' }] });
+    await exportBackupFile();
+    const backup = blobContent;
+    expect(JSON.parse(backup).courses).toHaveLength(1);
+    expect(JSON.parse(backup).semester).toHaveLength(1);
+
+    await _resetForTest();
+    const count = await importJSONIntoStore(backup);
+    expect(count).toBe(2);
+    const list = await db.getAllCourses();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高数');
+    const sem = await db.getSemester();
+    expect(sem?.startDate).toBe('2026-08-10');
+    expect(sem?.specialDates[0].kind).toBe('makeup');
+  });
+
+  it('仅课程数据目录（无任何计划）不被当首次使用丢弃（回归）', async () => {
+    await kvPut('courses.json', JSON.stringify([{ ...makeCourse('高数'), id: 1 }]));
+    await initStore();
+    const list = await db.getAllCourses();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高数');
+  });
+
+  it('旧版单数字 dayOfWeek 数据读入时自动归一化为数组（兼容）', async () => {
+    await kvPut('courses.json', JSON.stringify([{ ...makeCourse('高数'), id: 1, dayOfWeek: 4 }]));
+    await initStore();
+    const list = await db.getAllCourses();
+    expect(list).toHaveLength(1);
+    expect(list[0].dayOfWeek).toEqual([4]);
   });
 });
