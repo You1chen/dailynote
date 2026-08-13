@@ -31,7 +31,7 @@ dailynote/
 │   └── workflows/
 │       └── build-apk.yml                     # GitHub Actions CI
 │
-├── android/                                  # Capacitor Android 原生项目
+├── android/                                  # Capacitor Android 原生项目（含自定义 DailyNoteStoragePlugin：「所有文件访问」权限桥）
 │
 ├── test/
 │   ├── 时间网格点击映射/clickMapping.test.ts  # 207 tests
@@ -45,7 +45,7 @@ dailynote/
 │   └── DDL清单/ddlTime.test.ts               # 13 tests
 │
 └── src/
-    ├── main.tsx                              # React 挂载入口（Boot → SetupPage 或 App）
+    ├── main.tsx                              # React 挂载入口（Boot 四阶段 loading/setup/storagePermission/ready → SetupPage 或 App）
     ├── App.tsx                               # 根组件：路由 + TabBar + SideNav + 主题应用
     ├── App.css                               # 全局样式、CSS 变量、深色主题、通用工具类
     ├── vite-env.d.ts
@@ -167,7 +167,7 @@ Documents/<dir>/
  启动时 initStore() 读入 + 一次性迁移（旧单文件→新布局、旧 Dexie→文件，成功后删除旧数据源）
 ```
 
-- **模块**：[services/store.ts](src/services/store.ts) 维护内存 store、持久化队列（**只写变脏的文件**，入队时捕获 `{dir, 待写文件列表}` 快照）、双后端（Capacitor 文件 / Web IndexedDB KV）、路径管理、一次性迁移、加载自愈。
+- **模块**：[services/store.ts](src/services/store.ts) 维护内存 store、持久化队列（**只写变脏的文件**，入队时捕获 `{dir, 待写文件列表}` 快照）、双后端（Capacitor 文件 / Web IndexedDB KV）、路径管理、一次性迁移、加载自愈、**Android 存储权限守卫**（`storageAccessBlocked` 被阻塞时 `initStore` 返回 -2 且不碰内存 store）。
 - **CRUD**：[db/index.ts](src/db/index.ts) 所有读写直接作用于内存 store，每次变更立即写回对应文件（无防抖窗口；改当天只写当天文件）。
 - **旧 Dexie 库**：[db/legacy.ts](src/db/legacy.ts) 仅用于升级时一次性读取/删除，运行时不再使用。
 
@@ -497,6 +497,9 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `exportBackupFile()`        | 导出备份文件：Web 触发浏览器下载；Android 写入`Documents/<dir>/dailynote-backup-<时间戳>.json`（仅存档，不作为运行期存储）                       |
 | `isCapacitor()`             | 平台判定：仅原生（`isNativePlatform()===true`）返回 true。不能只看 `window.Capacitor` 是否存在——Web 端静态引入 `@capacitor/app` 也会挂上它 |
 | `listSubdirs()`             | 列出`Documents/` 下的子目录供「浏览已有目录」点选（Android 真实读取；Web 无真实目录返回空数组）                                                  |
+| `storageAccessBlocked()`    | Android 11+ 且未授予「所有文件访问」→ true（此时公共 Documents 读写必被系统拒绝）                                                                    |
+| `requestAllFilesAccess()`   | 跳转系统设置请求「所有文件访问」（原生插件 DailyNoteStorage；用户返回后 Boot 自动重新检测）                                                          |
+| `INIT_STORAGE_BLOCKED`      | initStore 被权限阻塞时的返回哨兵（-2），Boot 据此显示授权引导页                                                                                       |
 | `changeStoragePath()`       | 更改存储位置：新位置有数据则恢复，无数据则把当前数据搬过去                                                                                         |
 | `normalizePath()`           | 规范化并校验路径（拒绝`..`、绝对路径、非法字符）                                                                                                 |
 
@@ -521,7 +524,8 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `test/DDL清单/ddlTime.test.ts`                 |      13      | minutesUntilDeadline（未来/过期/恰为截止/跨零点/格式与范围非法→null）、ddlRemainText（分钟/小时/天边界、0→已过期）                                                                                                                       |
 | `test/任务清单/taskTemplate.test.ts`            |      13      | 模板 CRUD/更新、软删除进回收站与还原、templates.json 持久化、增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数                                                                                                                                                               |
 | `test/课程表/courseSchedule.test.ts`            |      32      | weekdayOf/mondayOf、weekIndex（周一/周中开学、早于开学、跨年）、isCourseActiveOnWeek（单双周+区间边界）、内置节假日表（2026/2027、无重复）、isDayHoliday（手动>内置、补课覆盖）、computeDayCourses（星期多选/周次/节假日/排序/多天课程）、dayOfWeek 旧数据归一化                                      |
-| **总计**                                    | **424** |                                                                                                                                                                                                                                                                                                       |
+| `test/数据存储/storageAccess.test.ts`         |       8      | Android 存储权限守卫：11+ 未授权阻塞/已授权放行、Android 10 不阻塞、Web 不阻塞、阻塞时 initStore 返回 -2 且零写入、授权后恢复                                                                                                                                                                         |
+| **总计**                                    | **432** |                                                                                                                                                                                                                                                                                                       |
 
 运行：`npx vitest run`（偶尔需先 `rm -rf node_modules/.vite node_modules/.vitest` 清缓存）
 

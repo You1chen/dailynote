@@ -21,11 +21,27 @@ import {
   exportBackupFile,
   isCapacitor,
   listSubdirs,
+  storageAccessStatus,
+  storageAccessBlocked,
+  requestAllFilesAccess,
+  INIT_STORAGE_BLOCKED,
 } from './store';
 
-export type { StorageData } from './store';
+export type { StorageData, NativeStorageStatus } from './store';
 
-export { getStoragePath, setStoragePath, getDisplayPath, normalizePath, flush, getLastPersistError, isCapacitor };
+export {
+  getStoragePath,
+  setStoragePath,
+  getDisplayPath,
+  normalizePath,
+  flush,
+  getLastPersistError,
+  isCapacitor,
+  storageAccessStatus,
+  storageAccessBlocked,
+  requestAllFilesAccess,
+  INIT_STORAGE_BLOCKED,
+};
 
 /** 启动时：从用户目录文件加载数据到内存（含一次性旧库迁移）。返回恢复条数，-1 表示首次使用 */
 export async function loadFromFile(): Promise<number> {

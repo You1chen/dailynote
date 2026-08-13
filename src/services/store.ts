@@ -28,6 +28,7 @@
 import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
+import { registerPlugin } from '@capacitor/core';
 
 // ============ 数据结构 ============
 
@@ -214,6 +215,50 @@ export function isCapacitor(): boolean {
     return !!(window as any).androidBridge || !!((window as any).webkit?.messageHandlers?.bridge);
   } catch {
     return false;
+  }
+}
+
+// ============ 原生存储权限（Android 11+ 所有文件访问） ============
+
+export interface NativeStorageStatus {
+  apiLevel: number;
+  manager: boolean;
+}
+
+interface DailyNoteStorageNative {
+  getStorageStatus(): Promise<NativeStorageStatus>;
+  requestAllFilesAccess(): Promise<{ granted: boolean }>;
+}
+
+const NativeStorage = registerPlugin<DailyNoteStorageNative>('DailyNoteStorage');
+
+/** 原生端存储访问状态（Web 端 / 插件缺失时视为可访问） */
+export async function storageAccessStatus(): Promise<NativeStorageStatus> {
+  if (!isCapacitor()) return { apiLevel: 0, manager: true };
+  try {
+    return await NativeStorage.getStorageStatus();
+  } catch {
+    return { apiLevel: 0, manager: true };
+  }
+}
+
+/**
+ * Android 11+ 且未授予「所有文件访问」时，公共 Documents 的读写必然被系统拒绝。
+ * 此时禁止读后端（否则误判为空数据）也禁止写（否则空数组覆盖磁盘数据）。
+ */
+export async function storageAccessBlocked(): Promise<boolean> {
+  const st = await storageAccessStatus();
+  return st.apiLevel >= 30 && !st.manager;
+}
+
+/** 跳转系统设置请求「所有文件访问」。通常返回 false（用户去设置页返回后需重新检测） */
+export async function requestAllFilesAccess(): Promise<boolean> {
+  if (!isCapacitor()) return true;
+  try {
+    const r = await NativeStorage.requestAllFilesAccess();
+    return !!r.granted;
+  } catch {
+    return true;
   }
 }
 
@@ -853,12 +898,18 @@ function healTrashDuplicates(): boolean {
 
 // ============ 启动 / 一次性迁移 ============
 
+/** 初始化被阻塞：Android 11+ 未授予「所有文件访问」，需用户授权后重试 */
+export const INIT_STORAGE_BLOCKED = -2;
+
 /**
  * 初始化 store：从当前后端读入数据，并做一次性迁移（旧单文件 → 新布局、旧 Dexie → 文件）。
  * 迁移以"持久化成功 → 删除旧数据源"作为提交标记；失败则下次启动重试。
- * 返回：-1 = 首次使用（无任何数据）；否则为恢复的记录总数。
+ * 返回：-2 = 存储权限被阻塞；-1 = 首次使用（无任何数据）；否则为恢复的记录总数。
  */
 export async function initStore(): Promise<number> {
+  // 权限被阻塞时不动内存 store：既不能把磁盘数据误判为空，更不能把空数组写回覆盖磁盘
+  if (await storageAccessBlocked()) return INIT_STORAGE_BLOCKED;
+
   const { data: backend, oldFormat } = await readBackend();
   const legacy = await readLegacyTablesSafe();
 
@@ -1009,6 +1060,8 @@ export async function listSubdirs(): Promise<string[]> {
  * - 新位置无数据/文件损坏 → 报错（损坏不覆盖）；无数据则把当前数据写入新位置
  */
 export async function changeStoragePath(path: string): Promise<{ recovered: boolean; count: number }> {
+  // 未授权时探测必然失败，随后会把空数据写往新位置覆盖磁盘——先拒绝
+  if (await storageAccessBlocked()) throw new Error('需要先授予「所有文件访问」权限');
   await flush();
   const probe = await readBackendAt(path);
   if (probe === 'CORRUPT') throw new Error('目标位置存在文件但已损坏，未做任何更改');

@@ -74,7 +74,7 @@
 修改：src/pages/DailyPlan.tsx、src/pages/DailyPlan.css、structure.md
 ```
 
-## 2026-08-12 — 清单型即时任务：占位时间 + 勾完即完成，不验收不评分
+## 2026-08-12 — 清单型即时任务：占位时间 + 勾完即完成，不验收不
 
 ### 需求
 
@@ -83,6 +83,7 @@
 ### 实现
 
 `src/pages/DailyPlan.tsx`：
+
 - 模块级辅助：`CHECKLIST_PLACEHOLDER_MIN=10`、`isChecklistTask`（有子任务清单 = 轻量任务）、`allChecklistDone`、`formatHM`。
 - 占位：清单模式下未全部勾选时强制 `endTime = startTime + 10min`（打开/切换模式时 effect + 即时任务 30s 刷新 effect 同步）；完成时不再改时间。
 - 完成时刻：清单勾选 toggle 里记录「由未全勾 → 全勾」的 `Date.now()` 到 `checklistDoneAtRef`；保存时若全勾 → `completed=true`、`endTime=最后勾选时刻`（重开已完成的块再保存不覆盖已记录的 endTime）；未全勾 → `completed=false`、`endTime=start+10min` 恢复占位。
@@ -134,6 +135,7 @@
 ### 实现
 
 `src/pages/DailyPlan.tsx`：
+
 - 即时+清单模式新增「开始时间」输入（含 ⚡即时 徽标与动态提示语），微调时占位 endTime 跟随（=新开始+10min；已全部勾完则保持完成时刻不变），清空输入不落状态（避免非法时间）。
 - 新增 `manualStartRef`：手动微调后冻结，每 30 秒 ticker 不再覆盖开始/结束时间；提示语切换为「已手动微调，不再随时间更新」。
 - 冻结标记在打开编辑器的一切入口复位（网格点击、全屏点击、添加按钮、点击已有时间块、切换⚡即时、编辑块 id 变化），保证新任务重新跟随当前时刻。
@@ -160,6 +162,7 @@
 核心链路已跟上，无功能缺口：store.ts 全部表枚举（StorageData/指纹/增量写/合并/自愈/快照/计数器）、db/index.ts（CRUD+软删除+还原）、legacy（模板无旧表属正常，mergeLegacy 以 `?? []` 兜底）、facade、Trash 标签均含 taskTemplates；templates.json 读写与空目录判定已有测试。
 
 发现并修复的缺口：
+
 1. 文档：store.ts 头部布局注释、备份页两处存储布局说明（`BackupRestore.tsx`）漏掉 templates.json → 补上。
 2. 测试：无「导出→导入」模板往返验证（换手机场景）→ `store.test.ts` 新增往返测试（导出备份含模板，重置后导入完整恢复）。
 3. 测试 schema 复刻：`jsonImport.test.ts` 本地 StorageData 接口与样例缺 taskItems/taskTemplates → 同步。
@@ -234,6 +237,7 @@
 加入课程表：记录周课表、开学时间、法定节假日、单双周差异、每门课的上课周数；课程表做好后，当天确实有课时直接体现在日程表上。另：课程星期支持多选（同一门课周一+周二都有课只需创建一次，无需重复建两门）。
 
 与用户确认的两项决策：
+
 - 节假日 = 内置中国法定节假日表（2026 精确、2027 部分推定，注释注明需逐年更新）+ 课程表页手动添加特殊日期（放假/补课）覆盖或补充。
 - 课程块 = 只读展示：渲染时按课表+日期实时计算，不写入当天 plan.json、不参与验收/统计；点击弹课程详情，修改请到课程表页。
 
@@ -346,4 +350,38 @@
 ```
 新增：src/pages/DdlPage.tsx / .css、src/utils/ddl.ts、test/DDL清单/ddlTime.test.ts
 修改：src/types/index.ts（DdlItem）、src/services/store.ts（ddls 管道 21 点）、src/db/index.ts（CRUD+回收站）、src/utils/avatarCrop.ts（图片压缩）、src/App.tsx（/ddl 路由）、src/components/SideMenu.tsx（DDL 条目）、src/pages/Trash.tsx（DDL 标签）、src/pages/BackupRestore.tsx（备份说明）、test/数据存储/store.test.ts（DDL 存储 7 项）、test/数据导入导出/jsonImport.test.ts（ddls 字段）、structure.md
+```
+
+## 2026-08-13 — 修复：Android 重装后不读公共 Documents 里的旧 JSON（存储权限）
+
+### 需求
+
+用户报告：卸载重装 App 后选回同一目录，应用不读取盘上已有 JSON（文件夹里数据还在，但软件不读）。
+
+### 根因（APK 合并清单 + Capacitor 8 插件源码核实）
+
+- 合并后 APK 的 AndroidManifest 只声明了 `INTERNET`（targetSdk 36），**没有任何存储权限**。
+- Capacitor 8 Filesystem 的 `Directory.Documents` 在 Android 上映射到公共 Documents（`Environment.getExternalStoragePublicDirectory`，ionfilesystem-android 1.1.0 反编译确认），读写走原生 `java.io.File`。
+- Android 11+ 沙盒存储拒绝应用对公共 Documents 里非媒体文件的直接读写（需「所有文件访问」MANAGE_EXTERNAL_STORAGE）；Capacitor 8 插件在 Android 13+ 上不再请求任何存储权限（`isStoragePermissionGranted` 恒 true），11-12 请求的 READ_EXTERNAL_STORAGE 又未在 manifest 声明（自动拒绝）。
+- 后果链：initStore 读取全部失败（readdir 抛错→空、readFile→null）→ `readNewStructure` 返回 null → 应用按「无数据」启动；更危险的是此后任何写入会把空数组写回磁盘**覆盖 goals.json 等分类文件**；写入失败也只静默记录 `lastPersistError`（仅备份页可见）。
+
+### 实现
+
+- **原生插件** `android/.../DailyNoteStoragePlugin.java`（Java，MainActivity 注册）：`getStorageStatus`（apiLevel + 是否已授「所有文件访问」）、`requestAllFilesAccess`（跳转系统设置 App 专属页，部分 ROM 回退总开关页）。
+- **store.ts**：注册同名 JS 插件桥（`@capacitor/core` registerPlugin，Web/测试环境安全）；新增 `storageAccessStatus / storageAccessBlocked / requestAllFilesAccess`；`initStore` 被阻塞时返回 `INIT_STORAGE_BLOCKED(-2)` 且**不动内存 store**（不误判空数据、不写回覆盖）；`changeStoragePath` 被阻塞时直接报错（防止把空数据写往新位置覆盖磁盘）。
+- **main.tsx Boot**：新增 `storagePermission` 阶段——被阻塞时显示授权引导页（「去开启权限」/「已开启，重新检测」），从系统设置返回后经 `visibilitychange` + `appStateChange` 自动重新检测并加载数据。
+- **AndroidManifest.xml**：加 `MANAGE_EXTERNAL_STORAGE`；`READ_EXTERNAL_STORAGE(maxSdk 32)` / `WRITE_EXTERNAL_STORAGE(maxSdk 29)` 供 Android 10-12 运行时权限对话框（10 由 Capacitor 插件自动请求）。
+- 版本号 1.2（versionCode 3）。
+
+### 验证
+
+- 新增 `test/数据存储/storageAccess.test.ts` 8 个测试（vi.mock 模拟原生插件）：11+ 未授权阻塞/已授权放行、Android 10 不阻塞、Web 不阻塞、被阻塞时 initStore 返回 -2 且零写入、授权后恢复。`npx vitest run` **432/432 通过**（424 既有 + 8 新增）。
+- `npm run build:apk` 全流程成功（tsc + vite + cap sync + gradle，Java 插件编译通过）；合并后 manifest 确认含 MANAGE_EXTERNAL_STORAGE、versionCode 3。
+- 待真机验证：用户安装新 APK → 授权引导页 → 开启「所有文件访问」→ 自动恢复数据。
+
+### 涉及文件
+
+```
+新增：android/app/src/main/java/com/dailynote/app/DailyNoteStoragePlugin.java、test/数据存储/storageAccess.test.ts
+修改：android/app/src/main/AndroidManifest.xml（权限）、android/app/src/main/java/com/dailynote/app/MainActivity.java（注册插件）、android/app/build.gradle（版本 1.2/3）、src/services/store.ts（权限桥+守卫）、src/services/storage.ts（facade 转发）、src/main.tsx（授权引导页）、structure.md
 ```
