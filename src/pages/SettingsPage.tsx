@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, RotateCcw } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Camera } from 'lucide-react';
 import { usePreferences, type ThemeMode } from '../hooks/usePreferences';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
+import AvatarCropper from '../components/AvatarCropper';
 import './SettingsPage.css';
 
 const AVATAR_OPTIONS = [
@@ -29,6 +30,8 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const { prefs, updatePrefs, resetPrefs } = usePreferences();
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Android 返回键处理
   useRegisterBackHandler(() => {
@@ -61,8 +64,14 @@ export default function SettingsPage() {
               onClick={() => setShowAvatarPicker(!showAvatarPicker)}
               title="更换头像"
             >
-              <span className="settings-avatar-emoji">{prefs.avatar}</span>
-              <span className="settings-avatar-hint">点击更换</span>
+              {prefs.avatar.startsWith('data:image') ? (
+                <img className="settings-avatar-img" src={prefs.avatar} alt="头像" />
+              ) : (
+                <>
+                  <span className="settings-avatar-emoji">{prefs.avatar}</span>
+                  <span className="settings-avatar-hint">点击更换</span>
+                </>
+              )}
             </button>
             <div className="settings-username">
               <label className="label">用户名</label>
@@ -79,6 +88,12 @@ export default function SettingsPage() {
           {/* 头像选择器 */}
           {showAvatarPicker && (
             <div className="settings-avatar-picker">
+              <button
+                className="settings-avatar-import-btn"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Camera size={16} /> 从图片导入
+              </button>
               {AVATAR_OPTIONS.map(emoji => (
                 <button
                   key={emoji}
@@ -205,6 +220,32 @@ export default function SettingsPage() {
           <RotateCcw size={16} /> 恢复默认设置
         </button>
       </section>
+
+      {/* 图片导入（隐藏 input；选中后打开裁剪弹窗） */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          e.target.value = ''; // 允许重复选择同一文件
+          if (file) {
+            setCropperFile(file);
+            setShowAvatarPicker(false);
+          }
+        }}
+      />
+      {cropperFile && (
+        <AvatarCropper
+          file={cropperFile}
+          onCancel={() => setCropperFile(null)}
+          onConfirm={dataURL => {
+            updatePrefs({ avatar: dataURL });
+            setCropperFile(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -176,3 +176,29 @@
 修改：src/services/store.ts（注释）、src/pages/BackupRestore.tsx（布局说明）、src/pages/Trash.tsx（标签）
 修改：test/数据存储/store.test.ts（+1 测试）、test/数据导入导出/jsonImport.test.ts（schema 同步）、structure.md（测试计数）
 ```
+
+## 2026-08-13 — 头像支持导入任意图片并引导裁剪（放大缩小、移动）
+
+### 需求
+
+头像不应限于预设 emoji：导入任意图片后引导用户截取一部分，支持放大缩小和移动。App 主要跑 Android（Capacitor WebView），必须支持触屏（单指拖动 + 双指捏合）。
+
+### 实现
+
+- `src/utils/avatarCrop.ts`（新）：裁剪纯函数，左上角坐标系——fitCoverScale（cover 最小缩放）、clampPan（图片边缘不露进视口）、zoomAround（围绕视口点缩放、该点像素不动）、cropSourceRect（视口区域→原图坐标）；renderAvatarToDataURL（canvas 输出 256×256 白底 JPEG q0.85 dataURL）、downscaleImage（>4096px 巨图一次性降采样防 WebView OOM）。
+- `src/components/AvatarCropper.tsx / .css`（新）：Portal 裁剪弹窗。手势全程 ref 直写 img style（零 React 重渲染）；单指/鼠标拖动（pointer capture）、双指捏合（指距比缩放 + 跟手中点）、滚轮（原生非被动监听）、± 按钮与滑杆（1×–4× of cover）。圆形 box-shadow 遮罩提示成品形状。取消/Android 返回键/Escape/背景滚动锁定。加载失败显示错误态。
+- `src/pages/SettingsPage.tsx / .css`：头像选择器新增全宽「📷 从图片导入」入口（隐藏 file input，选中后打开裁剪弹窗）；头像按钮在 avatar 为 data:image 时渲染圆形 img；emoji 选择器保留（恢复默认设置仍回 👤）。
+- `src/hooks/usePreferences.ts`：仅注释更新（avatar = emoji 或 data:image 图片，约 20-55KB）。
+- 无新依赖（不用 react-easy-crop）；EXIF 方向由浏览器解码时自动应用，无需处理。
+
+### 验证
+
+- `npx vitest run` **345/345 通过**（新增 17 个裁剪数学测试，含 100 组随机模糊）；`npm run build`（tsc + vite build）通过。
+- 真实浏览器端到端（system Edge + 手机视口 390×844 + 触屏模拟，临时 playwright-core 已卸载、临时脚本已删）：首次向导跳过 → 导入 400×600 PNG → 初始居中（x=0, y=-70 ✓）、CDP 触摸拖动（y -70→-30，x 保持钳制 ✓）、滚轮缩放（0.700→0.805 ✓）、± 按钮 ✓ → 确定后 localStorage avatar 为 data:image/jpeg（长度正常）、设置页渲染图片头像 ✓、emoji 选择器回归 ✓。
+
+### 涉及文件
+
+```
+新增：src/utils/avatarCrop.ts、src/components/AvatarCropper.tsx / .css、test/偏好设置/avatarCrop.test.ts
+修改：src/pages/SettingsPage.tsx / .css、src/hooks/usePreferences.ts（注释）、structure.md
+```

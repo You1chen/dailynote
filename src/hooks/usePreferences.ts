@@ -13,7 +13,7 @@ export interface UserPreferences {
   theme: ThemeMode;         // 浅色 / 深色 / 跟随系统
   // 用户信息
   username: string;
-  avatar: string;           // emoji 字符
+  avatar: string;           // emoji 字符或 data:image 图片（裁剪后约 20-55KB）
 }
 
 const STORAGE_KEY = 'dailynote_preferences';

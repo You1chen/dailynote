@@ -37,6 +37,7 @@ dailynote/
 │   ├── 时间网格点击映射/clickMapping.test.ts  # 207 tests
 │   ├── 数据导入导出/jsonImport.test.ts        # 23 tests
 │   ├── 偏好设置/preferences.test.ts          # 15 tests
+│   ├── 偏好设置/avatarCrop.test.ts           # 17 tests
 │   ├── 任务清单/taskList.test.ts             # 18 tests
 │   └── 任务清单/taskTemplate.test.ts         # 13 tests
 │
@@ -50,7 +51,8 @@ dailynote/
     │   └── index.ts                          # 所有数据模型类型 & genId/todayStr
     │
     ├── utils/
-    │   └── time.ts                           # 时间工具函数（toMinutes, sleep判断, blockRenderRect 块渲染矩形）
+    │   ├── time.ts                           # 时间工具函数（toMinutes, sleep判断, blockRenderRect 块渲染矩形）
+    │   └── avatarCrop.ts                     # 头像裁剪纯函数（cover/钳制/缩放/裁剪矩形 + canvas 输出）
     │
     ├── db/
     │   ├── index.ts                          # 内存 CRUD（file-authoritative，签名兼容旧版）
@@ -82,13 +84,14 @@ dailynote/
     │   ├── CalendarHeatmap.tsx / .css        # GitHub 风格打卡热力图
     │   ├── FullscreenEditor.tsx / .css       # 全屏编辑器（收获/反思页使用）
     │   ├── FullscreenSchedule.tsx / .css     # 全屏日程视图（Portal 渲染）
+    │   ├── AvatarCropper.tsx / .css          # 头像裁剪弹窗（Portal、拖动/捏合/滚轮缩放、圆形遮罩）
     │   ├── PreferencePanel.tsx / .css        # 偏好设置底部面板
     │   ├── TimeBlockCard.tsx / .css          # 时间块折叠卡片（历史遗留）
     │   └── TrendChart.tsx                    # Recharts 趋势折线图
     │
     └── pages/
         ├── DailyPlan.tsx / .css              # 首页：日计划时间网格 + 即时规划 + 清单模式
-        ├── SettingsPage.tsx / .css           # 设置：头像/用户名/主题/偏好
+        ├── SettingsPage.tsx / .css           # 设置：头像（emoji 或图片裁剪）/用户名/主题/偏好
         ├── TaskListPage.tsx / .css           # 任务清单：按日浏览、添加/勾选/删除
         ├── LongTermGoals.tsx / .css          # 长期目标 & 子任务拆解 & 作息模板
         ├── Reflection.tsx / .css             # 反思记录
@@ -445,10 +448,11 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `test/时间网格点击映射/blockRenderRect.test.ts` | 16 | 时间块渲染矩形：睡眠折叠时段内的块贴边界可见（⚡即时任务夜场景回归）、跨夜/不跨夜、边界时刻、非法时间 |
 | `test/数据导入导出/jsonImport.test.ts` | 23 | JSON 解析、BOM 处理、乱码拒绝、微信缓存检测、round-trip |
 | `test/偏好设置/preferences.test.ts` | 15 | 默认值、localStorage 存取、旧版兼容、主题应用逻辑 |
+| `test/偏好设置/avatarCrop.test.ts` | 17 | 头像裁剪纯函数：cover 缩放、平移钳制、围绕点缩放像素不动、裁剪矩形映射（含随机模糊） |
 | `test/任务清单/taskList.test.ts` | 18 | 创建、完成切换、排序、统计、日期隔离、边界情况 |
 | `test/数据存储/store.test.ts` | 36 | 内存 CRUD 语义、id 单调性、回收站深拷贝、persist 快照队列、路径/导入、一次性迁移、新布局分布、增量写、旧单文件迁移、加载自愈、导出备份（含模板导出→导入往返） |
 | `test/任务清单/taskTemplate.test.ts` | 13 | 模板 CRUD/更新、软删除进回收站与还原、templates.json 持久化、增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数 |
-| **总计** | **328** | |
+| **总计** | **345** | |
 
 运行：`npx vitest run`（偶尔需先 `rm -rf node_modules/.vite node_modules/.vitest` 清缓存）
 
