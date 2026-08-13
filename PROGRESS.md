@@ -415,3 +415,33 @@
 ```
 修改：src/services/store.ts（导入错误细分）、src/main.tsx（版本号显示）、android/app/build.gradle（版本 1.2.1/4）、package.json / package-lock.json（1.2.1）、test/数据存储/store.test.ts（+1 测试）、structure.md
 ```
+
+## 2026-08-13 — 修复（再续）：手机写出的 JSON 是乱码——writeFile 缺 encoding 被当 base64
+
+### 需求
+
+用户反馈新线索：把手机刚写出的 json 改成 txt 查看，内容完全是乱码——问题不在读而在写。
+
+### 根因（ionfilesystem-android 1.1.0 字节码核实）
+
+- store.ts 的 `Filesystem.writeFile` 从首个提交起就没传 `encoding`；readFile 传了 `Encoding.UTF8`（所以读路径没错，读出的「损坏」是写入造成的）。
+- Capacitor 8 Filesystem 的原生契约：**writeFile 缺省 encoding 时 data 按 base64 解码**。Kotlin 插件 `getWriteFileOptions()` → `IONFILEEncoding.fromEncodingName(null)` 返回 `Default = IONFILEEncoding$Base64`。
+- `IONFILELocalFilesHelper$saveFile$2` 字节码：Base64 路径 = `getData() → substringAfter(",") → trim() → android.util.Base64.decode(...)`（Android 的 Base64.decode **宽容跳过非法字符**，不抛错）→ 把解码出的二进制写入文件；`WithCharset` 路径才是 `OutputStreamWriter(charset).write(data)` 文本写入。
+- 结果链：JSON 文本被当 base64 宽容解码 → 盘上文件全是乱码二进制 → 重装后 readFile 按 UTF-8 读出乱码 → JSON.parse 失败 → 按「损坏/无数据」处理；导出备份同样乱码 → 导入报「无效的数据文件格式」。浏览器版走 IndexedDB 不经 Filesystem，所以正常——这就是「电脑可读、手机不可读」的直接原因（叠加 Android 11+ 归属权问题）。
+
+### 实现
+
+- store.ts 两处 `Filesystem.writeFile`（增量写盘原语 + `exportBackupFile`）显式传 `encoding: Encoding.UTF8`，并加注释说明缺省会当 base64 写出乱码。
+- 版本号：versionCode 4→5、versionName 1.2.1→1.2.2；package.json / package-lock.json 同步 1.2.2（顺带修复上一轮把 package-lock 根条目格式改坏的隐患，改为 JSON 解析后写回）。
+
+### 验证
+
+- 新增 `test/数据存储/nativeWriteEncoding.test.ts` 2 项（vi.mock @capacitor/filesystem + 模拟原生平台）：增量写盘必须带 `encoding: 'utf8'` 且 data 是 JSON 文本本身（以 `[` 开头、可解析、中文原样）；导出备份同样带 utf8 且 data 以 `{` 开头含 version。`npx vitest run` **435/435** 通过。
+- `npm run build:apk` 全流程成功；合并后 manifest 确认 versionCode 5 / versionName 1.2.2 + MANAGE_EXTERNAL_STORAGE。
+- 待真机验证（1.2.2）：写出的 json 用文本查看器应是可读 JSON；卸载重装 + 授予「所有文件访问」后能读回；导出→导入正常。注：此前被写成乱码的文件无法恢复（宽容解码有损），旧有效数据若在盘上可被恢复；浏览器版 IndexedDB 中的数据可导出→导入到手机兜底。
+
+### 涉及文件
+
+```
+修改：src/services/store.ts（两处 writeFile 加 encoding: UTF8）、android/app/build.gradle（1.2.2/5）、package.json / package-lock.json（1.2.2）、test/数据存储/nativeWriteEncoding.test.ts（新增 2 项）、structure.md
+```

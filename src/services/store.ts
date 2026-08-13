@@ -345,8 +345,10 @@ function nativePath(dir: string, rel: string): string {
 async function writeFile(dir: string, rel: string, json: string): Promise<boolean> {
   try {
     if (isCapacitor()) {
-      const { Filesystem, Directory } = await import('@capacitor/filesystem');
-      await Filesystem.writeFile({ path: nativePath(dir, rel), data: json, directory: Directory.Documents, recursive: true });
+      const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+      // 必须显式传 encoding：Capacitor 8 的 ionfilesystem 在缺省时把 data 当 base64 解码
+      //（substringAfter(",") 后宽容解码），会把 JSON 文本写成乱码二进制
+      await Filesystem.writeFile({ path: nativePath(dir, rel), data: json, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
     } else {
       await idbKvPut(rel, json);
     }
@@ -1012,10 +1014,11 @@ export async function exportBackupFile(): Promise<string> {
   const json = exportJSON();
   const name = backupFileName();
   if (isCapacitor()) {
-    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
     const dir = getStoragePath();
     const rel = nativePath(dir, name);
-    await Filesystem.writeFile({ path: rel, data: json, directory: Directory.Documents, recursive: true });
+    // 与 writeFile 相同：缺省 encoding 会被当 base64 写出乱码
+    await Filesystem.writeFile({ path: rel, data: json, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
     return `Documents/${rel}`;
   }
   // Web：触发浏览器下载

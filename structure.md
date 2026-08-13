@@ -167,7 +167,7 @@ Documents/<dir>/
  启动时 initStore() 读入 + 一次性迁移（旧单文件→新布局、旧 Dexie→文件，成功后删除旧数据源）
 ```
 
-- **模块**：[services/store.ts](src/services/store.ts) 维护内存 store、持久化队列（**只写变脏的文件**，入队时捕获 `{dir, 待写文件列表}` 快照）、双后端（Capacitor 文件 / Web IndexedDB KV）、路径管理、一次性迁移、加载自愈、**Android 存储权限守卫**（`storageAccessBlocked` 被阻塞时 `initStore` 返回 -2 且不碰内存 store）、**导入错误细分**（空文件 / 非 JSON 文本〔微信缓存提示〕/ 非 DailyNote 格式〔旧版提示〕）。
+- **模块**：[services/store.ts](src/services/store.ts) 维护内存 store、持久化队列（**只写变脏的文件**，入队时捕获 `{dir, 待写文件列表}` 快照）、双后端（Capacitor 文件 / Web IndexedDB KV，**原生写文件显式传 `encoding: UTF8`**——缺省会被 ionfilesystem 当 base64 解码写出乱码）、路径管理、一次性迁移、加载自愈、**Android 存储权限守卫**（`storageAccessBlocked` 被阻塞时 `initStore` 返回 -2 且不碰内存 store）、**导入错误细分**（空文件 / 非 JSON 文本〔微信缓存提示〕/ 非 DailyNote 格式〔旧版提示〕）。
 - **CRUD**：[db/index.ts](src/db/index.ts) 所有读写直接作用于内存 store，每次变更立即写回对应文件（无防抖窗口；改当天只写当天文件）。
 - **旧 Dexie 库**：[db/legacy.ts](src/db/legacy.ts) 仅用于升级时一次性读取/删除，运行时不再使用。
 
@@ -525,7 +525,8 @@ db/index.ts (Dexie CRUD) → hooks/useXxx.ts (React state + callbacks) → pages
 | `test/任务清单/taskTemplate.test.ts`            |      13      | 模板 CRUD/更新、软删除进回收站与还原、templates.json 持久化、增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数                                                                                                                                                               |
 | `test/课程表/courseSchedule.test.ts`            |      32      | weekdayOf/mondayOf、weekIndex（周一/周中开学、早于开学、跨年）、isCourseActiveOnWeek（单双周+区间边界）、内置节假日表（2026/2027、无重复）、isDayHoliday（手动>内置、补课覆盖）、computeDayCourses（星期多选/周次/节假日/排序/多天课程）、dayOfWeek 旧数据归一化                                      |
 | `test/数据存储/storageAccess.test.ts`         |       8      | Android 存储权限守卫：11+ 未授权阻塞/已授权放行、Android 10 不阻塞、Web 不阻塞、阻塞时 initStore 返回 -2 且零写入、授权后恢复                                                                                                                                                                         |
-| **总计**                                    | **433** |                                                                                                                                                                                                                                                                                                       |
+| `test/数据存储/nativeWriteEncoding.test.ts`    |       2      | Android 原生写入编码回归：增量写盘与导出备份必须带 encoding utf8 且 data 为 JSON 文本本身（缺省会被 ionfilesystem 当 base64 写出乱码）                                                                                                                                                                 |
+| **总计**                                    | **435** |                                                                                                                                                                                                                                                                                                       |
 
 运行：`npx vitest run`（偶尔需先 `rm -rf node_modules/.vite node_modules/.vitest` 清缓存）
 
