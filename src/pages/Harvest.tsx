@@ -90,7 +90,7 @@ export default function HarvestPage() {
         <div className="empty-state">
           <p>今天还没有收获记录</p>
           <p style={{ fontSize: 'var(--font-xs)', color: 'var(--color-text-muted)' }}>
-            学到了什么？用 #关键字 分类，主动回忆能加深记忆
+            学到了什么？用 #关键字 分类
           </p>
         </div>
       ) : (
@@ -132,10 +132,10 @@ export default function HarvestPage() {
         onSave={handleSave}
         onCancel={() => setEditorOpen(false)}
         titlePlaceholder="一句话概括（可选）"
-        bodyPlaceholder="写下今天学到了什么...\n\n用 #关键字 来标记分类"
+        bodyPlaceholder="写下今天学到了什么..."
         extra={
           <p style={{ fontSize: 'var(--font-xs)', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Hash size={12} /> 输入 #关键字 自动识别为标签
+            <Hash size={12} /> #关键字 自动识别为标签
           </p>
         }
       />

@@ -35,7 +35,7 @@ export default function PreferencePanel({ visible, prefs, onUpdate, onReset, onC
           {/* 睡眠时间 */}
           <div className="pref-section">
             <label className="label">😴 睡眠时间段</label>
-            <p className="pref-hint">此时间段在时间网格中折叠隐藏，节省空间</p>
+            <p className="pref-hint">此时间段在时间网格中折叠</p>
             <div className="pref-time-row">
               <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                 <label className="label" style={{ fontSize: '0.6875rem' }}>开始</label>
@@ -80,7 +80,7 @@ export default function PreferencePanel({ visible, prefs, onUpdate, onReset, onC
           {/* 默认任务时长 */}
           <div className="pref-section">
             <label className="label">⏱ 默认任务时长</label>
-            <p className="pref-hint">点击网格空白处创建任务时的默认时长</p>
+            <p className="pref-hint">点击空白处创建任务时的默认时长</p>
             <div className="pref-duration-row">
               {[15, 30, 45, 60, 90, 120].map(d => (
                 <button

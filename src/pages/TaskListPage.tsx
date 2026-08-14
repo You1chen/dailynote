@@ -130,7 +130,7 @@ export default function TaskListPage() {
               handleAdd();
             }
           }}
-          placeholder="添加新任务..."
+          placeholder="添加任务"
         />
         <button
           className="btn btn-primary"
@@ -148,7 +148,7 @@ export default function TaskListPage() {
           <ListTodo size={36} className="icon" />
           <p>暂无任务</p>
           <span style={{ fontSize: 'var(--font-xs)', color: 'var(--color-text-muted)' }}>
-            在上方输入框添加今天的待办事项
+            在上方输入框添加待办
           </span>
         </div>
       ) : (
@@ -244,7 +244,7 @@ export default function TaskListPage() {
                 value={newTemplateName}
                 onChange={e => setNewTemplateName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleCreateTemplate(); }}
-                placeholder="新模板名称，例如：早起清单"
+                placeholder="模板名称"
               />
               <button
                 className="btn btn-primary btn-sm"
@@ -311,7 +311,7 @@ export default function TaskListPage() {
                               }))}
                               onBlur={() => handleCommitItemText(id, item.id)}
                               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                              placeholder="子任务内容..."
+                              placeholder="子任务内容"
                             />
                             <button
                               className="btn btn-ghost btn-icon btn-sm"

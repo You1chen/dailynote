@@ -192,8 +192,7 @@ export default function CoursesPage() {
             <div className="settings-field">
               <label className="label">🎌 特殊日期（放假 / 补课）</label>
               <p className="settings-field-hint" style={{ marginBottom: 8 }}>
-                法定节假日已内置（2026 精确，2027 部分推定），这里手动补充：放假日期不显示课程；
-                补课日期即使撞上节假日也照常显示当天课程
+                法定节假日已内置（2026 精确，2027 部分推定）。手动补充：放假不显示课程，补课照常显示。
               </p>
               <div className="courses-special-add">
                 <input

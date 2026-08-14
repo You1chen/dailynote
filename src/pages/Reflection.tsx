@@ -197,12 +197,12 @@ export default function ReflectionPage() {
             <div className="ref-editor-body">
               {/* 问题 */}
               <div className="ref-editor-section">
-                <label className="ref-editor-label">🔍 发现了什么问题？</label>
+                <label className="ref-editor-label">🔍 问题</label>
                 <textarea
                   className="input textarea ref-editor-textarea"
                   value={editProblem}
                   onChange={e => setEditProblem(e.target.value)}
-                  placeholder="具体描述遇到的问题，不要笼统..."
+                  placeholder="遇到的问题"
                   rows={3}
                   autoFocus
                 />
@@ -210,24 +210,24 @@ export default function ReflectionPage() {
 
               {/* 原因 */}
               <div className="ref-editor-section">
-                <label className="ref-editor-label">🤔 原因是什么？</label>
+                <label className="ref-editor-label">🤔 原因</label>
                 <textarea
                   className="input textarea ref-editor-textarea"
                   value={editCause}
                   onChange={e => setEditCause(e.target.value)}
-                  placeholder="深入分析根本原因..."
+                  placeholder="根本原因"
                   rows={3}
                 />
               </div>
 
               {/* 改进 */}
               <div className="ref-editor-section">
-                <label className="ref-editor-label">💡 下次怎么改进？</label>
+                <label className="ref-editor-label">💡 改进方案</label>
                 <textarea
                   className="input textarea ref-editor-textarea"
                   value={editSolution}
                   onChange={e => setEditSolution(e.target.value)}
-                  placeholder="具体的、可执行的改进方案..."
+                  placeholder="改进方案"
                   rows={3}
                 />
               </div>
@@ -241,7 +241,7 @@ export default function ReflectionPage() {
                     {taskOptions.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 ) : (
-                  <input className="input" value={editTask} onChange={e => setEditTask(e.target.value)} placeholder="手动输入关联任务" />
+                  <input className="input" value={editTask} onChange={e => setEditTask(e.target.value)} placeholder="输入关联任务" />
                 )}
               </div>
             </div>

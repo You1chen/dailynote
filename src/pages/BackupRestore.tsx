@@ -138,7 +138,7 @@ export default function BackupRestorePage() {
               {getDisplayPath()}
             </p>
             <p className="backup-desc">
-              数据保存在此目录下，按「日期文件夹 + 类型文件」组织（days/&lt;日期&gt;/plan、reflections、harvests、tasks，以及 goals、routines、templates、courses、semester、ddls、trash）。卸载 App 后目录保留，重新安装选择相同路径即可恢复。
+              数据按「日期文件夹 + 类型文件」分文件保存。卸载重装后选择相同路径即可恢复。
             </p>
           </div>
         </div>
@@ -158,14 +158,13 @@ export default function BackupRestorePage() {
           <div>
             <strong>更改存储位置</strong>
             <p className="backup-desc">
-              输入子目录名（如 MyNotes，即 Documents/MyNotes/）或完整路径 Documents/MyNotes。
-              若该位置已有数据（例如重装前使用的目录），将恢复那里的数据并继续编辑；原位置数据保留在盘上。
+              输入子目录名或完整路径。若该位置已有数据将恢复并继续编辑，原位置数据保留。
             </p>
             <input
               className="input input-sm"
               value={newPath}
               onChange={e => { setNewPath(e.target.value); setPathError(''); }}
-              placeholder="输入新的存储目录（可选）"
+              placeholder="存储目录（可选）"
               style={{ marginTop: 8 }}
               onKeyDown={e => { if (e.key === 'Enter') handleChangePath(); }}
             />
@@ -187,8 +186,7 @@ export default function BackupRestorePage() {
               <div className="card" style={{ marginTop: 8, padding: 10 }}>
                 {subdirs.length === 0 ? (
                   <p className="backup-desc" style={{ margin: 0, fontSize: '0.8rem' }}>
-                    网页版数据保存在浏览器内置存储中，不依赖真实文件夹，「浏览」主要用于手机版。
-                    手机版会列出 Documents/ 下已有的文件夹，点选即可切换；也可以在上方输入任意名称新建目录。
+                    网页版数据在浏览器内置存储；手机版列出 Documents/ 下已有文件夹，点选切换，或输入名称新建。
                   </p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

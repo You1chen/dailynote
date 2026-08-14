@@ -358,7 +358,7 @@ export default function DailyPlanPage() {
   const handleImportRoutine = async () => {
     const routines = await getAllRoutines();
     if (routines.length === 0) {
-      alert('还没有创建固定作息模板，请先去「目标」页创建。');
+      alert('请先在「目标」页创建作息模板');
       return;
     }
     if (!plan) return;
@@ -383,7 +383,7 @@ export default function DailyPlanPage() {
   const handleOpenTemplatePicker = async () => {
     const list = await getAllTaskTemplates();
     if (list.length === 0) {
-      alert('还没有任务清单模板，请先去「任务清单」页创建。');
+      alert('请先在「任务清单」页创建模板');
       return;
     }
     setTemplateList(list);
@@ -806,7 +806,7 @@ export default function DailyPlanPage() {
                   <p className="bs-instant-hint">
                     {manualStartRef.current
                       ? '已手动微调，不再随时间更新'
-                      : '默认每 30 秒更新为当前时刻，可手动微调'}
+                      : '默认随当前时刻更新，可手动微调'}
                   </p>
                 </div>
               )}
@@ -818,7 +818,7 @@ export default function DailyPlanPage() {
                   className="input"
                   value={editingBlock.taskTitle}
                   onChange={e => setEditingBlock({ ...editingBlock, taskTitle: e.target.value })}
-                  placeholder="例如：早读英语、做物理题..."
+                  placeholder="任务名称"
                 />
               </div>
 
@@ -853,7 +853,7 @@ export default function DailyPlanPage() {
                             updated[idx] = { ...updated[idx], text: e.target.value };
                             setEditingBlock({ ...editingBlock, checklist: updated });
                           }}
-                          placeholder="子任务内容..."
+                          placeholder="子任务内容"
                         />
                         <button
                           type="button"
@@ -921,7 +921,7 @@ export default function DailyPlanPage() {
                     className="input textarea"
                     value={editingBlock.plannedContent}
                     onChange={e => setEditingBlock({ ...editingBlock, plannedContent: e.target.value })}
-                    placeholder="具体要做什么？"
+                    placeholder="要做什么？"
                     rows={2}
                   />
                 </div>
@@ -932,7 +932,7 @@ export default function DailyPlanPage() {
             {/* 固定底部操作栏 */}
             <div className="bs-footer">
               {editingBlock.id && !isChecklistTask(editingBlock) && (
-                <button className="btn btn-sm btn-outline" onClick={openAcceptance} title="填写验收项并保存后视为完成">
+                <button className="btn btn-sm btn-outline" onClick={openAcceptance} title="验收并完成">
                   <CheckCircle2 size={16} /> 验收
                 </button>
               )}
@@ -967,7 +967,7 @@ export default function DailyPlanPage() {
                 className="input textarea"
                 value={acceptingBlock.actualExecution}
                 onChange={e => setAcceptingBlock({ ...acceptingBlock, actualExecution: e.target.value })}
-                placeholder="实际完成了什么？有什么偏差？"
+                placeholder="实际完成情况"
                 rows={3}
               />
             </div>
@@ -1027,13 +1027,13 @@ export default function DailyPlanPage() {
                 className="input"
                 value={acceptingBlock.notes}
                 onChange={e => setAcceptingBlock({ ...acceptingBlock, notes: e.target.value })}
-                placeholder="其他想记录的..."
+                placeholder="备注"
               />
             </div>
 
             <div className="accept-actions">
               {acceptingBlock.completed && (
-                <button className="btn btn-sm btn-ghost" onClick={handleUnacceptBlock} title="撤销验收，恢复为未完成">
+                <button className="btn btn-sm btn-ghost" onClick={handleUnacceptBlock} title="撤销验收">
                   撤销验收
                 </button>
               )}

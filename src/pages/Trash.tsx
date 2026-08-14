@@ -74,7 +74,7 @@ export default function TrashPage() {
                     className="btn btn-outline btn-sm"
                     onClick={async () => {
                       const ok = await restore(gid);
-                      if (!ok) alert('还原失败，可能原始数据已不存在。');
+                      if (!ok) alert('还原失败：原始数据已不存在');
                     }}
                   >
                     <RotateCcw size={14} /> 还原

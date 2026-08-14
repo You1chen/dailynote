@@ -79,7 +79,7 @@ export default function SettingsPage() {
                 className="input"
                 value={prefs.username}
                 onChange={e => updatePrefs({ username: e.target.value })}
-                placeholder="设置你的名字..."
+                placeholder="你的名字"
                 maxLength={20}
               />
             </div>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
           {/* 默认任务时长 */}
           <div className="settings-field">
             <label className="label">⏱ 默认任务时长</label>
-            <p className="settings-field-hint" style={{ marginBottom: 8 }}>点击网格空白处创建任务时的默认时长</p>
+            <p className="settings-field-hint" style={{ marginBottom: 8 }}>点击空白处创建任务时的默认时长</p>
             <div className="settings-chip-row">
               {DURATION_OPTIONS.map(d => (
                 <button

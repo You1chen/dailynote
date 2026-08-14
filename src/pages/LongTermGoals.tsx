@@ -70,7 +70,7 @@ export default function LongTermGoalsPage() {
             <h3 className="modal-title">新建长期目标</h3>
             <div className="form-group">
               <label className="label">目标名称</label>
-              <input className="input" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="例如：提高英语作文分数" />
+              <input className="input" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="目标名称" />
             </div>
             <div className="form-group">
               <label className="label">分类</label>
@@ -80,7 +80,7 @@ export default function LongTermGoalsPage() {
             </div>
             <div className="form-group">
               <label className="label">描述</label>
-              <textarea className="input textarea" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="补充说明..." rows={2} />
+              <textarea className="input textarea" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="描述" rows={2} />
             </div>
             <div className="modal-actions">
               <button className="btn btn-ghost" onClick={() => setShowForm(false)}>取消</button>
@@ -95,7 +95,7 @@ export default function LongTermGoalsPage() {
           <Target size={48} className="icon" />
           <p>还没有长期目标</p>
           <p style={{ fontSize: 'var(--font-xs)', color: 'var(--color-text-muted)' }}>
-            从需求倒推方案：大目标 → 拆解任务 → 填充到每日计划
+            大目标 → 拆解任务 → 每日计划
           </p>
         </div>
       ) : (

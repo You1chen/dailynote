@@ -114,7 +114,7 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
             className="input"
             value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
-            placeholder="如：高等数学"
+            placeholder="课程名"
             maxLength={30}
           />
         </div>
@@ -134,7 +134,7 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
             className="input"
             value={form.location}
             onChange={e => setForm({ ...form, location: e.target.value })}
-            placeholder="如：三教 302"
+            placeholder="上课地点"
             maxLength={30}
           />
         </div>
@@ -163,7 +163,7 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
             })}
           </div>
           <p className="settings-field-hint" style={{ marginTop: 6 }}>
-            同一门课在多个星期都有课时，勾选多个即可，无需重复创建
+            多星期有课可多选，无需重复创建
           </p>
         </div>
         <div className="form-group">

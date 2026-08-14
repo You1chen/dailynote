@@ -57,8 +57,7 @@ export default function SetupPage({ onComplete }: Props) {
         </div>
         <h1 className="setup-title">欢迎使用 DailyNote</h1>
         <p className="setup-desc">
-          为保证数据安全，所有记录将保存在设备公共存储中。
-          即使卸载 App，数据也不会丢失。重新安装后指定相同路径即可恢复。
+          数据保存在设备公共存储，卸载重装不丢失，重新指定相同路径即可恢复。
         </p>
 
         {/* 默认路径 */}
@@ -70,7 +69,7 @@ export default function SetupPage({ onComplete }: Props) {
             <strong>使用默认位置</strong>
             <span className="setup-option-path">{defaultPath}/</span>
             <span className="setup-option-hint">
-              系统 Documents 文件夹，卸载不丢失，其他应用也能访问
+              系统 Documents 文件夹，卸载不丢失
             </span>
           </div>
           <ArrowRight size={20} className="setup-option-arrow" />
@@ -84,15 +83,14 @@ export default function SetupPage({ onComplete }: Props) {
           <div className="setup-option-body">
             <strong>自定义子目录</strong>
             <span className="setup-option-hint">
-              如输入 "MyNotes" 则路径为 Documents/MyNotes/；也支持直接输入完整路径 Documents/MyNotes。
-              重装后输入相同的目录即可恢复之前的全部数据。
+              输入子目录名（如 MyNotes）或完整路径 Documents/MyNotes。重装后输入相同目录即可恢复数据。
             </span>
             <input
               className="input input-sm"
               value={customPath}
               onChange={e => { setCustomPath(e.target.value); setPathError(''); }}
               onClick={e => e.stopPropagation()}
-              placeholder="输入子文件夹名称（可选）"
+              placeholder="子文件夹名称（可选）"
               style={{ marginTop: 8 }}
               onKeyDown={e => {
                 if (e.key === 'Enter') handleUseCustom();
@@ -104,13 +102,13 @@ export default function SetupPage({ onComplete }: Props) {
               </span>
             )}
             <button className="btn btn-outline btn-sm" onClick={handleBrowse} style={{ marginTop: 8 }}>
-              <FolderSearch size={14} /> {browsing ? '收起目录' : '浏览已有目录（不输入名称，直接选）'}
+              <FolderSearch size={14} /> {browsing ? '收起目录' : '浏览已有目录'}
             </button>
             {browsing && (
               <div className="card" style={{ marginTop: 8, padding: 10 }}>
                 {subdirs.length === 0 ? (
                   <p className="setup-option-hint" style={{ margin: 0, fontSize: '0.8rem' }}>
-                    网页版数据在浏览器内置存储中，无真实文件夹；手机版会列出 Documents/ 下已有目录供点选。
+                    网页版数据在浏览器内置存储，无真实文件夹；手机版列出 Documents/ 下已有目录。
                   </p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

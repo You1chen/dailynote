@@ -70,7 +70,7 @@ export default function TimeBlockCard({ block, onChange, onDelete }: Props) {
               className="input"
               value={block.taskTitle}
               onChange={e => onChange({ taskTitle: e.target.value })}
-              placeholder="例如：早读英语、做物理题..."
+              placeholder="任务名称"
             />
           </div>
 
@@ -80,7 +80,7 @@ export default function TimeBlockCard({ block, onChange, onDelete }: Props) {
               className="input textarea"
               value={block.plannedContent}
               onChange={e => onChange({ plannedContent: e.target.value })}
-              placeholder="具体要做什么？"
+              placeholder="要做什么？"
               rows={2}
             />
           </div>
@@ -91,7 +91,7 @@ export default function TimeBlockCard({ block, onChange, onDelete }: Props) {
               className="input textarea"
               value={block.actualExecution}
               onChange={e => onChange({ actualExecution: e.target.value })}
-              placeholder="实际完成了什么？有什么偏差？"
+              placeholder="实际完成情况"
               rows={2}
             />
           </div>
@@ -135,7 +135,7 @@ export default function TimeBlockCard({ block, onChange, onDelete }: Props) {
               className="input"
               value={block.notes}
               onChange={e => onChange({ notes: e.target.value })}
-              placeholder="其他想记录的..."
+              placeholder="备注"
             />
           </div>
 

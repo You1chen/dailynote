@@ -977,14 +977,14 @@ export async function importJSONIntoStore(json: string): Promise<number> {
   const clean = json.codePointAt(0) === 0xFEFF ? json.slice(1) : json;
   const trimmed = clean.trimStart();
   if (!trimmed) throw new Error('文件内容为空，无法导入');
-  if (!trimmed.startsWith('{')) throw new Error('文件内容不是 JSON 文本（可能选到了微信缓存/二进制文件，请选择导出的 .json 备份）');
+  if (!trimmed.startsWith('{')) throw new Error('文件内容不是 JSON 文本');
   try {
     JSON.parse(trimmed);
   } catch {
     throw new Error('文件内容不是有效的 JSON（可能已损坏或选错文件）');
   }
   const data = parseStorageData(trimmed);
-  if (!data) throw new Error('不是 DailyNote 数据文件（缺少 version/dailyPlans 字段，可能是旧版本导出的备份）');
+  if (!data) throw new Error('不是 DailyNote 数据文件（缺少 version/dailyPlans 字段）');
   let count = 0;
   await mutate(() => {
     count = mergeIntoStore(data);

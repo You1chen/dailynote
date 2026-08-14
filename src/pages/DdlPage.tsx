@@ -197,7 +197,7 @@ export default function DdlPage() {
                 value={form.name}
                 maxLength={30}
                 onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="例如：高数作业提交"
+                placeholder="事件名称"
               />
             </div>
 
@@ -226,7 +226,7 @@ export default function DdlPage() {
                 rows={5}
                 value={form.notes}
                 onChange={e => setForm({ ...form, notes: e.target.value })}
-                placeholder="可写任意长度的文字说明..."
+                placeholder="备注说明"
               />
             </div>
 

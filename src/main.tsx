@@ -181,11 +181,10 @@ function Boot() {
         <span style={{ fontSize: 44 }}>🔓</span>
         <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>需要存储权限</h2>
         <p style={{ margin: 0, maxWidth: 420, lineHeight: 1.7 }}>
-          你的数据文件保存在公共 Documents 目录。Android 11+ 系统限制应用直接读写该目录，
-          需要授予「所有文件访问」权限，应用才能读取和保存这些数据（数据只在手机本地，不会上传）。
+          数据保存在公共 Documents 目录。Android 11+ 需授予「所有文件访问」权限才能读写（数据仅存手机本地，不会上传）。
         </p>
         <p style={{ margin: 0, maxWidth: 420, lineHeight: 1.7, color: '#6b7280', fontSize: '0.8rem' }}>
-          点击下方按钮打开系统设置，开启「允许管理所有文件」开关后返回本应用，将自动重新检测并恢复数据。
+          点击下方按钮去系统设置开启「允许管理所有文件」，返回后自动重新检测。
         </p>
         <button style={permBtn} onClick={handleGrantAccess}>去开启权限</button>
         <button style={permBtnGhost} onClick={() => tryLoad()}>已开启，重新检测</button>
