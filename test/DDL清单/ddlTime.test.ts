@@ -48,10 +48,16 @@ describe('minutesUntilDeadline', () => {
     expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '25:00' }, NOW)).toBeNull();
     expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '18:99' }, NOW)).toBeNull();
     expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '18-30' }, NOW)).toBeNull();
-    expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '' }, NOW)).toBeNull();
+    expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '25:00' }, NOW)).toBeNull();
+    expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: 'ab:cd' }, NOW)).toBeNull();
   });
 });
 
+  it('时间不填 → 按当天 23:59 算', () => {
+    const at2359 = minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '23:59' }, NOW);
+    expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '' }, NOW)).toBe(at2359);
+    expect(minutesUntilDeadline({ deadlineDate: '2026-08-20', deadlineTime: '   ' }, NOW)).toBe(at2359);
+  });
 describe('ddlRemainText', () => {
   it('-1 → 已过期', () => {
     expect(ddlRemainText(-1)).toBe('已过期');
