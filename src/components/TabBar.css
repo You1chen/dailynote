@@ -1,7 +1,7 @@
 .tab-bar {
   position: fixed;
   bottom: 0;
-  left: calc(56px + (100vw - 56px) / 2);
+  left: calc(var(--nav-w) + (100vw - var(--nav-w)) / 2);
   transform: translateX(-50%);
   width: 100%;
   max-width: 480px;

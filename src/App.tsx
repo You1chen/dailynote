@@ -1,22 +1,25 @@
 import { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import TabBar from './components/TabBar';
+import TaskBall from './components/TaskBall';
 import SideNav from './components/SideNav';
-import SideMenu from './components/SideMenu';
 import DailyPlanPage from './pages/DailyPlan';
 import LongTermGoalsPage from './pages/LongTermGoals';
 import ReflectionPage from './pages/Reflection';
 import HarvestPage from './pages/Harvest';
-import DashboardPage from './pages/Dashboard';
 import TrashPage from './pages/Trash';
 import BackupRestorePage from './pages/BackupRestore';
 import SettingsPage from './pages/SettingsPage';
-import TaskListPage from './pages/TaskListPage';
 import CoursesPage from './pages/CoursesPage';
 import WeekViewPage from './pages/WeekViewPage';
 import DdlPage from './pages/DdlPage';
-import { BackButtonProvider, useRegisterBackHandler } from './contexts/BackButtonContext';
+import ImportantPage from './pages/ImportantPage';
+import BacklogPage from './pages/BacklogPage';
+import { BackButtonProvider } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
+import { useBacklogBadge } from './hooks/useBacklog';
+import { useDdlBadge } from './hooks/useDdlBadge';
+import { useImportantBadge } from './hooks/useImportantBadge';
 import './App.css';
 
 function applyTheme(theme: ThemeMode) {
@@ -30,9 +33,10 @@ function applyTheme(theme: ThemeMode) {
 }
 
 function AppShell() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const navigate = useNavigate();
   const { prefs } = usePreferences();
+  const backlogBadge = useBacklogBadge();
+  const ddlBadge = useDdlBadge();
+  const importantBadge = useImportantBadge();
 
   // 应用主题
   useEffect(() => {
@@ -45,39 +49,28 @@ function AppShell() {
     }
   }, [prefs.theme]);
 
-  useRegisterBackHandler(() => {
-    if (menuOpen) {
-      setMenuOpen(false);
-      return true;
-    }
-    return false;
-  }, [menuOpen]);
-
   return (
     <>
-      <SideNav
-        onMenuClick={() => setMenuOpen(true)}
-        onSettingsClick={() => navigate('/settings')}
-      />
-      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <SideNav badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />
 
       <div className="app-main">
         <Routes>
           <Route path="/" element={<DailyPlanPage />} />
           <Route path="/goals" element={<LongTermGoalsPage />} />
+          <Route path="/backlog" element={<BacklogPage />} />
           <Route path="/reflection" element={<ReflectionPage />} />
           <Route path="/harvest" element={<HarvestPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/backup" element={<BackupRestorePage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/week" element={<WeekViewPage />} />
           <Route path="/ddl" element={<DdlPage />} />
+          <Route path="/important" element={<ImportantPage />} />
         </Routes>
       </div>
       <TabBar />
+      <TaskBall />
     </>
   );
 }

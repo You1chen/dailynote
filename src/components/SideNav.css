@@ -1,35 +1,60 @@
+/* ============ 左侧导航（展开式：图标 + 文字） ============ */
+
 .side-nav {
   position: fixed;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 56px;
+  width: var(--nav-w, 76px);
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
   padding-top: var(--safe-top);
   padding-bottom: calc(64px + var(--safe-bottom));
   z-index: 90;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.side-nav-items {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 6px 0;
+  gap: 2px;
+}
+
+.side-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.side-nav-divider {
+  height: 1px;
+  background: var(--color-border);
+  opacity: 0.7;
+  margin: 6px 10px;
 }
 
 .side-nav-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  width: 44px;
-  height: 44px;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 2px;
+  border: none;
+  background: transparent;
   border-radius: var(--radius-sm);
-  text-decoration: none;
-  color: var(--color-text-muted);
-  transition: all 0.15s;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
   -webkit-tap-highlight-color: transparent;
-  flex-shrink: 0;
 }
 
 .side-nav-item:active {
@@ -37,13 +62,49 @@
 }
 
 .side-nav-item--active {
-  color: var(--color-primary);
   background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .side-nav-label {
-  font-size: 0.5rem;
+  font-size: 10.5px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.side-nav-bottom {
+  flex: 0 0 auto;
+  padding: 6px;
+  border-top: 1px solid var(--color-border);
+}
+
+.side-nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+/* 顶部搜索入口 */
+.side-nav-search {
+  flex: 0 0 auto;
+  padding: 8px 6px 2px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+
+.side-nav-item--search {
+  color: var(--color-primary);
 }

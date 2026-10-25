@@ -33,6 +33,7 @@
   --font-xl: 1.25rem;
   --font-2xl: 1.5rem;
 
+  --nav-w: 76px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -296,7 +297,7 @@ body {
 
 /* ============ 左侧导航栏布局 ============ */
 .app-main {
-  margin-left: 56px;
+  margin-left: var(--nav-w);
   min-height: 100dvh;
 }
 
