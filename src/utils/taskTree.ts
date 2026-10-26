@@ -157,6 +157,16 @@ export function countUndone(leaves: TaskLeaf[]): number {
   return leaves.filter(l => !l.done).length;
 }
 
+/**
+ * 勾掉 `key` 之后清单是否正好全部完成（「全部完成」庆祝的判定）。
+ * 已完成的项、不存在的 key、空清单都返回 false。
+ */
+export function completesAll(leaves: TaskLeaf[], key: string): boolean {
+  const target = leaves.find(l => l.key === key);
+  if (!target || target.done) return false;
+  return leaves.every(l => l.key === key || l.done);
+}
+
 // ============ 变更（不可变） ============
 
 /** 按完整链翻转末级的完成状态 */

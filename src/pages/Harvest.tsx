@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2, Hash, Edit3 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import FullscreenEditor from '../components/FullscreenEditor';
 import { useHarvests } from '../hooks/useHarvests';
@@ -33,7 +34,13 @@ function splitContent(content: string): { title: string; body: string } {
 }
 
 export default function HarvestPage() {
-  const [date, setDate] = useState(todayStr());
+  const [searchParams] = useSearchParams();
+  const [date, setDate] = useState(searchParams.get('date') || todayStr());
+
+  useEffect(() => {
+    const d = searchParams.get('date');
+    if (d) setDate(d);
+  }, [searchParams]);
   const { harvests, loading, addOrUpdate, remove } = useHarvests(date);
   const [editorOpen, setEditorOpen] = useState(false);
   const [title, setTitle] = useState('');

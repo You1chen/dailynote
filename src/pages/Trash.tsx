@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Trash2, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useTrash } from '../hooks/useTrash';
+import ConfirmDialog from '../components/ConfirmDialog';
 import './Trash.css';
 
 const TABLE_LABELS: Record<string, string> = {
@@ -11,11 +13,15 @@ const TABLE_LABELS: Record<string, string> = {
   taskTemplates: '任务清单模板',
   courses: '课程',
   ddls: 'DDL',
+  important: '重要的事',
+  backlog: '遗留问题',
   timeBlocks: '时间块',
 };
 
 export default function TrashPage() {
   const { items, loading, restore, permDelete, clearAll } = useTrash();
+  const [askClear, setAskClear] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -31,9 +37,7 @@ export default function TrashPage() {
       <div className="page-header">
         <h1 className="page-title">回收站</h1>
         {items.length > 0 && (
-          <button className="btn btn-danger btn-sm" onClick={() => {
-            if (confirm('确定要清空回收站吗？此操作不可撤销。')) clearAll();
-          }}>
+          <button className="btn btn-danger btn-sm" onClick={() => setAskClear(true)}>
             <AlertTriangle size={14} /> 清空回收站
           </button>
         )}
@@ -74,7 +78,7 @@ export default function TrashPage() {
                     className="btn btn-outline btn-sm"
                     onClick={async () => {
                       const ok = await restore(gid);
-                      if (!ok) alert('还原失败：原始数据已不存在');
+                      if (!ok) setNotice('还原失败：原始数据已不存在');
                     }}
                   >
                     <RotateCcw size={14} /> 还原
@@ -91,6 +95,16 @@ export default function TrashPage() {
           })}
         </div>
       )}
-    </div>
+      <ConfirmDialog
+        open={askClear}
+        message="确定要清空回收站吗？此操作不可撤销。"
+        onCancel={() => setAskClear(false)}
+        onConfirm={() => { setAskClear(false); clearAll(); }}
+      />
+      <ConfirmDialog
+        open={notice !== null}
+        message={notice ?? ''}
+        onCancel={() => setNotice(null)}
+      />    </div>
   );
 }

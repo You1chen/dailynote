@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DailyNoteStoragePlugin.class);
+        registerPlugin(MlkitOcrPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

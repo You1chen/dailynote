@@ -10,6 +10,7 @@ import {
   getLastPersistError,
   listStorageSubdirs,
 } from '../services/storage';
+import { rescanFromDisk } from '../services/store';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import './BackupRestore.css';
 
@@ -100,6 +101,30 @@ export default function BackupRestorePage() {
     }
   };
 
+  const [rescanning, setRescanning] = useState(false);
+
+  /** 忽略启动快照，按磁盘现状重新读一遍（外部改过文件后用） */
+  const handleRescan = async () => {
+    setRescanning(true);
+    try {
+      const count = await rescanFromDisk();
+      if (count === -2) {
+        setStatusType('error');
+        setStatus('存储权限被拒绝，无法读取');
+      } else if (count < 0) {
+        setStatusType('success');
+        setStatus('目录里没有数据');
+      } else {
+        setStatusType('success');
+        setStatus(`已按磁盘重新读取（${count} 条记录）`);
+      }
+    } catch {
+      setStatusType('error');
+      setStatus('重新扫描失败');
+    } finally {
+      setRescanning(false);
+    }
+  };
   const handleImport = async () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -236,6 +261,15 @@ export default function BackupRestorePage() {
       >
         <Upload size={18} />
         {importing ? '导入中...' : '从文件导入数据'}
+      </button>
+
+      <button
+        className="btn btn-outline backup-btn"
+        onClick={handleRescan}
+        disabled={rescanning}
+      >
+        <FolderSearch size={18} />
+        {rescanning ? '扫描中...' : '重新扫描存储目录'}
       </button>
 
       {status && (

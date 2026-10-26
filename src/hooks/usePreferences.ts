@@ -9,6 +9,7 @@ export interface UserPreferences {
   hideSleepHours: boolean;  // 隐藏睡眠时段
   defaultDuration: number;  // 默认任务时长（分钟）
   hourHeight: number;       // 网格密度（px/小时）
+  futureOnly: boolean;      // 只看未来：折叠当前小时之前的时间段
   // 外观
   theme: ThemeMode;         // 浅色 / 深色 / 跟随系统
   // 用户信息
@@ -24,6 +25,7 @@ const DEFAULTS: UserPreferences = {
   hideSleepHours: true,
   defaultDuration: 60,
   hourHeight: 64,
+  futureOnly: false,
   theme: 'system',
   username: '',
   avatar: '👤',

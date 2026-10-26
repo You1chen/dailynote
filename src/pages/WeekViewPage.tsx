@@ -6,7 +6,7 @@ import { getAllCourses, getSemester, getPlanByDate } from '../db';
 import type { Course, SemesterRecord, DailyPlan } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { usePreferences } from '../hooks/usePreferences';
-import { blockRenderRect } from '../utils/time';
+import { blockRenderRect, minutesToTop, topToMinutes, minutesToTime, sleepLabel, getVisibleHours } from '../utils/time';
 import { computeDayCourses, weekIndex, isDayHoliday } from '../utils/courseSchedule';
 import CourseEditModal, { DAY_LABELS } from '../components/CourseEditModal';
 import './WeekViewPage.css';
@@ -61,9 +61,31 @@ export default function WeekViewPage() {
   }, [loadWeek]);
 
   const hourHeight = prefs.hourHeight;
-  const gridHeight = 24 * hourHeight;
-  const gridGeo = { hideSleep: false, sleepStart: '', sleepEnd: '', hourHeight, barHeight: 0, gridHeight };
+  // 与日计划一致的睡眠折叠：折叠条 28px，睡眠时段整段压成一条
+  const hideSleep = prefs.hideSleepHours;
+  const barHeight = hideSleep ? 28 : 0;
+  const sleepStart = prefs.sleepStart;
+  const sleepEnd = prefs.sleepEnd;
+  const visibleHours = hideSleep ? getVisibleHours(sleepStart, sleepEnd) : 24;
+  const gridHeight = visibleHours * hourHeight + barHeight;
+  const gridGeo = { hideSleep, sleepStart, sleepEnd, hourHeight, barHeight, gridHeight };
 
+  /**
+   * 点空白处：按列定位日期、按 y 反算时间，直接跳那一天并由日计划打开新建面板。
+   * 编辑面板只有日计划那一套（这里不重复造轮子）。
+   */
+  function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top - GRID_HEADER_H;
+    if (y < 0) return;
+    const idx = Math.floor((x - TIME_COL_W) / COL_W);
+    if (idx < 0 || idx > 6) return;
+    const minutes = topToMinutes(y, gridGeo);
+    if (minutes == null) return;
+    const m = Math.max(0, Math.min(1430, Math.round(minutes / 5) * 5));
+    navigate(`/?date=${weekDateStrs[idx]}&new=${minutesToTime(m)}`);
+  }
   return (
     <div className="app-container app-container--week">
       {/* 页面标题 */}
@@ -89,7 +111,11 @@ export default function WeekViewPage() {
       </div>
 
       <div className="wv-scroll">
-        <div className="wv-inner" style={{ height: GRID_HEADER_H + gridHeight }}>
+        <div className="wv-inner" style={{ height: GRID_HEADER_H + gridHeight }} onClick={handleGridClick}>
+          {/* 极淡列分隔线（替代原来的格子边框） */}
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={`col-${i}`} className="wv-col-line" style={{ left: TIME_COL_W + i * COL_W }} />
+          ))}
           {/* 表头：星期 + 日期 + 周次 + 放假角标 */}
           <div className="wv-head" style={{ height: GRID_HEADER_H }}>
             {weekDates.map((d, i) => {
@@ -111,17 +137,28 @@ export default function WeekViewPage() {
             })}
           </div>
 
-          {/* 小时行 */}
-          {Array.from({ length: 24 }, (_, h) => (
-            <div
-              key={h}
-              className="wv-hour-row"
-              style={{ top: GRID_HEADER_H + h * hourHeight, height: hourHeight }}
-            >
-              <span className="wv-hour-label">{String(h).padStart(2, '0')}:00</span>
-              <div className="wv-hour-line" />
+          {/* 睡眠折叠条 */}
+          {hideSleep && (
+            <div className="wv-sleep-bar" style={{ top: GRID_HEADER_H, height: barHeight }}>
+              <span className="wv-sleep-text">💤 {sleepLabel(sleepStart, sleepEnd)}</span>
             </div>
-          ))}
+          )}
+
+          {/* 小时行（折叠时段跳过） */}
+          {Array.from({ length: 24 }, (_, h) => h).map(h => {
+            const top = minutesToTop(h * 60, gridGeo);
+            if (top < 0) return null;
+            return (
+              <div
+                key={h}
+                className="wv-hour-row"
+                style={{ top: GRID_HEADER_H + top, height: hourHeight }}
+              >
+                <span className="wv-hour-label">{String(h).padStart(2, '0')}:00</span>
+                <div className="wv-hour-line" />
+              </div>
+            );
+          })}
 
           {/* 任务块（当天计划，只读展示） */}
           {weekDates.map((d, i) => {
@@ -135,6 +172,10 @@ export default function WeekViewPage() {
                   key={b.id}
                   className="wv-task-block"
                   title={`${b.taskTitle} · ${b.startTime}-${b.endTime}`}
+                  onClick={e => {
+                    e.stopPropagation();
+                    navigate(`/?date=${weekDateStrs[i]}&block=${b.id}`);
+                  }}
                   style={{
                     left: TIME_COL_W + i * COL_W + 2,
                     width: COL_W - 6,

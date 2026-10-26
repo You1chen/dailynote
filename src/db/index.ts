@@ -6,9 +6,12 @@
  * 保持与旧版完全一致的导出函数签名，页面/Hook 无需改动。
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
+import { toggleLeafDone, removeLeaf, normalizeOrder } from '../utils/taskTree';
+import { searchStore, type SearchHit } from '../utils/search';
+import { DDL_DEFAULT_TIME } from '../utils/ddl';
 
 // ============ 每日计划 CRUD ============
 
@@ -272,10 +275,11 @@ export async function saveSemester(record: SemesterRecord): Promise<number> {
 // ============ DDL 截止清单 CRUD ============
 
 export async function getAllDdls(): Promise<DdlItem[]> {
-  // 按截止时间升序（日期 → 时间 → id），已过期的自然排在最前
+  // 按截止时间升序（日期 → 时间 → id），已过期的自然排在最前；时间未填按 23:59
+  const tm = (x: { deadlineTime: string }) => x.deadlineTime?.trim() || DDL_DEFAULT_TIME;
   return [...store.ddls].sort((a, b) =>
     a.deadlineDate.localeCompare(b.deadlineDate)
-    || a.deadlineTime.localeCompare(b.deadlineTime)
+    || tm(a).localeCompare(tm(b))
     || (a.id ?? 0) - (b.id ?? 0));
 }
 
@@ -291,6 +295,7 @@ export async function saveDdl(ddl: DdlItem): Promise<number> {
     resultId = allocId('ddls');
     store.ddls.push({ ...ddl, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
   });
+  notifyDdlChanged();
   return resultId;
 }
 
@@ -310,6 +315,7 @@ export async function deleteDdl(id: number): Promise<void> {
     }
     cleanOldTrashSync();
   }, { writeOrder: ['trashItems', 'ddls'] });
+  notifyDdlChanged();
 }
 
 // ============ 回收站 CRUD ============
@@ -328,6 +334,8 @@ const TRASH_TARGET: Record<string, AnyStoreTable> = {
   taskTemplates: 'taskTemplates',
   courses: 'courses',
   ddls: 'ddls',
+  important: 'important',
+  backlog: 'backlog',
   timeBlocks: 'dailyPlans',
 };
 
@@ -390,6 +398,18 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
           const rec = originalData as DdlItem;
           if (rec.id != null && store.ddls.some(d => d.id === rec.id)) { ok = false; return; }
           store.ddls.push(rec);
+          break;
+        }
+        case 'important': {
+          const rec = originalData as ImportantItem;
+          if (rec.id != null && store.important.some(d => d.id === rec.id)) { ok = false; return; }
+          store.important.push(rec);
+          break;
+        }
+        case 'backlog': {
+          const rec = originalData as BacklogItem;
+          if (rec.id != null && store.backlog.some(b => b.id === rec.id)) { ok = false; return; }
+          store.backlog.push(rec);
           break;
         }
         case 'timeBlocks':
@@ -552,4 +572,144 @@ export async function deleteTaskTemplate(id: number): Promise<void> {
     }
     cleanOldTrashSync();
   }, { writeOrder: ['trashItems', 'taskTemplates'] });
+}
+
+// ============ 遗留问题 CRUD ============
+
+export async function getAllBacklog(): Promise<BacklogItem[]> {
+  return [...store.backlog];
+}
+
+export async function saveBacklog(item: BacklogItem): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (item.id != null) {
+      const idx = store.backlog.findIndex(x => x.id === item.id);
+      if (idx >= 0) store.backlog[idx] = { ...item, updatedAt: Date.now() };
+      resultId = item.id;
+      return;
+    }
+    resultId = allocId('backlog');
+    store.backlog.push({ ...item, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+/** 只改状态：更新时间戳即"重新计时"（气泡不催刚动过的） */
+export async function setBacklogStatus(id: number, status: BacklogStatus): Promise<void> {
+  await mutate(() => {
+    const idx = store.backlog.findIndex(x => x.id === id);
+    if (idx >= 0) store.backlog[idx] = { ...store.backlog[idx], status, updatedAt: Date.now() };
+  });
+}
+
+export async function deleteBacklog(id: number): Promise<void> {
+  await mutate(() => {
+    const item = store.backlog.find(x => x.id === id);
+    if (item) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'backlog',
+        originalId: id,
+        originalData: deepClone(item),
+        title: `遗留问题 - ${item.title?.slice(0, 30) || '无标题'}`,
+        deletedAt: Date.now(),
+      });
+      store.backlog = store.backlog.filter(x => x.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'backlog'] });
+}
+
+
+// ============ 任务树 CRUD（单记录数组表，id 恒 1） ============
+
+export async function getTaskBoard(): Promise<TaskBoard> {
+  return store.taskBoard.find(b => b.id === 1) ?? { id: 1, nodes: [], order: [], updatedAt: 0 };
+}
+
+export async function saveTaskBoard(next: { nodes: TaskNode[]; order: string[] }): Promise<void> {
+  await mutate(() => {
+    const rec: TaskBoard = { id: 1, nodes: next.nodes, order: next.order, updatedAt: Date.now() };
+    const idx = store.taskBoard.findIndex(b => b.id === 1);
+    if (idx >= 0) store.taskBoard[idx] = rec;
+    else store.taskBoard.push(rec);
+  });
+}
+
+export async function toggleTaskLeaf(key: string): Promise<void> {
+  const board = await getTaskBoard();
+  const nodes = toggleLeafDone(board.nodes, key);
+  await saveTaskBoard({ nodes, order: board.order });
+}
+
+export async function removeTaskLeaf(key: string): Promise<void> {
+  const board = await getTaskBoard();
+  const nodes = removeLeaf(board.nodes, key);
+  const order = normalizeOrder(nodes, board.order.filter(k => k !== key));
+  await saveTaskBoard({ nodes, order });
+}
+
+// ============ 全局内容搜索 ============
+
+/** 只在用户自己录入的内容里搜（不含界面文案与日期），返回带位置与路由的结果 */
+export async function searchEverything(query: string, limit = 60): Promise<SearchHit[]> {
+  return searchStore(store, query, limit);
+}
+
+/** DDL 变更通知（侧栏红点用） */
+function notifyDdlChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('dailynote-ddl-changed'));
+}
+
+// ============ 重要的事 CRUD ============
+
+function importantTime(x: { deadlineTime: string }): string {
+  return x.deadlineTime?.trim() || DDL_DEFAULT_TIME;
+}
+
+export async function getAllImportant(): Promise<ImportantItem[]> {
+  return [...store.important].sort((a, b) =>
+    a.deadlineDate.localeCompare(b.deadlineDate)
+    || importantTime(a).localeCompare(importantTime(b))
+    || (a.id ?? 0) - (b.id ?? 0));
+}
+
+export async function saveImportant(item: ImportantItem): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (item.id != null) {
+      const idx = store.important.findIndex(x => x.id === item.id);
+      if (idx >= 0) store.important[idx] = { ...item, updatedAt: Date.now() };
+      resultId = item.id;
+      return;
+    }
+    resultId = allocId('important');
+    store.important.push({ ...item, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  notifyImportantChanged();
+  return resultId;
+}
+
+export async function deleteImportant(id: number): Promise<void> {
+  await mutate(() => {
+    const item = store.important.find(x => x.id === id);
+    if (item) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'important',
+        originalId: id,
+        originalData: deepClone(item),
+        title: `重要 - ${item.name?.slice(0, 30) || '无标题'}`,
+        deletedAt: Date.now(),
+      });
+      store.important = store.important.filter(x => x.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'important'] });
+  notifyImportantChanged();
+}
+
+function notifyImportantChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('dailynote-important-changed'));
 }

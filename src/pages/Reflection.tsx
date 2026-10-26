@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Save, Trash2, Edit3, CheckCircle2, Circle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import { useReflections } from '../hooks/useReflections';
 import { useDailyPlan } from '../hooks/useDailyPlan';
@@ -9,7 +10,13 @@ import type { Reflection } from '../types';
 import './Reflection.css';
 
 export default function ReflectionPage() {
-  const [date, setDate] = useState(todayStr());
+  const [searchParams] = useSearchParams();
+  const [date, setDate] = useState(searchParams.get('date') || todayStr());
+
+  useEffect(() => {
+    const d = searchParams.get('date');
+    if (d) setDate(d);
+  }, [searchParams]);
   const { reflections, loading, addOrUpdate, remove } = useReflections(date);
   const { plan } = useDailyPlan(date);
   const [activePeriod, setActivePeriod] = useState<Period>('morning');

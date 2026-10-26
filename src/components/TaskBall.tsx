@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTaskBoard } from '../hooks/useTaskBoard';
+import { usePreferences } from '../hooks/usePreferences';
+import CelebrationDialog from './CelebrationDialog';
+import type { TaskLeaf } from '../types';
 import type { TaskLine } from '../utils/taskTree';
 import {
   chainText,
+  completesAll,
   linesToText,
   linesToTree,
   parseTaskText,
@@ -34,6 +38,7 @@ function clamp(n: number, min: number, max: number): number {
 
 export default function TaskBall() {
   const { nodes, leaves, undone, saveTree, toggle, remove, reorder } = useTaskBoard();
+  const { prefs } = usePreferences();
 
   const [panel, setPanel] = useState<Panel>(null);
   const [mode, setMode] = useState<'lines' | 'text'>('lines');
@@ -45,6 +50,8 @@ export default function TaskBall() {
   const [chain, setChain] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
+  /** 全部完成时的庆祝弹窗（null = 不显示；数字 = 本次清单总条数） */
+  const [celebration, setCelebration] = useState<number | null>(null);
 
   // ---- 悬浮球位置（可拖动） ----
   const [pos, setPos] = useState<Pos>(loadPos);
@@ -227,6 +234,13 @@ export default function TaskBall() {
   const done = useMemo(() => leaves.filter(l => l.done).length, [leaves]);
   const shownLevel = editing ? (lines[editing.index]?.level ?? 0) : level;
 
+  /** 勾掉最后一条未完成的 → 立刻庆祝 */
+  async function toggleLeaf(leaf: TaskLeaf) {
+    const finishedAll = completesAll(leaves, leaf.key);
+    await toggle(leaf.key);
+    if (finishedAll) setCelebration(leaves.length);
+  }
+
   return (
     <>
       <button
@@ -270,7 +284,7 @@ export default function TaskBall() {
                   <button className="tb-ic" onClick={() => setChain(leaf.chain)}>…</button>
                   <button
                     className={`tb-ic tb-ic--box ${leaf.done ? 'tb-ic--on' : ''}`}
-                    onClick={() => toggle(leaf.key)}
+                    onClick={() => toggleLeaf(leaf)}
                   >✓</button>
                   <button className="tb-ic" onClick={() => remove(leaf.key)}>✕</button>
                 </div>
@@ -385,6 +399,14 @@ export default function TaskBall() {
           </div>
         </div>
       )}
+
+      {/* 全部完成：自动跳出庆祝 */}
+      <CelebrationDialog
+        open={celebration !== null}
+        count={celebration ?? 0}
+        username={prefs.username}
+        onClose={() => setCelebration(null)}
+      />
     </>
   );
 }

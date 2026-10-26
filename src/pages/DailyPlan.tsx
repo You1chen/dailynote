@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Plus, X, Save, Trash2, CheckCircle2, Settings, Maximize2, ClipboardList, CalendarDays } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Plus, X, Save, Trash2, CheckCircle2, Settings, Maximize2, ClipboardList, CalendarDays, SkipForward } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import FullscreenSchedule from '../components/FullscreenSchedule';
 import PreferencePanel from '../components/PreferencePanel';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useDailyPlan } from '../hooks/useDailyPlan';
 import { usePreferences } from '../hooks/usePreferences';
-import { getAllRoutines, getAllTaskTemplates, savePlan, getAllCourses, getSemester } from '../db';
+import { getAllRoutines, getAllTaskTemplates, savePlan, getAllCourses, getSemester, getAllPlans } from '../db';
 import { todayStr, genId, appendTemplateItems } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
-import { timeToMinutes, isInSleepPeriod, sleepLabel, gridClickY, blockRenderRect } from '../utils/time';
+import { timeToMinutes, minutesToTime, isInSleepPeriod, sleepLabel, gridClickY, blockRenderRect, futureFoldStart, futureWindow } from '../utils/time';
+import type { FutureWindowGeometry } from '../utils/time';
 import { computeDayCourses, weekIndex } from '../utils/courseSchedule';
 import type { TimeBlock, TaskTemplate, Course, SemesterRecord } from '../types';
 import './DailyPlan.css';
@@ -40,9 +42,45 @@ function formatHM(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/** "YYYY-MM-DD" → 本地 Date */
+function dateObj(dateStr: string): Date {
+  return new Date(`${dateStr}T00:00:00`);
+}
+
+/** 日期平移 n 天，返回 "YYYY-MM-DD" */
+function shiftDate(dateStr: string, n: number): string {
+  const d = dateObj(dateStr);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** 该日期所在周（周一→周日）7 个日期 */
+function weekOf(dateStr: string): string[] {
+  const dow = dateObj(dateStr).getDay(); // 0=周日
+  const monday = shiftDate(dateStr, -((dow === 0 ? 7 : dow) - 1));
+  return Array.from({ length: 7 }, (_, i) => shiftDate(monday, i));
+}
+
+/** 只看未来：只留折叠起点之后的小时标签 */
+function futureHourLabels(g: FutureWindowGeometry): { hour: number; top: number }[] {
+  const labels: { hour: number; top: number }[] = [];
+  for (let h = 0; h < 24; h++) {
+    const top = g.minuteToTop(h * 60);
+    if (top >= 0) labels.push({ hour: h, top });
+  }
+  return labels;
+}
+
 export default function DailyPlanPage() {
   const navigate = useNavigate();
-  const [date, setDate] = useState(todayStr());
+  const [searchParams] = useSearchParams();
+  const [date, setDate] = useState(searchParams.get('date') || todayStr());
+
+  // 从搜索跳进来时切到对应日期
+  useEffect(() => {
+    const d = searchParams.get('date');
+    if (d) setDate(d);
+  }, [searchParams]);
   const { plan, loading, addFullBlock, updateBlock, removeBlock, reload } = useDailyPlan(date);
   const { prefs, updatePrefs, resetPrefs } = usePreferences();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -62,6 +100,7 @@ export default function DailyPlanPage() {
   const [planningMode, setPlanningMode] = useState<'pre' | 'instant'>('pre');
   const [instantStyle, setInstantStyle] = useState<'block' | 'list'>('block');
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [templateList, setTemplateList] = useState<TaskTemplate[]>([]);
   const [acceptingBlock, setAcceptingBlock] = useState<TimeBlock | null>(null);
   // 课程表（只读展示：渲染时按日期实时计算，不写入当天计划）
@@ -135,6 +174,13 @@ export default function DailyPlanPage() {
   const SLEEP_BAR_H = hideSleep ? 28 : 0;
   const GRID_HEIGHT = visibleHours * HOUR_HEIGHT + SLEEP_BAR_H;
 
+  // ---- 只看未来（仅今天）：折叠当前小时之前的时段 ----
+  const isToday = date === todayStr();
+  const FUTURE_BAR_H = 24;
+  const futureStart = isToday && prefs.futureOnly ? futureFoldStart(nowMinutes) : 0;
+  const futureGeo = futureStart > 0 ? futureWindow(futureStart, HOUR_HEIGHT, FUTURE_BAR_H) : null;
+  const gridHeight = futureGeo ? futureGeo.gridHeight : GRID_HEIGHT;
+
   // 根据时长模式计算 endTime
   const computeEndTime = (start: string, dur: number): string => {
     const mins = timeToMinutes(start) + dur;
@@ -162,13 +208,19 @@ export default function DailyPlanPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // 自动滚动到当前时间
+  // 自动滚动到当前时间（整页滚动，不是内层容器）；只看未来时回到页面顶部，让折叠条露出来
   useEffect(() => {
-    if (!loading && scrollRef.current && !fullscreen) {
-      const scrollTo = Math.max(0, nowMinutes * (HOUR_HEIGHT / 60) - 200);
-      scrollRef.current.scrollTop = scrollTo;
+    const el = scrollRef.current;
+    if (loading || !el || fullscreen) return;
+    if (futureGeo) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
     }
-  }, [loading, date]);
+    const offset = Math.max(0, minutesToTop(nowMinutes) - 200);
+    const top = el.getBoundingClientRect().top + window.scrollY + offset;
+    window.scrollTo({ top, behavior: 'auto' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, date, prefs.futureOnly]);
 
   // --- 将实际分钟映射到网格 top 位置 ---
   function minutesToTop(minutes: number): number {
@@ -212,17 +264,49 @@ export default function DailyPlanPage() {
     return labels;
   }
 
+  // --- 在指定分钟处新建任务块（点空白 / FAB / 只看未来 共用） ---
+  const startNewBlockAt = useCallback((minutes: number) => {
+    const actualMinutes = Math.max(0, Math.min(1430, Math.round(minutes / 5) * 5));
+    const startTime = minutesToTime(actualMinutes);
+    const endTime = minutesToTime(Math.min(1440, actualMinutes + prefs.defaultDuration) % 1440);
+
+    setNewStartTime(startTime);
+    manualStartRef.current = false;
+    setEditingBlock({
+      id: '',
+      startTime,
+      endTime,
+      taskTitle: '',
+      plannedContent: '',
+      checklist: [],
+      actualExecution: '',
+      focusScore: 0,
+      efficiencyScore: 0,
+      completed: false,
+      notes: '',
+    });
+    setShowNewMenu(false);
+  }, [prefs.defaultDuration]);
+
   // --- 网格点击处理 ---
   const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('.time-block')) return;
     if ((e.target as HTMLElement).closest('.course-block')) return;
     if ((e.target as HTMLElement).closest('.sleep-bar')) return;
+    if ((e.target as HTMLElement).closest('.future-bar')) return;
 
     // 滚动容器（.time-grid-container）的 rect.top 不随内部滚动变化；
     // 若取 e.currentTarget（.time-grid）的 rect.top，会随滚动偏移，再加 scrollTop 会双重补偿
     const rect = scrollRef.current?.getBoundingClientRect();
     if (!rect) return;
     const y = gridClickY(e.clientY, rect.top, scrollRef.current?.scrollTop ?? 0);
+
+    // 只看未来：折叠条以上无效，其余按折叠窗口直接反映射
+    if (futureGeo) {
+      if (y < FUTURE_BAR_H) return;
+      startNewBlockAt(futureGeo.topToMinutes(y));
+      return;
+    }
 
     // 精确逆映射：minutesToTop 的反函数
     let actualMinutes: number;
@@ -242,29 +326,8 @@ export default function DailyPlanPage() {
     } else {
       actualMinutes = (y * 60) / HOUR_HEIGHT;
     }
-    actualMinutes = Math.max(0, Math.min(1430, Math.round(actualMinutes / 5) * 5));
-
-    const startTime = `${String(Math.floor(actualMinutes / 60)).padStart(2, '0')}:${String(actualMinutes % 60).padStart(2, '0')}`;
-    const endMin = Math.min(1440, actualMinutes + prefs.defaultDuration);
-    const endTime = `${String(Math.floor(endMin / 60) % 24).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
-
-    setNewStartTime(startTime);
-    manualStartRef.current = false;
-    setEditingBlock({
-      id: '',
-      startTime,
-      endTime,
-      taskTitle: '',
-      plannedContent: '',
-      checklist: [],
-      actualExecution: '',
-      focusScore: 0,
-      efficiencyScore: 0,
-      completed: false,
-      notes: '',
-    });
-    setShowNewMenu(false);
-  }, [hideSleep, HOUR_HEIGHT, SLEEP_BAR_H, sleepCrosses, sleepMinEnd, sleepMinStart, sleepDurationMin, prefs.defaultDuration]);
+    startNewBlockAt(actualMinutes);
+  }, [hideSleep, HOUR_HEIGHT, SLEEP_BAR_H, sleepCrosses, sleepMinEnd, sleepMinStart, sleepDurationMin, futureGeo, startNewBlockAt]);
 
   // --- 全屏模式下的网格点击回调（不再退出全屏） ---
   const handleFullscreenGridClick = useCallback((startTime: string) => {
@@ -358,7 +421,7 @@ export default function DailyPlanPage() {
   const handleImportRoutine = async () => {
     const routines = await getAllRoutines();
     if (routines.length === 0) {
-      alert('请先在「目标」页创建作息模板');
+      setNotice('请先在「目标」页创建作息模板');
       return;
     }
     if (!plan) return;
@@ -383,7 +446,7 @@ export default function DailyPlanPage() {
   const handleOpenTemplatePicker = async () => {
     const list = await getAllTaskTemplates();
     if (list.length === 0) {
-      alert('请先在「任务清单」页创建模板');
+      setNotice('任务清单模板请在任务悬浮球里创建');
       return;
     }
     setTemplateList(list);
@@ -403,71 +466,207 @@ export default function DailyPlanPage() {
     () => computeDayCourses(courses, semester, date),
     [courses, semester, date],
   );
-  const isToday = date === todayStr();
-  const showNowLine = isToday && !(hideSleep && isInSleepPeriod(nowMinutes, prefs.sleepStart, prefs.sleepEnd));
-  const hourLabels = getVisibleHourLabels();
+  // 月历面板（默认收起，点顶部日期展开）
+  const [calOpen, setCalOpen] = useState(false);
+  // 哪些日期有计划（周条上的小圆点）
+  const [planDates, setPlanDates] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let alive = true;
+    getAllPlans()
+      .then(plans => {
+        if (!alive) return;
+        setPlanDates(new Set(plans.filter(p => p.timeBlocks.length > 0).map(p => p.date)));
+      })
+      .catch(() => { /* 圆点失败不影响主流程 */ });
+    return () => { alive = false; };
+  }, [plan]);
+
+  const weekDates = weekOf(date);
+  // 从周视图跳过来：用同一套面板新建/编辑（参数用掉后清掉，避免刷新重复弹）
+  useEffect(() => {
+    if (loading) return;
+    const newAt = searchParams.get('new');
+    const blockId = searchParams.get('block');
+    if (!newAt && !blockId) return;
+
+    if (blockId) {
+      const b = plan?.timeBlocks.find(x => x.id === blockId);
+      if (b) setEditingBlock({ ...b });
+    } else if (newAt && /^\d{2}:\d{2}$/.test(newAt)) {
+      setNewStartTime(newAt);
+      manualStartRef.current = true;
+      setEditingBlock({
+        id: '',
+        startTime: newAt,
+        endTime: computeEndTime(newAt, prefs.defaultDuration),
+        taskTitle: '',
+        plannedContent: '',
+        checklist: [],
+        actualExecution: '',
+        focusScore: 0,
+        efficiencyScore: 0,
+        completed: false,
+        notes: '',
+      });
+    }
+    navigate(`/?date=${date}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, plan, searchParams]);
+  /** 新建时间块（FAB / 空档点击共用） */
+  const openNewBlock = useCallback(() => {
+    const isInstant = planningMode === 'instant';
+    const start = isInstant ? getNowRounded() : '08:00';
+    const end = isInstant ? computeEndTime(start, prefs.defaultDuration) : '09:00';
+    setNewStartTime(start);
+    manualStartRef.current = false;
+    setEditingBlock({
+      id: '',
+      startTime: start,
+      endTime: end,
+      taskTitle: '',
+      plannedContent: '',
+      checklist: [],
+      actualExecution: '',
+      focusScore: 0,
+      efficiencyScore: 0,
+      completed: false,
+      notes: '',
+    });
+  }, [planningMode, prefs.defaultDuration]);
+
+  /** 顶部概览：块数 / 已验收 / 专注均值（只算已评分的块） */
+  const summary = useMemo(() => {
+    const blocks = plan?.timeBlocks ?? [];
+    const done = blocks.filter(b => b.completed).length;
+    const scored = blocks.filter(b => b.focusScore > 0);
+    const avg = scored.length
+      ? Math.round((scored.reduce((s, b) => s + b.focusScore, 0) / scored.length) * 10) / 10
+      : 0;
+    return { total: blocks.length, done, avg };
+  }, [plan]);
+  const showNowLine = isToday && (futureGeo !== null || !(hideSleep && isInSleepPeriod(nowMinutes, prefs.sleepStart, prefs.sleepEnd)));
+  const hourLabels = futureGeo ? futureHourLabels(futureGeo) : getVisibleHourLabels();
+
+  /** 时间块渲染矩形：只看未来走折叠窗口，否则走睡眠折叠 */
+  const blockRect = (start: string, end: string) => futureGeo
+    ? futureGeo.rect(start, end)
+    : blockRenderRect(start, end, {
+        hideSleep,
+        sleepStart: prefs.sleepStart,
+        sleepEnd: prefs.sleepEnd,
+        hourHeight: HOUR_HEIGHT,
+        barHeight: SLEEP_BAR_H,
+        gridHeight: GRID_HEIGHT,
+      });
 
   if (loading) {
     return (
-      <div className="app-container">
-        <DayNavigator date={date} onDateChange={setDate} />
+      <div className="app-container app-container--day">
         <div className="empty-state"><p>加载中...</p></div>
       </div>
     );
   }
 
   return (
-    <div className="app-container app-container--day">
-      <DayNavigator date={date} onDateChange={setDate} />
+    <div className="dp-page">
+      <div className="dp-head">
+      {/* 顶部：日期 + 前后一天 */}
+      <div className="dp-top">
+        <button className="dp-date" onClick={() => setCalOpen(v => !v)}>
+          <span className="dp-date-main">
+            {dateObj(date).getMonth() + 1}月{dateObj(date).getDate()}日
+          </span>
+          <span className="dp-date-sub">{WEEKDAY_LABELS[dateObj(date).getDay()]}</span>
+        </button>
+        <div className="dp-top-actions">
+          <button className="dp-arrow" onClick={() => setDate(shiftDate(date, -1))} aria-label="前一天">‹</button>
+          <button className="dp-arrow" onClick={() => setDate(shiftDate(date, 1))} aria-label="后一天">›</button>
+          {date !== todayStr() && (
+            <button className="dp-today" onClick={() => setDate(todayStr())}>今天</button>
+          )}
+        </div>
+      </div>
 
-      {/* 快捷操作栏 */}
-      <div className="day-toolbar">
-        <span className="day-toolbar-date">{date}</span>
-        <div className="day-toolbar-actions">
-          <button className="btn btn-ghost btn-sm btn-icon-only" title="偏好设置" onClick={() => setShowPrefs(true)}>
-            <Settings size={17} />
+      {/* 月历：点日期展开，选完自动收起 */}
+      {calOpen && (
+        <div className="dp-cal">
+          <DayNavigator
+            date={date}
+            onDateChange={d => { setDate(d); setCalOpen(false); }}
+          />
+        </div>
+      )}
+
+      {/* 一周条：点一下切日，圆点=那天有计划 */}
+      <div className="dp-week">
+        {weekDates.map(d => {
+          const on = d === date;
+          const todayCell = d === todayStr();
+          return (
+            <button key={d} className={`dp-wd ${on ? 'dp-wd--on' : ''}`} onClick={() => setDate(d)}>
+              <span className="dp-wd-w">{WEEKDAY_LABELS[dateObj(d).getDay()].replace('周', '')}</span>
+              <span className={`dp-wd-n ${todayCell && !on ? 'dp-wd-n--today' : ''}`}>
+                {dateObj(d).getDate()}
+              </span>
+              <span className={`dp-wd-dot ${planDates.has(d) ? 'dp-wd-dot--on' : ''}`} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 一行统计 + 工具 */}
+      <div className="dp-stats">
+        <span><b>{summary.total}</b> 块</span>
+        <span className="dp-sep">·</span>
+        <span><b>{summary.done}</b> 已验收</span>
+        <span className="dp-sep">·</span>
+        <span>专注 <b>{summary.avg || '—'}</b></span>
+        <div className="dp-tools">
+          {isToday && (
+            <button
+              className={`dp-tool ${prefs.futureOnly ? 'dp-tool--on' : ''}`}
+              title={prefs.futureOnly ? '显示全部时段' : '只看未来（折叠当前小时之前）'}
+              aria-pressed={prefs.futureOnly}
+              onClick={() => updatePrefs({ futureOnly: !prefs.futureOnly })}
+            >
+              <SkipForward size={16} />
+            </button>
+          )}
+          <button className="dp-tool" title="偏好设置" onClick={() => setShowPrefs(true)}>
+            <Settings size={16} />
           </button>
-          <button className="btn btn-ghost btn-sm btn-icon-only" title="课程表" onClick={() => navigate('/courses')}>
-            <CalendarDays size={17} />
+          <button className="dp-tool" title="课程表" onClick={() => navigate('/courses')}>
+            <CalendarDays size={16} />
           </button>
-          <button className="btn btn-ghost btn-sm btn-icon-only" title="全屏视图" onClick={() => setFullscreen(true)}>
-            <Maximize2 size={17} />
+          <button className="dp-tool" title="全屏视图" onClick={() => setFullscreen(true)}>
+            <Maximize2 size={16} />
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={handleImportRoutine}>
-            从模板导入
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => {
-            const isInstant = planningMode === 'instant';
-            const start = isInstant ? getNowRounded() : '08:00';
-            const end = isInstant
-              ? computeEndTime(start, prefs.defaultDuration)
-              : '09:00';
-            setNewStartTime(start);
-            manualStartRef.current = false;
-            setEditingBlock({
-              id: '',
-              startTime: start,
-              endTime: end,
-              taskTitle: '',
-              plannedContent: '',
-              checklist: [],
-              actualExecution: '',
-              focusScore: 0,
-              efficiencyScore: 0,
-              completed: false,
-              notes: '',
-            });
-          }}>
-            <Plus size={16} /> 添加
+          <button className="dp-tool" title="从模板导入" onClick={handleImportRoutine}>
+            <ClipboardList size={16} />
           </button>
         </div>
+      </div>
       </div>
 
       {/* 时间网格 */}
       <div className="time-grid-container" ref={scrollRef}>
-        <div className="time-grid" style={{ height: GRID_HEIGHT }} onClick={handleGridClick}>
-          {/* 睡眠折叠条 */}
-          {hideSleep && (
+        <div className="time-grid" style={{ height: gridHeight }} onClick={handleGridClick}>
+          {/* 只看未来的折叠条（当前小时之前全部收起） */}
+          {futureGeo && (
+            <div
+              className="future-bar"
+              style={{ top: 0, height: FUTURE_BAR_H }}
+              onClick={() => updatePrefs({ futureOnly: false })}
+            >
+              <span className="future-bar-text">
+                ⏩ 只看未来 · 00:00–{minutesToTime(futureGeo.startMin)} 已折叠 · 点此展开
+              </span>
+            </div>
+          )}
+
+          {/* 睡眠折叠条（只看未来时由折叠条接管顶部） */}
+          {hideSleep && !futureGeo && (
             <div
               className="sleep-bar"
               style={{ top: 0, height: 24 }}
@@ -498,21 +697,14 @@ export default function DailyPlanPage() {
 
           {/* 课程块（只读展示，z-index 低于任务块，重叠时任务块在上） */}
           {courseBlocks.map(course => {
-            const rect = blockRenderRect(course.startTime, course.endTime, {
-              hideSleep,
-              sleepStart: prefs.sleepStart,
-              sleepEnd: prefs.sleepEnd,
-              hourHeight: HOUR_HEIGHT,
-              barHeight: SLEEP_BAR_H,
-              gridHeight: GRID_HEIGHT,
-            });
+            const rect = blockRect(course.startTime, course.endTime);
             if (!rect) return null;
             const { top, height } = rect;
             return (
               <div
                 key={`course-${course.id}`}
                 className="course-block"
-                style={{ top, height, left: 48, right: 4 }}
+                style={{ top, height, left: 48, right: 10 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   setViewingCourse(course);
@@ -533,14 +725,7 @@ export default function DailyPlanPage() {
 
           {/* 时间块 */}
           {blocks.map(block => {
-            const rect = blockRenderRect(block.startTime, block.endTime, {
-              hideSleep,
-              sleepStart: prefs.sleepStart,
-              sleepEnd: prefs.sleepEnd,
-              hourHeight: HOUR_HEIGHT,
-              barHeight: SLEEP_BAR_H,
-              gridHeight: GRID_HEIGHT,
-            });
+            const rect = blockRect(block.startTime, block.endTime);
             if (!rect) return null;
             const { top, height } = rect;
             const isDone = block.completed;
@@ -549,7 +734,7 @@ export default function DailyPlanPage() {
               <div
                 key={block.id}
                 className={`time-block ${isDone ? 'time-block--done' : ''} ${!block.taskTitle ? 'time-block--empty' : ''}`}
-                style={{ top, height, left: 48, right: 4 }}
+                style={{ top, height, left: 48, right: 10 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   manualStartRef.current = false;
@@ -590,7 +775,7 @@ export default function DailyPlanPage() {
 
           {/* 当前时间指示器 */}
           {showNowLine && (() => {
-            const top = minutesToTop(nowMinutes);
+            const top = futureGeo ? futureGeo.minuteToTop(nowMinutes) : minutesToTop(nowMinutes);
             if (top < 0) return null;
             return (
               <div className="now-line" style={{ top }}>
@@ -1047,6 +1232,17 @@ export default function DailyPlanPage() {
           </div>
         </div>
       )}
+
+      {/* 新建时间块（FAB） */}
+      <button className="dp-fab" onClick={openNewBlock} title="新建时间块" aria-label="新建时间块">
+        <Plus size={24} />
+      </button>
+
+      <ConfirmDialog
+        open={notice !== null}
+        message={notice ?? ''}
+        onCancel={() => setNotice(null)}
+      />
 
       {/* 课程详情弹窗（只读，修改请到课程表页） */}
       {viewingCourse && (() => {

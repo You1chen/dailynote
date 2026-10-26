@@ -1,6 +1,5 @@
-/* ============ 课程表页面 ============ */
+/* ============ 课程表页面（去棱角版） ============ */
 
-/* 警告提示（未设置开学时间 / 表单校验错误） */
 .courses-warn {
   font-size: var(--font-sm);
   color: var(--color-danger);
@@ -31,14 +30,16 @@
   gap: 6px;
 }
 
+/* 去掉描边，用底与圆角分层 */
 .courses-special-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  padding: 7px 11px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  border: none;
+  box-shadow: var(--shadow-sm);
 }
 
 .courses-special-date {
@@ -47,15 +48,15 @@
 }
 
 .courses-special-tag {
-  font-size: 0.625rem;
+  font-size: 10.5px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
 }
 
 .courses-special-tag--holiday {
   color: var(--color-danger);
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .courses-special-tag--makeup {
@@ -77,29 +78,30 @@
 }
 
 .courses-day-group {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .courses-day-label {
-  font-size: var(--font-xs);
+  font-size: 11px;
   font-weight: 600;
   color: var(--color-text-muted);
   padding-left: 4px;
-  margin-bottom: 6px;
+  margin-bottom: 7px;
+  letter-spacing: 0.04em;
 }
 
 .courses-day-empty {
   font-size: var(--font-sm);
   color: var(--color-text-muted);
   padding: 4px;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .courses-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 6px;
   cursor: pointer;
 }
 
@@ -108,11 +110,11 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .courses-card-time {
-  font-size: var(--font-xs);
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--color-primary);
   font-variant-numeric: tabular-nums;
@@ -121,16 +123,16 @@
 .courses-card-name {
   font-size: var(--font-base);
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .courses-card-meta {
-  font-size: var(--font-xs);
+  font-size: 11.5px;
   color: var(--color-text-muted);
 }
 
-/* ---- 课程表视图（二维课表网格，模板语义：显示全部课程，不按周过滤） ---- */
+/* ---- 课表视图 ---- */
 
-/* 课表视图下的固定高度容器（同周视图/日视图模式），网格内部滚动 */
 .app-container--week {
   padding-bottom: 16px;
   display: flex;
@@ -144,29 +146,35 @@
   gap: 8px;
 }
 
+/* 视图切换：填充色胶囊，不再描边 */
 .courses-view-toggle {
   display: flex;
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  gap: 2px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-bg);
+  padding: 2px;
   overflow: hidden;
 }
 
 .courses-view-toggle .settings-chip {
   border: none;
-  border-radius: 0;
+  border-radius: 999px;
+  background: transparent;
 }
 
+/* 网格：不再是盒子 */
 .ct-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
+  margin: 0 -8px;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
 }
 
-/* 44（时间列）+ 7×52（天列） */
 .ct-inner {
   position: relative;
   min-width: 408px;
@@ -176,7 +184,7 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--color-surface);
+  background: var(--color-bg);
 }
 
 .ct-head-cell {
@@ -188,9 +196,9 @@
   justify-content: center;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-text);
-  border-left: 1px solid var(--color-border);
-  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-left: none;
+  border-bottom: none;
 }
 
 .ct-hour-row {
@@ -199,32 +207,37 @@
   right: 0;
   display: flex;
   align-items: flex-start;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: none;
 }
 
 .ct-hour-label {
   width: 44px;
-  padding: 2px 6px 0 0;
+  padding: 2px 8px 0 0;
   text-align: right;
-  font-size: 0.625rem;
+  font-size: 10.5px;
   color: var(--color-text-muted);
   font-weight: 500;
   flex-shrink: 0;
   position: sticky;
   left: 0;
-  background: var(--color-surface);
+  background: var(--color-bg);
   z-index: 2;
   user-select: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .ct-hour-line {
   flex: 1;
+  align-self: flex-start;
+  height: 1px;
+  background: rgba(17, 17, 27, 0.055);
 }
 
+/* 课程块：圆角加大、内边距放宽 */
 .ct-course-block {
   position: absolute;
-  border-radius: 6px;
-  background: rgba(245, 158, 11, 0.15);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.14);
   border-left: 3px solid var(--color-warning);
   cursor: pointer;
   overflow: hidden;
@@ -237,52 +250,53 @@
 }
 
 .ct-block-inner {
-  padding: 3px 5px;
+  padding: 5px 7px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   height: 100%;
   overflow: hidden;
 }
 
 .ct-block-time {
-  font-size: 0.5625rem;
+  font-size: 10px;
   font-weight: 600;
   color: var(--color-warning);
-  line-height: 1;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
 .ct-block-name {
-  font-size: 0.6875rem;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--color-text);
-  line-height: 1.2;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
 .ct-block-loc {
-  font-size: 0.5625rem;
+  font-size: 10px;
   color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 单/双周角标（模板不绑定具体周，用角标提示） */
+/* 单/双周角标 */
 .ct-block-badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 0.5rem;
+  top: 3px;
+  right: 3px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
-  padding: 2px 3px;
-  border-radius: 3px;
-  color: var(--color-warning);
-  background: rgba(245, 158, 11, 0.25);
+  padding: 2px 4px;
+  border-radius: 5px;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.22);
 }
 
 /* ---- 不重要时段折叠 ---- */
@@ -292,12 +306,12 @@
   padding: 2px 0 8px;
 }
 
-/* 折叠条（仅展示不点击）：z=4 高于课程块/时间标签（2）、低于 sticky 表头（5） */
+/* 折叠条：去掉渐变块，只留一条虚线 */
 .ct-fold-bar {
   position: absolute;
   left: 0;
   right: 0;
-  background: linear-gradient(135deg, #f0f0f8 0%, #e8e8f0 100%);
+  background: transparent;
   border-bottom: 1px dashed var(--color-border);
   display: flex;
   align-items: center;
@@ -306,8 +320,7 @@
 }
 
 .ct-fold-bar-text {
-  font-size: 0.6875rem;
+  font-size: 11px;
   color: var(--color-text-muted);
   font-weight: 500;
 }
-

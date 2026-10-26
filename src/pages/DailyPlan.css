@@ -815,3 +815,483 @@
   justify-content: flex-end;
   padding-top: 12px;
 }
+
+/* ============ 顶部：日期 / 一周条 / 概览（2026-10 重做） ============ */
+.dp-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0 4px;
+}
+
+.dp-date {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.dp-date-main {
+  font-size: var(--font-xl);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dp-date-sub {
+  font-size: var(--font-xs);
+  color: var(--color-text-secondary);
+}
+
+.dp-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dp-arrow {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dp-arrow:hover {
+  background: var(--color-surface);
+}
+
+.dp-today {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.dp-cal {
+  margin-bottom: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+}
+
+/* 一周条 */
+.dp-week {
+  display: flex;
+  gap: 4px;
+  padding: 6px 0 10px;
+}
+
+.dp-wd {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.dp-wd-w {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.dp-wd-n {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.dp-wd-n--today {
+  color: var(--color-primary);
+}
+
+.dp-wd-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.dp-wd-dot--on {
+  background: var(--color-primary-light);
+}
+
+.dp-wd--on {
+  background: var(--color-primary);
+}
+
+.dp-wd--on .dp-wd-w,
+.dp-wd--on .dp-wd-n {
+  color: #fff;
+}
+
+.dp-wd--on .dp-wd-dot--on {
+  background: #fff;
+}
+
+/* 概览 + 工具 */
+.dp-summary {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+
+.dp-sum {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 6px 0;
+  text-align: center;
+}
+
+.dp-sum b {
+  display: block;
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.dp-sum span {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.dp-tools {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+}
+
+.dp-tool {
+  width: 31px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.dp-tool:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+/* 新建按钮 */
+.dp-fab {
+  position: fixed;
+  right: max(16px, calc((100vw - 480px) / 2 + 16px));
+  bottom: calc(76px + var(--safe-bottom));
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  z-index: 50;
+}
+
+.dp-fab:active {
+  transform: scale(0.94);
+}
+
+/* 时间块圆角与新配色（几何位置仍由内联样式决定） */
+.time-block {
+  border-radius: 10px;
+}
+
+/* ============ 去框化 + 排版（2026-10 二次调整） ============
+   问题：每个控件都被 1px 边框圈住、网格被框成一个小盒子、字号偏小。
+   做法：边框换成留白与极淡阴影；网格全宽出血；字号上调。 */
+
+/* 网格不再是一个盒子，直接铺满页面宽度 */
+.time-grid-container {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0 -6px;
+  padding-bottom: 8px;
+}
+
+.time-grid {
+  padding-bottom: 16px;
+}
+
+/* 小时分隔线极淡，只留节奏感 */
+.time-row {
+  border-bottom: none;
+}
+
+.time-row-line {
+  align-self: flex-start;
+  height: 1px;
+  background: rgba(17, 17, 27, 0.055);
+}
+
+/* 半小时刻度几乎不可见，只作纹理 */
+.time-subline {
+  opacity: 1;
+  border-bottom: 1px solid rgba(17, 17, 27, 0.022);
+}
+
+/* 时间刻度字大一号、去掉重影 */
+.time-label {
+  width: 46px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-subline {
+  left: 46px;
+}
+
+/* 时间块：圆角更大、内边距与字号上调 */
+.time-block {
+  border-radius: 12px;
+  border-left-width: 3px;
+  box-shadow: none;
+}
+
+.time-block-inner {
+  padding: 6px 10px;
+  gap: 2px;
+}
+
+.time-block-time {
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+}
+
+.time-block-title {
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.time-block-scores {
+  font-size: 10.5px;
+}
+
+.time-block--done {
+  background: #f2fdf8;
+}
+
+/* 睡眠条：去掉渐变块，只留一条细线 */
+.sleep-bar {
+  background: transparent;
+  border-bottom: 1px dashed var(--color-border);
+  border-radius: 0;
+}
+
+.sleep-bar:active {
+  background: transparent;
+}
+
+.sleep-bar-text {
+  font-size: 11px;
+}
+
+/* 概览与月历：边框换阴影 */
+.dp-sum {
+  border: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.dp-cal {
+  border: none;
+  box-shadow: var(--shadow-sm);
+}
+
+/* 顶部更紧凑 */
+.dp-top {
+  padding: 10px 0 2px;
+}
+
+.dp-week {
+  padding: 4px 0 8px;
+}
+
+.dp-summary {
+  padding-bottom: 8px;
+}
+
+.dp-tool {
+  color: var(--color-text-muted);
+}
+
+/* ==================================================================
+   日程页整体重排（2026-10 重写）
+   思路：不再"页面里放一个滚动盒子"，改成整页连续滚动：
+   内容从左侧导航后面直接开始，时间轴铺满宽度，滚到底就是底部标签栏。
+   ================================================================== */
+
+.dp-page {
+  min-height: 100dvh;
+  padding: 0 0 calc(70px + var(--safe-bottom));
+  background: var(--color-bg);
+}
+
+/* 顶部：粘在顶端，滚动时收起留给时间轴 */
+.dp-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 10px 14px 6px;
+  background: rgba(245, 245, 247, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .dp-head {
+  background: rgba(15, 15, 26, 0.92);
+}
+
+.dp-top {
+  padding: 0;
+}
+
+.dp-week {
+  padding: 6px 0 8px;
+}
+
+/* 统计：一行文字，不再用三张卡片 */
+.dp-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  padding-bottom: 4px;
+}
+
+.dp-stats b {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dp-sep {
+  opacity: 0.5;
+}
+
+.dp-stats .dp-tools {
+  margin-left: auto;
+}
+
+/* 时间轴：不再是盒子，直接铺满 */
+.time-grid-container {
+  overflow: visible;
+  height: auto;
+  flex: none;
+  margin: 0;
+  padding: 0 0 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  position: relative;
+}
+
+/* 左侧时间刻度贴边，滚动时留在左侧 */
+.time-label {
+  width: 46px;
+  padding: 2px 0 0 14px;
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--color-bg);
+  z-index: 2;
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.time-subline {
+  left: 46px;
+}
+
+/* 当前时间线：与任务块左右边缘对齐，圆点圆心正好落在列表左边缘 */
+.now-line {
+  left: 48px;
+  right: 10px;
+}
+
+.now-dot {
+  margin-left: -4px;
+}
+
+/* 工具按钮的开启态（只看未来） */
+.dp-tool--on {
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+/* 只看未来的折叠条：与睡眠条同构，用主色区分 */
+.future-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: transparent;
+  border-bottom: 1px dashed var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.future-bar-text {
+  font-size: 11px;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+/* 月历卡片也去掉边框 */
+.dp-cal {
+  border: none;
+  box-shadow: var(--shadow-sm);
+  background: var(--color-surface);
+}
+
+/* 底部：内容与标签栏之间不再留大片空白 */
+.dp-page .time-grid {
+  padding-bottom: 0;
+}
+
+.dp-fab {
+  bottom: calc(72px + var(--safe-bottom));
+}

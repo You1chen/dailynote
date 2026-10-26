@@ -20,7 +20,7 @@
 ### 验证
 
 - 新增 `test/任务清单/taskTemplate.test.ts` 13 个测试：CRUD/更新、软删除与还原、templates.json 持久化与增量写、旧备份导入兼容、空目录判定、回收站自愈、appendTemplateItems 纯函数。
-- `npx vitest run` **311/311 通过**（298 既有 + 13 新增）；`npm run build`（tsc --noEmit + vite build）通过。
+- `n`npx vitest run` **311/311 通过**（298 既有 + 13 新增）；`npm run build`（tsc --noEmit + vite build）通过。
 - 临时脚本 `test/demo_export.mjs`、`test/gen_json.mjs` 已删除（未被 src 引用）。
 
 ### 涉及文件
@@ -45,7 +45,7 @@
 
 ### 验证
 
-- `npx tsc --noEmit` 通过；`npx vitest run` **311/311 通过**（既有测试直接构造 TimeBlock 字面量，不受默认值影响）。
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **311/311 通过**（既有测试直接构造 TimeBlock 字面量，不受默认值影响）。
 
 ### 涉及文件
 
@@ -66,7 +66,7 @@
 
 ### 验证
 
-- `npx tsc --noEmit` 通过；`npx vitest run` **311/311 通过**。
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **311/311 通过**。
 
 ### 涉及文件
 
@@ -91,7 +91,7 @@
 
 ### 验证
 
-- `npx tsc --noEmit` 通过；`npx vitest run` **311/311 通过**；vite 热更新无报错。
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **311/311 通过**；vite 热更新无报错。
 
 ### 涉及文件
 
@@ -116,7 +116,7 @@
 
 ### 验证
 
-- 新增 `test/时间网格点击映射/blockRenderRect.test.ts` 16 个测试（import 真实源码函数）：折叠/不折叠、跨夜/不跨夜、夜场景回归（23:36-23:46 贴底部非 null）、边界时刻（23:00/00:00/23:50-00:10）、非法时间。`npx vitest run` **327/327 通过**；`npm run build`（tsc + vite build）通过。
+- 新增 `test/时间网格点击映射/blockRenderRect.test.ts` 16 个测试（import 真实源码函数）：折叠/不折叠、跨夜/不跨夜、夜场景回归（23:36-23:46 贴底部非 null）、边界时刻（23:00/00:00/23:50-00:10）、非法时间。`n`npx vitest run` **327/327 通过**；`npm run build`（tsc + vite build）通过。
 - 真实浏览器端到端复现（Edge + 伪造时钟，临时脚本用完已删）：修复前 23:36 保存后主网格/全屏均为 0 块；修复后 23:36、01:00、23:58、23:40 勾完 四个场景两个视图均渲染且位于滚动视口内（visiblePx=20），日间场景（10:30）位置无回归。
 
 ### 涉及文件
@@ -142,7 +142,7 @@
 
 ### 验证
 
-- `npx vitest run` **327/327 通过**；`npm run build`（tsc + vite build）通过。
+- `n`npx vitest run` **327/327 通过**；`npm run build`（tsc + vite build）通过。
 - 真实浏览器端到端（Edge + 伪造时钟 23:36，临时脚本用完已删）：清单模式显示开始时间且可微调；微调 23:25 后快进 45 秒输入仍为 23:25（冻结生效），保存后网格标签 23:25-23:35；不微调时快进 6 分钟输入更新为新时刻（既有行为不回归）；整块模式只读锁定输入不受影响。
 
 ### 涉及文件
@@ -171,7 +171,7 @@
 
 ### 验证
 
-- `npx vitest run` **328/328 通过**（新增 1 个模板往返测试）。
+- `n`npx vitest run` **328/328 通过**（新增 1 个模板往返测试）。
 
 ### 涉及文件
 
@@ -196,7 +196,7 @@
 
 ### 验证
 
-- `npx vitest run` **345/345 通过**（新增 17 个裁剪数学测试，含 100 组随机模糊）；`npm run build`（tsc + vite build）通过。
+- `n`npx vitest run` **345/345 通过**（新增 17 个裁剪数学测试，含 100 组随机模糊）；`npm run build`（tsc + vite build）通过。
 - 真实浏览器端到端（system Edge + 手机视口 390×844 + 触屏模拟，临时 playwright-core 已卸载、临时脚本已删）：首次向导跳过 → 导入 400×600 PNG → 初始居中（x=0, y=-70 ✓）、CDP 触摸拖动（y -70→-30，x 保持钳制 ✓）、滚轮缩放（0.700→0.805 ✓）、± 按钮 ✓ → 确定后 localStorage avatar 为 data:image/jpeg（长度正常）、设置页渲染图片头像 ✓、emoji 选择器回归 ✓。
 
 ### 涉及文件
@@ -221,7 +221,7 @@
 
 ### 验证
 
-- `npx vitest run` 345/345 通过；`npm run build` 通过。
+- `n`npx vitest run` 345/345 通过；`npm run build` 通过。
 - 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）：新建默认 08:00 → 切即时保留 08:00（不再变当前时刻）→ 切回预规划保留 → 手动设 15:00 双向切换均保留 → 关闭后重新添加（全局即时模式）仍默认当前时刻（创建默认值不受影响）→ 越过 30 秒 ticker 周期后保留的手动时间 09:30 未被自动重置。8/8 断言通过。
 
 ### 涉及文件
@@ -257,7 +257,7 @@
 
 ### 验证
 
-- `npx vitest run` 386/386 通过（新增 test/课程表/courseSchedule.test.ts 32 项 + store.test.ts 追加课程表存储 9 项 + jsonImport.test.ts 同步）；`npm run build` 通过。
+- `n`npx vitest run` 386/386 通过（新增 test/课程表/courseSchedule.test.ts 32 项 + store.test.ts 追加课程表存储 9 项 + jsonImport.test.ts 同步）；`npm run build` 通过。
 - 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）13/13 项通过：页面打开、设学期、多天课程创建一次出现在两个分组、当天课程块显示课程名/时间/地点、只读详情弹窗（不打开编辑面板）、无课日不显示、多天课程周一/周四均显示、节假日抑制+移除恢复、全屏视图课程块+详情弹窗、删除→回收站→还原、任务块与课程块重叠时任务在上。
 
 ### 涉及文件
@@ -288,7 +288,7 @@
 
 ### 验证
 
-- `npm run build` 通过；`npx vitest run` 386/386 全绿（无新纯逻辑，未新增单测）。
+- `npm run build` 通过；`n`npx vitest run` 386/386 全绿（无新纯逻辑，未新增单测）。
 - 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）29/29 项通过：课程表页列表/课表切换、模板网格两门课全显示（含单周课）、单/双角标、tooltip 周数跨度、列 x 位置、点块编辑改名同步、空白格无弹窗、新建弹窗取消、周视图默认本周第 1 周课程块与任务块、点课程块编辑、任务块只读、空白格无弹窗、下一周单周课消失/上一周恢复、7 次下一周到假期周（4 个放假角标 + 周四无课）、标题点击回本周。
 - 手工冒烟：移动端宽度横向滚动、时间列 sticky、深色模式配色正常。
 
@@ -312,7 +312,7 @@
 
 ### 验证
 
-- `npx vitest run` 404/404 通过（新增 test/时间网格点击映射/foldedGrid.test.ts 18 项：三段几何、分钟映射、跨段块、整段贴条 20px、边界时刻、跨夜、密度参数、乱序输入、非法时间）；`npm run build` 通过。
+- `n`npx vitest run` 404/404 通过（新增 test/时间网格点击映射/foldedGrid.test.ts 18 项：三段几何、分钟映射、跨段块、整段贴条 20px、边界时刻、跨夜、密度参数、乱序输入、非法时间）；`npm run build` 通过。
 - 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）19/19 项通过：默认折叠 3 条折叠条文案正确、14 行小时标签（07..11 + 13..21）、08:00 块 top=122 高 106.7、午课块贴午休条下方 top=402 高 20、晚课块止于深夜条顶高 64、chip 展开回 24h 块恢复全高、再折叠、列表↔课表切换保留折叠态、点课程块弹共享编辑弹窗、空白格无弹窗。
 - 手工冒烟：移动端宽度横向滚动、折叠态滚动折叠条不盖 sticky 表头、深色模式配色正常。
 
@@ -341,7 +341,7 @@
 
 ### 验证
 
-- `npm run build` 通过；`npx vitest run` **424/424** 全绿（新增 test/DDL清单/ddlTime.test.ts 13 项 + test/数据存储/store.test.ts「DDL 存储」7 项：升序往返、同日同时刻 id 兜底、images/长备注往返、回收站还原原 id、id 不复用、导出→重置→导入往返、仅 ddls.json 目录回归）。
+- `npm run build` 通过；`n`npx vitest run` **424/424** 全绿（新增 test/DDL清单/ddlTime.test.ts 13 项 + test/数据存储/store.test.ts「DDL 存储」7 项：升序往返、同日同时刻 id 兜底、images/长备注往返、回收站还原原 id、id 不复用、导出→重置→导入往返、仅 ddls.json 目录回归）。
 - 真实浏览器端到端（system Edge，临时 playwright-core 已卸载、临时脚本已删）全部通过：种子 3 条（已过期/今日带图/三天后）列表升序过期在前、已过期红色徽章、备注预览、🖼1；新建（长多行备注）出现在列表且时间格式正确；编辑改名改时间同步；1×1 PNG setInputFiles → 压缩缩略图出现 → 保存 → reload 后图片仍在（ddls.json 往返）；删除确认进回收站（DDL 标签）→ 还原后列表与图片恢复；空名称保存报「请输入名称」；全程无页面 JS 错误。
 - 手工冒烟：移动端宽度、深色模式配色正常。
 
@@ -375,8 +375,8 @@
 
 ### 验证
 
-- 新增 `test/数据存储/storageAccess.test.ts` 8 个测试（vi.mock 模拟原生插件）：11+ 未授权阻塞/已授权放行、Android 10 不阻塞、Web 不阻塞、被阻塞时 initStore 返回 -2 且零写入、授权后恢复。`npx vitest run` **432/432 通过**（424 既有 + 8 新增）。
-- `npm run build:apk` 全流程成功（tsc + vite + cap sync + gradle，Java 插件编译通过）；合并后 manifest 确认含 MANAGE_EXTERNAL_STORAGE、versionCode 3。
+- 新增 `test/数据存储/storageAccess.test.ts` 8 个测试（vi.mock 模拟原生插件）：11+ 未授权阻塞/已授权放行、Android 10 不阻塞、Web 不阻塞、被阻塞时 initStore 返回 -2 且零写入、授权后恢复。`n`npx vitest run` **432/432 通过**（424 既有 + 8 新增）。
+- `n`npm run build:apk` 全流程成功（tsc + vite + cap sync + gradle，Java 插件编译通过）；合并后 manifest 确认含 MANAGE_EXTERNAL_STORAGE、versionCode 3。
 - 待真机验证：用户安装新 APK → 授权引导页 → 开启「所有文件访问」→ 自动恢复数据。
 
 ### 涉及文件
@@ -406,8 +406,8 @@
 
 ### 验证
 
-- `npx vitest run` **433/433** 通过（store.test.ts 新增「错误信息区分具体原因」1 项：空文件/空白、微信缓存特征字节、缺字段、损坏 JSON 各报对应错误）。
-- `npm run build:apk` 全流程成功；合并后 manifest 确认 versionCode 4 / versionName 1.2.1，MANAGE_EXTERNAL_STORAGE + READ/WRITE_EXTERNAL_STORAGE 均在。
+- `n`npx vitest run` **433/433** 通过（store.test.ts 新增「错误信息区分具体原因」1 项：空文件/空白、微信缓存特征字节、缺字段、损坏 JSON 各报对应错误）。
+- `n`npm run build:apk` 全流程成功；合并后 manifest 确认 versionCode 4 / versionName 1.2.1，MANAGE_EXTERNAL_STORAGE + READ/WRITE_EXTERNAL_STORAGE 均在。
 - 待真机验证步骤（1.2.1）：安装后启动页应显示 v1.2.1 → 若未授权会进入 🔓 引导页 → 去开启「所有文件访问」→ 返回自动重新检测并恢复数据；导入时直接选 Documents 里的 `dailynote-backup-*.json` 本体（勿选微信缓存文件）。
 
 ### 涉及文件
@@ -436,8 +436,8 @@
 
 ### 验证
 
-- 新增 `test/数据存储/nativeWriteEncoding.test.ts` 3 项（vi.mock @capacitor/filesystem + 模拟原生平台）：增量写盘必须带 `encoding: 'utf8'` 且 data 是 JSON 文本本身（以 `[` 开头、可解析、中文原样）；导出备份同样带 utf8 且 data 以 `{` 开头含 version；内存文件盘模拟磁盘的完整往返（写→重置→读回一致，原生分支从此纳入端到端测试覆盖）。`npx vitest run` **436/436** 通过。
-- `npm run build:apk` 全流程成功；合并后 manifest 确认 versionCode 5 / versionName 1.2.2 + MANAGE_EXTERNAL_STORAGE。
+- 新增 `test/数据存储/nativeWriteEncoding.test.ts` 3 项（vi.mock @capacitor/filesystem + 模拟原生平台）：增量写盘必须带 `encoding: 'utf8'` 且 data 是 JSON 文本本身（以 `[` 开头、可解析、中文原样）；导出备份同样带 utf8 且 data 以 `{` 开头含 version；内存文件盘模拟磁盘的完整往返（写→重置→读回一致，原生分支从此纳入端到端测试覆盖）。`n`npx vitest run` **436/436** 通过。
+- `n`npm run build:apk` 全流程成功；合并后 manifest 确认 versionCode 5 / versionName 1.2.2 + MANAGE_EXTERNAL_STORAGE。
 - 待真机验证（1.2.2）：写出的 json 用文本查看器应是可读 JSON；卸载重装 + 授予「所有文件访问」后能读回；导出→导入正常。注：此前被写成乱码的文件无法恢复（宽容解码有损），旧有效数据若在盘上可被恢复；浏览器版 IndexedDB 中的数据可导出→导入到手机兜底。
 
 ### 涉及文件
@@ -469,7 +469,7 @@
 
 ### 验证
 
-- `npx vitest run` **436/436 通过**（纯文案改动，未触及任何测试断言）。
+- `n`npx vitest run` **436/436 通过**（纯文案改动，未触及任何测试断言）。
 - `npm run build`（tsc --noEmit + vite build + PWA）通过。
 - Grep 复核无遗留 `例如：` / `如：` 占位符（time.ts 中仅剩代码注释，非用户可见）；残留 `...` 均为加载/状态类短文案，符合简洁要求。
 
@@ -477,4 +477,483 @@
 
 ```
 修改：src/main.tsx、src/pages/{SetupPage,BackupRestore,DailyPlan,Reflection,Harvest,LongTermGoals,TaskListPage,SettingsPage,DdlPage,CoursesPage,Trash}.tsx、src/components/{TimeBlockCard,PreferencePanel,CourseEditModal}.tsx、src/services/store.ts
+```
+
+## 2026-10-23 — 新增「遗留问题」（backlog）
+
+### 需求
+
+记录"现在解决不了、等以后有能力再处理"的事。重点不是记录，而是**别记完就忘**：每条写清"困难"，用一个带一周宽限的气泡提醒回看。
+
+### 实现
+
+- **类型** `src/types/index.ts`：新增 `BacklogItem`、`BacklogStartMode`（age/date/text）、`BacklogStatus`（blocked/ready/resolved/dropped）、`BACKLOG_STATUS_LABELS`、`BACKLOG_BLOCKER_HINTS`。
+- **时间纯函数** `src/utils/backlog.ts`：`startAtFromAge`（距今 N 年 M 月 D 日 → 起点时间戳，全空＝今天，月末夹取）、`ageFromStartAt`、`elapsedText`（历时文案）、`backlogAgeText`（文字填法原样显示）、`sortBacklog`（越久越前，文字垫底）、`isBacklogDue`/`countBacklogBadge`（阻塞中 + 超过 7 天没动）。
+- **存储层** `src/services/store.ts`：新增第 12 张表 `backlog` → `backlog.json`。全触点同步：`StorageData`/`StoreShape`、`CATEGORY_FILES`、`NumericTable`、`nextId`/`resetNextId`/`clearStore`/`countData`/`applyData`/`snapshot`、`readNewStructure`（含空目录判定）、`hasAny`、`fingerprint`/`Fp`/`buildWriteSetFromStore`/`buildWriteSetDirty`、`mergeIntoStore`/`mergeLegacy`、`liveArr`、`parseStorageData`（旧备份兜底空数组）、`DEFAULT_WRITE_ORDER`。
+- **CRUD** `src/db/index.ts`：`getAllBacklog`/`saveBacklog`/`setBacklogStatus`/`deleteBacklog`（软删除，`originalTable='backlog'`，标题 `遗留问题 - {title}`）；`TRASH_TARGET` + `restoreFromTrash` switch + `Trash.tsx` 标签。
+- **Hook** `src/hooks/useBacklog.ts`：`useBacklog`（items/addItem/updateItem/changeStatus/removeItem）与 `useBacklogBadge`（window 事件 `dailynote-backlog-changed` 同步侧栏气泡）。
+- **页面** `src/pages/BacklogPage.tsx/.css`：分组 `阻塞中`（历时降序）/`可推进`/`已解决`（折叠）/`已终止`（折叠）；卡片动作 仍阻塞·可推进·终止（可推进态为 退回阻塞·已解决·终止）；底部面板含 事项/起始三选一/困难（推荐词追加）/详情。
+- **路由与入口**：`App.tsx` 加 `/backlog`，`SideNav` 气泡（>9 显示 9+），`SideMenu` 菜单项带同一数字。
+
+### 关键设计
+
+- 起始三种填法：距今 / 具体日期 / 文字（如"小时候"）。**两种数字填法保存时都折算成起点时间戳**，否则明天看"历时"不会增长；文字填法不参与计算与排序（垫底）。
+- 气泡只数"阻塞中且超过 7 天没动"的条数，刚记/刚操作的不催，不显示 0。
+- 困难推荐词是**追加**到已有文本末尾并空一格，不覆盖、不是选择题。
+
+### 验证
+
+- 新增 `test/遗留问题/backlog.test.ts` 20 项：CRUD/id 单调、状态流转重新计时、软删除与还原、`backlog.json` 持久化、增量写、旧备份兼容、导出导入往返、距今折算/历时文案/一周宽限/排序。
+- `n`npx vitest run` **456/456 通过**；`npx tsc --noEmit` 通过。
+
+### 涉及文件
+
+```
+新增：src/utils/backlog.ts、src/hooks/useBacklog.ts、src/pages/BacklogPage.tsx/.css、test/遗留问题/backlog.test.ts
+修改：src/types/index.ts、src/services/store.ts、src/db/index.ts、src/App.tsx、src/components/{SideNav,SideMenu}.tsx/.css、src/pages/Trash.tsx
+```
+
+## 2026-10-23 — 菜单分层 + 日程页重排
+
+### 需求
+
+左侧菜单 9 项平铺显得乱，要求按使用频率分层；日程页"每个控件都被 1px 边框圈住、时间列表被框成一个小盒子、字小"，要求重做结构而不是修边框。
+
+### 实现
+
+- **菜单分层** `src/components/SideMenu.tsx/.css`：`MENU_GROUPS` 四组 —— `今天`（任务清单、DDL）/`安排`（课程表、周视图）/`长期`（长期目标、遗留问题+气泡）/`数据`（宏观视图、回收站、备份与恢复）；`设置` 固定到抽屉底部；分组标题小字灰。
+- **日程页骨架重排** `src/pages/DailyPlan.tsx/.css`：
+  - 去掉"页面内套固定高度滚动容器"的结构，改为整页连续滚动（`.dp-page`），内容贴住左侧导航直接开始，时间轴铺满宽度，右侧留 10px。
+  - 顶部改为粘性头部 `.dp-head`（日期 + ‹ › + 今天 + 一周条 + 一行统计 + 工具图标），滚动时收起让位给时间轴。
+  - 月历默认收起，点日期展开、选完自动收起（仍用 `DayNavigator`）。
+  - 一周条 7 天（周一→周日），当天高亮，有计划的日子显示小圆点（`getAllPlans` 载入）。
+  - 概览由三张卡片改为一行：`N 块 · M 已验收 · 专注 X`。
+  - 新建入口改为右下角圆形 FAB（`openNewBlock` 与空白格点击共用逻辑）。
+  - 去框化：网格容器无边框/阴影、小时线极淡、半小时刻度几乎不可见、时间刻度 11px、块标题 13px、块圆角 12px。
+  - 自动滚动改为整页 `window.scrollTo`（原为滚内层容器）；点击换算仍用容器 rect + scrollTop（scrollTop 恒 0，映射不变）。
+
+### 验证
+
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **456/456 通过**；`n`npm run build:apk` 全流程成功。
+- 浏览器（Vite dev）手动点选：菜单四组、月历展开/收起、一周条切日、FAB 新建、空白格新建、概览数字随块变化。
+
+### 涉及文件
+
+```
+修改：src/components/SideMenu.tsx/.css、src/pages/DailyPlan.tsx/.css
+```
+
+## 2026-10-24 — 任务清单重构为「悬浮球 + 树 + 标准文本结构」
+
+### 需求
+
+任务清单从菜单移出，改成常驻悬浮球；支持层级树填写、标准文本结构直接粘贴；完成后仍可改树且保留完成状态；清单条目可拖动排序。原「任务清单」页整体删除。
+
+### 实现
+
+- **纯函数** `src/utils/taskTree.ts`：`parseTaskText`（`- ` + Tab）、`linesToText`/`treeToLines`/`treeToText`、`linesToTree`（层级不可跳、按完整链回填 done）、`walkLeaves`/`leavesOf`（末级并列 + order 排序）、`leafKey`/`leafLabel`/`chainText`、`countUndone`、`toggleLeafDone`、`removeLeaf`（父节点空壳清理）、`moveKey`/`normalizeOrder`。
+- **类型** `TaskNode` / `TaskBoard` / `TaskLeaf`（types/index.ts）。
+- **存储** 第 13 张表 `taskBoard` → `taskboard.json`（单记录数组，id 恒 1），store.ts 全触点同步。
+- **CRUD** `getTaskBoard` / `saveTaskBoard` / `toggleTaskLeaf` / `removeTaskLeaf`。
+- **Hook** `src/hooks/useTaskBoard.ts`：`useTaskBoard`（nodes/leaves/undone/saveTree/toggle/remove/reorder）、`useTaskBadge`（`dailynote-task-changed` 事件同步球上数字）。
+- **组件** `src/components/TaskBall.tsx/.css`：可拖动悬浮球（`TODO` / 未结束数）+ 清单面板（`…` / 方框 / `✕`、拖动排序）+ 填写面板（层级四键 / 文本模式）+ 链路弹窗。
+- **删除** `src/pages/TaskListPage.tsx/.css`、`/tasks` 路由、菜单「任务清单」项。
+
+### 关键设计
+
+- 末级判定与状态匹配都用**完整链**（`实验/电子技术实验/实验报告`），不用 `父-子`，否则同名条目会串状态。
+- 完成状态在重建树时按完整链回填：改树不丢已完成状态；删掉再加回同名条目也能恢复。
+- 球点开分支：没有任何任务 → 填写面板；已有任务 → 清单面板，右上「继续编辑」回到树。
+- 清单顺序单独存 `order`（完整链数组），拖动只改 order，不动树结构。
+
+### 验证
+
+- 新增 `test/任务/taskTree.test.ts` 23 项；`n`npx vitest run` **479/479 通过**（15 个文件）。
+- `n`npx tsc --noEmit` 通过；浏览器（Vite dev）点选：拖动球、TODO/数字切换、层级四键、文本粘贴、完成后清单、方框减数、`…` 链路、继续编辑保留状态。
+
+### 涉及文件
+
+```
+新增：src/utils/taskTree.ts、src/hooks/useTaskBoard.ts、src/components/TaskBall.tsx/.css、test/任务/taskTree.test.ts
+修改：src/types/index.ts、src/services/store.ts、src/db/index.ts、src/App.tsx、src/components/SideMenu.tsx
+删除：src/pages/TaskListPage.tsx/.css、/tasks 路由、菜单「任务清单」
+```
+
+## 2026-10-24 — 左侧栏改常驻展开 + 层级行就地编辑
+
+### 需求
+
+去掉折叠用的「三」，左侧栏直接展开，否则气泡要打开菜单才看得见；层级填写里点任意一行要能直接改。
+
+### 实现
+
+- **左侧栏展开** `src/components/SideNav.tsx/.css`：56px 图标条 → 76px 图标+文字常驻栏，三组用细分割线分开（`DDL/课程表/周视图` ｜ `目标/遗留` ｜ `宏观/回收站/备份`），`设置` 固定底部；遗留问题的气泡直接挂在「遗留」上。
+- **抽屉菜单删除** `src/components/SideMenu.tsx/.css` 整体删除，`App.tsx` 去掉 `menuOpen` 状态与返回键拦截；宽度改用 CSS 变量 `--nav-w: 76px`（`App.css`），`TabBar.css` 的居中偏移同步跟着变量走。
+- **行就地编辑** `src/components/TaskBall.tsx/.css`：层级模式点任意一行 → 该行变输入框（`editing` 状态），回车/失焦提交、Esc 取消、清空则保留原样；此时四个键作用在**这一行**（缩进/缩退改该行层级，删除删该行），`第 N 层` 跟随当前行。
+- **输入框可见化**：底部新增行的输入框原来是无边框透明样式，看着像普通文字，改为白底圆角带描边、聚焦变紫。
+
+### 验证
+
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **479/479 通过**；`n`npm run build:apk` 全流程成功（4.88 MB）。
+- 浏览器点选：栏内各项跳转与高亮、气泡位置、点行就地改、Esc 取消、空内容不改、四个键对当前行生效。
+
+### 涉及文件
+
+```
+修改：src/components/SideNav.tsx/.css、src/components/TaskBall.tsx/.css、src/App.tsx、src/App.css、src/components/TabBar.css
+删除：src/components/SideMenu.tsx/.css
+```
+
+## 2026-10-25 — DDL 一周内红点 + 全局内容搜索
+
+### 需求
+
+1. DDL 剩余时间不足一周时，侧栏 DDL 项冒红点数字。
+2. 增加全局内容搜索：只搜用户自己填入的内容（不含界面文案、不含日期），结果要指明位置并能直接跳到对应页面。
+
+### 实现
+
+- **DDL 红点**：`src/utils/ddl.ts` 新增 `countDdlNear(ddls, now)` 与 `DDL_NEAR_MIN`（7 天，含已过期、格式非法不计）；`src/hooks/useDdlBadge.ts` 计算并监听 `dailynote-ddl-changed`；`db` 的 `saveDdl`/`deleteDdl` 末尾派发该事件；`SideNav` 的 DDL 项显示气泡。
+- **全局搜索**：
+  - `src/utils/search.ts` 的 `searchStore(data, q, limit)`：遍历时间块（标题/计划/实际执行/备注/清单项）、反思、收获、长期目标（含子任务）、遗留问题（标题/困难/详情/文字起始）、DDL（名称/备注）、课程（课程名/教师/地点）、任务树（节点标题）。**不索引日期、不索引界面文案**。
+  - `db.searchEverything(q)` 暴露给 UI。
+  - `src/components/SearchOverlay.tsx/.css`：顶部搜索框 + 结果列表（标题 + 命中片段 + 位置），点一条即跳转；日维度内容带 `?date=`，任务节点通过 `dailynote-open-tasks` 事件打开悬浮球面板。
+  - `SideNav` 顶部新增「搜索」入口（放大镜图标）。
+  - `DailyPlan` / `Reflection` / `Harvest` 支持 `?date=` 参数（搜索跳转时定位到那天）。
+
+### 关键设计
+
+- 搜索源是内存 store 的快照，不做全文索引、不加依赖；只走用户输入字段，硬编码文案天然搜不到。
+- 结果为「位置 + 片段」而非只给标题，方便判断是哪一天/哪个模块。
+- 任务树没有独立页面，用事件让悬浮球面板打开，避免为搜索再造一个页面。
+
+### 验证
+
+- 新增 `test/搜索/search.test.ts` 18 项：命中用户内容、不命中界面文案与日期、路由与位置文案、任务 `onOpen`、大小写、空查询、limit、DDL 一周计数（含过期/非法）。
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **497/497 通过**（16 个文件）；`n`npm run build:apk` 成功（4.88 MB）。
+
+### 涉及文件
+
+```
+新增：src/utils/search.ts、src/components/SearchOverlay.tsx/.css、src/hooks/useDdlBadge.ts、test/搜索/search.test.ts
+修改：src/utils/ddl.ts、src/db/index.ts、src/components/SideNav.tsx/.css、src/components/TaskBall.tsx、src/App.tsx、src/pages/{DailyPlan,Reflection,Harvest}.tsx
+```
+
+## 2026-10-25 — 三页美化 + 周视图可编辑 + 原生对话框替换
+
+### 需求
+
+1. DDL / 课程表 / 周视图三页"棱角分明、到处都是框"，要按计划页那套去框化重做；周视图的网格同样是"框死"的问题。
+2. DDL 删除键点击无反应；周视图点空白不能新建、点任务不能编辑；周视图缺少睡眠折叠。
+3. 周视图不要自己再造一套编辑窗（重复造轮子），要和日计划一致。
+
+### 实现
+
+- **去框化**（DDL / 课程表 / 周视图）：`1px 描边` → 极淡阴影或纯留白；圆角统一放大（卡片 14、块 10）；字号上调一档；网格容器去掉边框/阴影/圆角并左右各出血 8px；小时线改极淡 1px；周视图新增极淡列分隔线；DDL 徽章与缩略图改填充式、无描边；课程表视图切换改胶囊底；折叠条去掉渐变块只留虚线。
+- **DDL 删除无反应**：根因是 `window.confirm` 在安卓 WebView 里静默返回 false。新增 `components/ConfirmDialog.tsx`（应用内确认/提示框，支持纯提示的单按钮模式），DDL、遗留问题、课程删除、特殊日期删除、清空回收站、还原失败提示、日计划的两处 `alert` 全部改为它。
+- **DDL 时间可选**：`utils/ddl.ts` 引入 `DDL_DEFAULT_TIME = '23:59'`，时间空串/空白按 23:59 参与剩余时间、红点计数与排序；表单不再强制填时间，卡片无时间时只显示日期，页面不写任何"默认 23:59"的说明。
+- **周视图可编辑**：`utils/time.ts` 抽出 `minutesToTop` / `topToMinutes`（`blockRenderRect` 复用同一公式）。点空白处 → 按列定位日期、按 y 反算时间，跳转 `/?date=<日>&new=<HH:mm>`；点任务块 → `/?date=<日>&block=<id>`；日计划消费这两个参数打开自己的新建/编辑面板，用后 `replace` 清掉参数。
+- **周视图睡眠折叠**：与日计划同一套（折叠条 28px、`minutesToTop` 映射、小时行跳过折叠时段、块贴边界）。
+- **删掉重复轮子**：`WeekTaskSheet.tsx/.css` 删除，周视图不再自带编辑窗。
+
+### 验证
+
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **498/498 通过**（16 个文件，新增 DDL 空时间用例）；`n`npm run build:apk` 成功（4.88 MB）。
+- 代码库内已无 `window.confirm` / `alert` 调用。
+
+### 涉及文件
+
+```
+新增：src/components/ConfirmDialog.tsx/.css
+修改：src/pages/{DdlPage,CoursesPage,WeekViewPage,BacklogPage,Trash,DailyPlan}.tsx + 三个页面的 css、src/utils/{ddl,time}.ts、src/db/index.ts、src/types/index.ts
+删除：src/components/WeekTaskSheet.tsx/.css
+```
+
+## 2026-10-25 — 删除「宏观视图」页
+
+### 需求
+
+宏观视图不再需要，整页删除。
+
+### 实现
+
+- 删除 `src/pages/Dashboard.tsx/.css`，移除 `/dashboard` 路由与侧栏「宏观」入口。
+- 随之变成死代码的组件与 Hook 一并删除：`components/CalendarHeatmap.tsx/.css`、`components/TrendChart.tsx`、`hooks/useStats.ts`（全项目已无引用）。
+- `recharts` 依赖暂时保留在 `package.json` 里（已无源码引用，不会打进包），留待下次统一清依赖。
+
+### 验证
+
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **498/498 通过**；`n`npm run build:apk` 成功（4.86 MB，比上一版小 0.02 MB）。
+- 侧栏只剩 `安排 / 长期 / 数据` 三组。
+
+### 涉及文件
+
+```
+删除：src/pages/Dashboard.tsx/.css、src/components/{CalendarHeatmap.tsx,CalendarHeatmap.css,TrendChart.tsx}、src/hooks/useStats.ts
+修改：src/App.tsx、src/components/SideNav.tsx
+```
+
+## 2026-10-25 — 新增「重要的事」页
+
+### 需求
+
+新增「重要的事」页面：提示即将到来的重要事项，进入 3 天内侧栏冒气泡数字；页面与 DDL 的添加页完全同构，只是文案略有不同。
+
+### 实现
+
+- **先抽公共页**：把原 `DdlPage` 的整页逻辑抽成 `components/DeadlineListPage.tsx`（列表 + 卡片 + 新建/编辑弹窗 + 图片上传 + 删除确认），文案与数据源参数化；`pages/DdlPage.tsx` 变薄包装，`pages/ImportantPage.tsx` 用同一组件、换文案。
+- **第 14 张表** `important` → `important.json`：store 全触点（StorageData/StoreShape/CATEGORY_FILES/NumericTable/nextId/resetNextId/clearStore/countData/applyData/snapshot/fingerprint/buildWriteSet*/DEFAULT_WRITE_ORDER/mergeIntoStore/mergeLegacy/liveArr/parseStorageData/readNewStructure/hasAny）。
+- **CRUD** `getAllImportant`（按日期→时间→id 升序，时间空按 23:59）、`saveImportant`、`deleteImportant`（软删除，`originalTable='important'`，标题 `重要 - 名称`）；`TRASH_TARGET` + 还原 switch + 回收站标签。
+- **气泡**：`utils/ddl.ts` 加 `IMPORTANT_NEAR_MIN = 3 天` 与 `countImportantNear`；`hooks/useImportantBadge.ts` 监听 `dailynote-important-changed`；侧栏新增「重要」（在 DDL 下方）带气泡。
+- 路由 `/important`。
+
+### 验证
+
+- 新增 `test/重要的事/important.test.ts` 11 项：CRUD 与升序、软删除还原、`important.json` 持久化、旧备份兼容、三天阈值（含过期/边界/非法/空时间）。
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **509/509 通过**（17 个文件）；`n`npm run build:apk` 成功（5.03 MB）。
+
+### 涉及文件
+
+```
+新增：src/components/DeadlineListPage.tsx/.css（由 DdlPage 抽出）、src/pages/ImportantPage.tsx、src/hooks/useImportantBadge.ts、test/重要的事/important.test.ts
+修改：src/pages/DdlPage.tsx（变薄）、src/types/index.ts、src/services/store.ts、src/db/index.ts、src/utils/ddl.ts、src/App.tsx、src/components/SideNav.tsx、src/pages/Trash.tsx
+删除：src/pages/DdlPage.css（搬进组件目录）
+```
+
+## 2026-10-25 — 重要的事：搜索接入 + 过期收起
+
+### 需求
+
+搜索搜不到「重要的事」（新增表没接进搜索，牵一发动全身）。另外已到达的重要事件应在过期一天后隐藏，并提供搜索之外的查看方式。
+
+### 实现
+
+- **搜索接入** `src/utils/search.ts`：索引 `important` 的名称与备注，位置显示「重要 · 日期 时间」，跳 `/important`。
+- **过期收起** `src/utils/ddl.ts` 新增 `IMPORTANT_KEEP_AFTER_MIN = 1 天` 与 `splitDeadlineItems(items, now, hideAfterMinutes)`；`DeadlineListPage` 新增 `hideAfterMinutes` 参数，主列表只显示未收起的，其余收进底部「已过期 N 件 · 展开」（默认折叠，点开即查）。
+- **气泡同口径**：`countImportantNear` 排除已收起（过期超过一天）的条目，避免"气泡有数、列表没有"。
+- 时间格式非法的条目不参与收起判定（留在 visible，不因解析失败藏用户数据）。
+- DDL 页不传 `hideAfterMinutes`，行为不变（过期仍显示）。
+
+### 验证
+
+- `test/重要的事/important.test.ts` 扩到 15 项；`test/搜索/search.test.ts` 扩到 20 项；`test/DDL清单/ddlTime.test.ts` 14 项。
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **515/515 通过**（17 个文件）；`n`npm run build:apk` 成功（4.86 MB）。
+
+### 涉及文件
+
+```
+修改：src/utils/search.ts、src/utils/ddl.ts、src/components/DeadlineListPage.tsx/.css、src/pages/ImportantPage.tsx、test/搜索/search.test.ts、test/重要的事/important.test.ts、test/DDL清单/ddlTime.test.ts
+```
+
+## 2026-10-25 — DDL/重要的事：地点 + Markdown 备注 + 图片查看
+
+### 需求
+
+1. 编辑信息要包含「地点」。
+2. 备注支持 Markdown，保存后能看到渲染效果。
+3. Bug：备注图片打不开（手机/电脑都点不开）。
+4. 同源：重要的事同步修改。
+
+### 实现
+
+- **地点**：`DdlItem` 新增 `location`（`ImportantItem` 是它的别名，自动同步）；表单加「地点」输入，卡片在截止时间行显示 📍 地点；搜索也索引了地点。
+- **Markdown 备注**：新增 `src/utils/markdown.ts`（零依赖）—— 支持标题/粗斜体/删除线/行内代码/代码块/有序无序列表/引用/分割线/链接，**先转义再套标记**（写 `<script>` 只会显示成文本）。
+  - 编辑弹窗里备注分「编辑 / 预览」两态；
+  - 卡片上的备注直接渲染 Markdown（限高截断），保存后立刻看到效果。
+- **图片打不开**：原来只有缩略图、点了没任何反应。新增 `components/Lightbox.tsx`（全屏查看、多图左右切换、Esc/点背景关闭、Android 返回键优先关它）：
+  - 卡片上有图时显示前 3 张缩略图 + 张数，点任一张打开大图；
+  - 编辑弹窗里的缩略图也可点开大图（缩放光标提示）。
+- 因为 DDL 与「重要的事」共用 `DeadlineListPage`，以上三处改动两边同时生效。
+
+### 验证
+
+- 新增 `test/DDL清单/markdownAndLocation.test.ts` 10 项：Markdown 各语法、XSS 转义、`markdownToPlain`、地点在 DDL/重要的事上的往返；搜索测试补地点命中。
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **525/525 通过**（18 个文件）；`n`npm run build:apk` 成功（4.86 MB）。
+
+### 涉及文件
+
+```
+新增：src/utils/markdown.ts、src/components/Lightbox.tsx/.css、test/DDL清单/markdownAndLocation.test.ts
+修改：src/types/index.ts、src/components/DeadlineListPage.tsx/.css、src/utils/search.ts、test/搜索/search.test.ts
+```
+
+## 2026-10-25 — DDL/重要的事：图片识别自动填时间地点（ML Kit 路线）
+
+### 需求
+
+给备注图片做识别，自动抽出「时间」「地点」填进字段，并把「要求信息」「邮箱」等要点写进备注。原计划用 LFM2.5-VL-450M 端侧视觉模型，最终定为：**先走 ML Kit OCR + 规则（C）**，VLM（A）后续按需接入。
+
+### 实现
+
+- **模型调研与下载**：确认 `LiquidAI/LFM2.5-VL-450M` 有 ONNX（520–650MB）与 GGUF（Q4_K_M 218.7MB + mmproj-Q8 98.1MB）两套官方量化；huggingface 直连超时、`hf-mirror.com` 可用（实测约 4 分钟下完 317MB），权重已下到 `D:\dailynote-models\` 并校验 GGUF 魔数。本机**无 Android NDK**，原生 llama.cpp 路线需先装 NDK，因此本轮不做。
+- **抽取器** `src/utils/extract.ts`：文本 → `{title, date, time, location, emails, requirements, notes}`。规则包含全角转半角、`2026年11月2日`/`11月8日`/`今天明天后天`、`下午2:30`/`14点30分`→24 小时制、带「地点：」标签优先 + 教室/楼/馆短行兜底（提示类行不误判）、要求类关键词行去项目符号、邮箱去重；备注按 `**要求**` / `**邮箱**` 两段组装。
+- **原生插件** `android/.../MlkitOcrPlugin.java`（`@CapacitorPlugin(name = "MlkitOcr")`）：接收 data URL → 解码 → 超 1600px 先缩放 → `ChineseTextRecognizerOptions` 识别 → 返回整段文本 + 逐行文本与 top 坐标；`MainActivity` 注册。
+- **依赖**：`com.google.mlkit:text-recognition-chinese:16.0.1`（模型随包，离线、不需要 GMS）。
+- **桥接** `src/services/ocr.ts`：`ocrAvailable()` / `recognizeImage(dataUrl)`，Web 端直接抛 `not-native`。
+- **界面** `DeadlineListPage`（DDL 与重要的事共用）：编辑弹窗新增「从图片识别」→ 选图 → 识别 → 「识别结果」核对面板（名称/日期/时间/地点/要求条数/邮箱）→ 「填入」只覆盖有值的字段，备注追加不覆盖；失败或 Web 端用应用内提示。
+- **瘦身**：ML Kit 自带 4 个 ABI 的原生库（x86/x86_64 各 11MB），用 `packaging.jniLibs.excludes` 去掉模拟器 ABI，APK 从 **48 MB → 24.6 MB**。
+
+### 验证
+
+- `n`npx tsc --noEmit` 通过；`n`npx vitest run` **541/541 通过**（19 个文件，新增 `test/识别/extract.test.ts` 16 项）。
+- `n`npm run build:apk` 成功；`MlkitOcrPlugin.class` 已在 javac 产物中，APK 内只含 `arm64-v8a` / `armeabi-v7a`，ML Kit 模型 25 个资源已打包。
+- **未验证**：真机上的识别效果（本机无设备/模拟器），需装包实测。
+
+### 涉及文件
+
+```
+新增：src/utils/extract.ts、src/services/ocr.ts、android/app/src/main/java/com/dailynote/app/MlkitOcrPlugin.java、test/识别/extract.test.ts
+修改：android/app/build.gradle（ML Kit 依赖 + abiFilters + jniLibs excludes）、android/app/src/main/java/com/dailynote/app/MainActivity.java、src/components/DeadlineListPage.tsx/.css
+## 2026-10-25 — 图片识别：逐行可改可删 + 去重/冲突请示 + 识别全部图片
+
+### 需求
+
+识别的信息对错混杂，要能逐条改、逐条删；已有的相同内容不要重复填，值不同要请示；识别按钮移到备注图片栏，并识别全部备注图片。
+
+### 实现
+
+- **可编辑核对面板**：识别结果改为逐行输入框，每行可改；✕ 删除该行；`fill` / `skip`（已存在）/ `conflict` 三态标注。
+- **去重与冲突** `utils/extract.ts` 新增 `planExtraction(info, current)` 与 `parseExistingNotes(notes)`：
+  - 表单值或备注里已有**完全相同**的 → `skip`，不重复填；
+  - 已有**不同**的值 → `conflict`，行内给「保留原值 / 用识别值」，默认保留原值；
+  - 要求条目按行去重；邮箱额外区分「已有别的邮箱」→ 冲突；
+  - `parseExistingNotes` 先剔 `**要求**` 这类加粗标题再剥项目符号（否则 `*` 会被当符号吃掉）。
+- **识别全部图片**：按钮移到「备注图片」标题右侧，一次识别 `form.images` 中所有图（逐张 OCR，文本合并后统一抽取）；没有图片时提示先添加。
+- 填入时备注仍为追加：只写用户确认采用的要求与邮箱。
+
+### 验证
+
+- `test/识别/extract.test.ts` 扩到 23 项（空表单全填、相同跳过、不同冲突、邮箱相同/不同、要求去重、parseExistingNotes 剥符号）。
+- 
+`npx tsc --noEmit` 通过；
+`npx vitest run` **548/548**（19 文件）；
+`npm run build:apk` 成功（24.64 MB）。
+
+### 涉及文件
+
+```
+修改：src/utils/extract.ts、src/components/DeadlineListPage.tsx/.css、test/识别/extract.test.ts、structure.md
+## 2026-10-25 — 图片识别：状态栏时钟 / 截止行 / 界面噪声修复
+
+### 问题（实测反馈）
+
+1. 截图顶部的状态栏时钟 `20:02` 被当成截止时间，真正的 `截止时间：2026-11-02 23:59` 反而进了备注「要求」。
+2. `截止时间：…` 这类声明行被当成要求条目。
+3. OCR 到 App 自己的 DDL 页截图时，`DDL / 搜索 / 共4个截止事项 / 事件名称 / 截止时间 / 地点` 等界面文案被当成内容。
+4. 没有有效信息时仍硬凑出条目。
+
+### 实现
+
+- **时间改为按行打分**：与「截止/时间」同行 +5、与日期同行 +3、含时间词 +2；孤立的 `HH:MM` −6（且在前三行再 −2），得分 <1 直接丢弃 → 状态栏时钟不会被采纳。
+- **日期优先取「截止」行**：先按是否含截止/时间词排序，再解析；`截止时间：2026-11-02 23:59` 的日期与时间都能取到。
+- **要求过滤声明行**：`截止/时间/日期/地点/deadline` 开头的行不算要求；同时排除界面文案、孤立时间/日期、地点行、含邮箱的行。
+- **界面噪声黑名单**：`DDL / 搜索 / 添加 / 编辑 / 事件名称 / 截止时间 / 地点 / 名称 / 保留原值 / 用识别值 / 共N个截止事项` 等整行匹配即忽略。
+- **名称判据收紧**：排除界面词、孤立时间/日期、纯数字符号、含日期的行；优先「关于/主题」与业务名词（通知/作业/报告/会议/答辩/活动/考试…）。
+- 全空时组件提示「这几张图里没找到可用信息」，不再硬凑。
+
+### 验证
+
+- 新增 8 项回归测试（用户给的两张截图原文）：`test/识别/extract.test.ts` 扩到 36 项。
+- 
+`npx tsc --noEmit` 通过；
+`npx vitest run` **561/561**（19 文件）；
+`npm run build:apk` 成功（24.81 MB）。
+
+### 涉及文件
+
+```
+修改：src/utils/extract.ts、test/识别/extract.test.ts、structure.md
+## 2026-10-25 — 启动改为快照式增量读取
+
+### 需求
+
+每次启动都要扫描整个存储目录（每个日期目录读 4 个文件），天数一多就是上千次桥接调用，很慢。要像 git 一样只同步变化的部分。
+
+### 实现
+
+- **新增 `services/snapshot.ts`**：把上次读入/写出的整份数据存进 IndexedDB（`dailynote_snapshot`，不放进用户数据目录），记录 `root + dates + files + data`。
+- **启动快路径**（`store.ts` 的 `readBackend`）：
+  1. 旧单文件存在 → 仍走迁移路径（本来就要读它）。
+  2. 只列一次 `days/` 与根目录的**文件名**（不读内容）。
+  3. 日期集合与快照一致 → 直接用快照数据，**零文件读取**。
+  4. 日期集合变化 → 全量读取并刷新快照。
+- **快照刷新**：写盘成功后 400ms 防抖落盘，`flush()` 时立即落盘；「切后台」会走 flush。
+- **兜底入口**：`rescanFromDisk()` 丢弃快照后全量重读，挂在「备份与恢复 → 重新扫描存储目录」。
+- `_resetForTest()` 同时清快照，避免测试互相污染。
+
+局限（已写进结构文档）：外部直接改某天的**文件内容**（名字不变）不会被自动发现，需点「重新扫描存储目录」。
+
+### 验证
+
+- 新增 `test/数据存储/startupSnapshot.test.ts` 6 项：快照命中不重读、日期变化失效、rescan 读入外部改动、换目录不复用、`sameNames` 顺序无关、清空后可再写。
+- 
+`npx tsc --noEmit` 通过；
+`npx vitest run` **567/567**（20 文件）；
+`npm run build:apk` 成功（24.81 MB）。
+
+### 涉及文件
+
+```
+新增：src/services/snapshot.ts、test/数据存储/startupSnapshot.test.ts
+修改：src/services/store.ts（快照快路径 + 防抖写快照 + rescanFromDisk）、src/pages/BackupRestore.tsx、structure.md
+```
+```
+## 2026-10-25 — 图片识别：补「图与图之间」的冲突
+
+### 需求
+
+除「图片 vs 已有信息」的矛盾外，多张备注图片之间同一字段给出不同值时也要请示。
+
+### 实现
+
+- `utils/extract.ts` 新增 `mergeExtractions(list)`：每张图各自抽取后合并 —— 名称/日期/时间/地点的值去重成候选集合（>1 即为图与图冲突），要求与邮箱取并集。
+- `planExtraction(info, cur, candidates)` 接收候选：候选 >1 时把全部候选挂到对应行（`candidates`），行的 `action` 仍按与表单的比较得出，因此**「图与图冲突」与「与表单冲突」可同时出现在同一行**。
+- 组件 `DeadlineListPage`：OCR 改为**逐张抽取再合并**（原来是文本直接拼接、只有第一个命中生效）；核对面板每行增加「图与图不同」候选 chip，点选即采用该值。
+- 顺手修：要求行剥离「要求：/注意：/须知：」这类标签前缀（原来会把标签一起当内容）。
+
+### 验证
+
+- `test/识别/extract.test.ts` 扩到 28 项（时间不同进候选、相同不产生候选、要求/邮箱并集去重、候选挂到行上、图冲突与表单冲突并存）。
+- 
+`npx tsc --noEmit` 通过；
+`npx vitest run` **553/553**（19 文件）；
+`npm run build:apk` 成功（24.64 MB）。
+
+### 涉及文件
+
+```
+修改：src/utils/extract.ts、src/components/DeadlineListPage.tsx/.css、test/识别/extract.test.ts、structure.md
+```
+
+## 2026-10-26 — 计划页：红线贴边 / 只看未来 / TODO 全部完成庆祝
+
+### 需求
+
+1. 计划页「现在」红线位置有偏移：红点不在列表边缘，落在列表中间。
+2. 计划页新增「只看未来」——把用户当前时刻之前的时间段折叠起来。
+3. TODO 里所有任务完成的瞬间，自动跳出庆祝弹窗，要有图、要走心。
+
+### 实现
+
+- **红线偏移（根因是两套坐标叠加）**：`DailyPlan.css` 末段重排把 `.now-line` 改成 `left: 46px`，而圆点 `.now-dot` 仍是旧布局的 `margin-left: 40px`，于是圆点被推到内容区里侧 38px（实测圆点 162、任务块左边缘 124）。改为 `.now-line { left: 48px; right: 10px }` + `.now-dot { margin-left: -4px }`：圆点圆心正好压在任务块左边缘，红线尾部与块右边缘齐平（实测圆点 120–128 / 块 124，线 124–420）。
+- **只看未来**：`utils/time.ts` 新增 `futureFoldStart`（折叠起点取当前小时起点，网格每小时只跳一次）与 `futureWindow`（折叠条偏移 + 分钟↔top 映射与反算 + 块矩形）。页面侧：`prefs.futureOnly` 持久化（默认关）；工具条新增 `SkipForward` 开关（只在今天显示，开启态高亮）；网格顶部折叠条「⏩ 只看未来 · 00:00–11:00 已折叠 · 点此展开」，点一下即还原；小时标签/任务块/课程块/点空白新建/当前时间线全部走同一套映射；跨折叠起点的块从折叠条下方开始渲染并保留真实起止，整块落在过去的块不渲染；开启时回到页面顶部让折叠条可见。与「隐藏睡眠」互斥（折叠条接管顶部），看别的日期不折叠。
+- **庆祝弹窗**：新增 `components/CelebrationDialog.tsx/.css`——内联 SVG 笑眯眯星星（光晕/星屑/纸屑 + 轻微浮动）＋ 6 条随机走心文案 ＋ 昵称与完成件数 ＋ 纸屑飘落动画，z-index 600。判定用新增纯函数 `utils/taskTree.ts#completesAll(leaves, key)`：只有「这一下正好勾掉最后一条未完成」才弹（取消勾选、清空清单、删任务都不弹）。`TaskBall` 的勾选改走 `toggleLeaf`，先把判定算在 await 之前再写入。
+
+### 验证
+
+- 新增 `test/时间网格点击映射/futureWindow.test.ts` 20 项、`test/任务/celebration.test.ts` 7 项。
+- `npx tsc --noEmit` 通过；`npx vitest run` **593/593**（22 文件）。
+- 用无头 Chrome 跑**真实 App**（临时脚本预置 IndexedDB 数据、走启动流程）核对行为，不靠静态推断：
+  - 红线：圆点 120–128、任务块 124、红线 124–420（修复前圆点 162、块 124）。
+  - 只看未来：网格 856px（24 + 13×64）、小时标签 11:00–23:00、折叠条文案正确、点折叠条下方 4h 处新建得到 15:10–16:10、点折叠条展开后回到 16 个标签且 `futureOnly` 落盘为 false。
+  - 切到次日：无折叠条、工具条少一个按钮（开关不显示）、标签恢复 16 个。
+  - 庆祝：两条任务勾掉最后一条后 `.celebration-card` 出现，文案/件数/插画正常。
+- 临时视觉验证脚本与截图 `test/_visual/` 已删除。
+
+### 涉及文件
+
+```
+新增：src/components/CelebrationDialog.tsx/.css、test/时间网格点击映射/futureWindow.test.ts、test/任务/celebration.test.ts
+修改：src/utils/time.ts、src/utils/taskTree.ts、src/hooks/usePreferences.ts、src/pages/DailyPlan.tsx/.css、src/components/TaskBall.tsx、structure.md
+删除：test/_visual/（临时视觉验证脚本与截图）
 ```

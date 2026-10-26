@@ -9,6 +9,7 @@ import { blockRenderRect, foldedGrid } from '../utils/time';
 import CourseEditModal, { DAY_LABELS, WEEK_TYPE_LABELS } from '../components/CourseEditModal';
 // settings-section / settings-field / settings-chip 等通用表单样式复用设置页
 import './SettingsPage.css';
+import ConfirmDialog from '../components/ConfirmDialog';
 import './CoursesPage.css';
 
 const SPECIAL_KINDS: { value: 'holiday' | 'makeup'; label: string }[] = [
@@ -49,6 +50,8 @@ export default function CoursesPage() {
 
   // 编辑弹窗：undefined=关闭，null=新建，Course=编辑
   const [editingCourse, setEditingCourse] = useState<Course | null | undefined>(undefined);
+  const [askDeleteCourse, setAskDeleteCourse] = useState<Course | null>(null);
+  const [askDeleteSpecial, setAskDeleteSpecial] = useState<number | null>(null);
 
   // 特殊日期表单
   const [specialDate, setSpecialDate] = useState('');
@@ -103,8 +106,8 @@ export default function CoursesPage() {
     setSpecialDate('');
   };
 
-  const handleRemoveSpecialDate = async (id: number) => {
-    if (!window.confirm('删除这条特殊日期？')) return;
+  const removeSpecialDate = async (id: number) => {
+    setAskDeleteSpecial(null);
     await saveSemester({
       id: 1,
       startDate: semester?.startDate ?? null,
@@ -116,8 +119,8 @@ export default function CoursesPage() {
 
   // ============ 课程 ============
 
-  const handleDeleteCourse = async (c: Course) => {
-    if (!window.confirm(`确定删除课程「${c.name}」？删除后可在回收站恢复。`)) return;
+  const removeCourse = async (c: Course) => {
+    setAskDeleteCourse(null);
     await deleteCourse(c.id!);
     setCourses(await getAllCourses());
   };
@@ -236,7 +239,7 @@ export default function CoursesPage() {
                         <button
                           className="btn btn-ghost btn-icon courses-special-del"
                           title="删除"
-                          onClick={() => handleRemoveSpecialDate(s.id)}
+                          onClick={() => setAskDeleteSpecial(s.id)}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -400,7 +403,7 @@ export default function CoursesPage() {
                           title="删除课程"
                           onClick={e => {
                             e.stopPropagation();
-                            handleDeleteCourse(c);
+                            setAskDeleteCourse(c);
                           }}
                         >
                           <Trash2 size={16} />
@@ -423,6 +426,17 @@ export default function CoursesPage() {
           onSaved={handleCourseSaved}
         />
       )}
-    </div>
+      <ConfirmDialog
+        open={askDeleteCourse !== null}
+        message={askDeleteCourse ? `确定删除课程「${askDeleteCourse.name}」？删除后可在回收站恢复。` : ''}
+        onCancel={() => setAskDeleteCourse(null)}
+        onConfirm={() => askDeleteCourse && removeCourse(askDeleteCourse)}
+      />
+      <ConfirmDialog
+        open={askDeleteSpecial !== null}
+        message="删除这条特殊日期？"
+        onCancel={() => setAskDeleteSpecial(null)}
+        onConfirm={() => askDeleteSpecial !== null && removeSpecialDate(askDeleteSpecial)}
+      />    </div>
   );
 }

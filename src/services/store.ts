@@ -17,6 +17,9 @@
  *     courses.json                   课程表课程
  *     semester.json                  学期设置（单记录数组，id 恒 1）
  *     ddls.json                      DDL 截止清单
+ *     important.json                 重要的事
+ *     backlog.json                   遗留问题（backlog）
+ *     taskboard.json                 任务树（单记录，id 恒 1）
  *
  * 写盘策略：
  *   - mutate() 先对每张表做指纹快照，变更后对比，只写"变脏"的文件
@@ -25,10 +28,11 @@
  *   - 启动时若发现旧版单文件 dailynote-data.json → 迁移到新布局并删除旧文件（提交标记）
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, TaskBoard, ImportantItem } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
+import { readSnapshot, writeSnapshot, clearSnapshot, sameNames } from './snapshot';
 
 // ============ 数据结构 ============
 
@@ -46,6 +50,9 @@ export interface StorageData {
   courses: Course[];
   semester: SemesterRecord[];
   ddls: DdlItem[];
+  important: ImportantItem[];
+  backlog: BacklogItem[];
+  taskBoard: TaskBoard[];
 }
 
 export interface StoreShape {
@@ -60,6 +67,9 @@ export interface StoreShape {
   courses: Course[];
   semester: SemesterRecord[];
   ddls: DdlItem[];
+  important: ImportantItem[];
+  backlog: BacklogItem[];
+  taskBoard: TaskBoard[];
 }
 
 export type AnyStoreTable = keyof StoreShape;
@@ -76,7 +86,7 @@ function oldSingleRel(): string {
 }
 const DAY_DIR = 'days';
 const DAY_TYPES = ['reflections', 'harvests', 'tasks'] as const;
-const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 'taskTemplates' | 'courses' | 'semester' | 'ddls', string> = {
+const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 'taskTemplates' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'taskBoard', string> = {
   longTermGoals: 'goals.json',
   fixedRoutines: 'routines.json',
   trashItems: 'trash.json',
@@ -84,6 +94,9 @@ const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 
   courses: 'courses.json',
   semester: 'semester.json',
   ddls: 'ddls.json',
+  important: 'important.json',
+  backlog: 'backlog.json',
+  taskBoard: 'taskboard.json',
 };
 
 function dayPlan(date: string): string {
@@ -96,7 +109,7 @@ function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks'): 
 const KV_DB = 'dailynote_kv';
 const KV_STORE = 'kv';
 
-type NumericTable = 'dailyPlans' | 'longTermGoals' | 'reflections' | 'harvests' | 'fixedRoutines' | 'taskTemplates' | 'trashItems' | 'courses' | 'semester' | 'ddls';
+type NumericTable = 'dailyPlans' | 'longTermGoals' | 'reflections' | 'harvests' | 'fixedRoutines' | 'taskTemplates' | 'trashItems' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'taskBoard';
 
 // ============ 内存 store ============
 
@@ -112,6 +125,9 @@ const store: StoreShape = {
   courses: [],
   semester: [],
   ddls: [],
+  important: [],
+  backlog: [],
+  taskBoard: [],
 };
 
 /**
@@ -129,6 +145,9 @@ const nextId: Record<NumericTable, number> = {
   courses: 1,
   semester: 1,
   ddls: 1,
+  important: 1,
+  backlog: 1,
+  taskBoard: 1,
 };
 
 export function allocId(table: NumericTable): number {
@@ -136,7 +155,7 @@ export function allocId(table: NumericTable): number {
 }
 
 function resetNextId(): void {
-  const tables: NumericTable[] = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines', 'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls'];
+  const tables: NumericTable[] = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines', 'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls', 'important', 'backlog', 'taskBoard'];
   for (const t of tables) {
     let max = 0;
     for (const rec of store[t] as { id?: number }[]) {
@@ -158,12 +177,15 @@ function clearStore(): void {
   store.courses = [];
   store.semester = [];
   store.ddls = [];
+  store.important = [];
+  store.backlog = [];
+  store.taskBoard = [];
 }
 
 function countData(): number {
   return store.dailyPlans.length + store.longTermGoals.length + store.reflections.length
     + store.harvests.length + store.fixedRoutines.length + store.taskItems.length + store.taskTemplates.length + store.trashItems.length
-    + store.courses.length + store.semester.length + store.ddls.length;
+    + store.courses.length + store.semester.length + store.ddls.length + store.important.length + store.backlog.length + store.taskBoard.length;
 }
 
 // ============ 路径管理 ============
@@ -429,6 +451,9 @@ function parseStorageData(text: string): StorageData | null {
       courses: Array.isArray(data.courses) ? data.courses.map(normalizeCourseDayOfWeek) : [],
       semester: Array.isArray(data.semester) ? data.semester : [],
       ddls: Array.isArray(data.ddls) ? data.ddls : [],
+      important: Array.isArray(data.important) ? data.important : [],
+      backlog: Array.isArray(data.backlog) ? data.backlog : [],
+      taskBoard: Array.isArray(data.taskBoard) ? data.taskBoard : [],
     };
   } catch {
     return null;
@@ -438,7 +463,7 @@ function parseStorageData(text: string): StorageData | null {
 function hasAny(d: StorageData): boolean {
   return d.dailyPlans.length > 0 || d.longTermGoals.length > 0 || d.reflections.length > 0
     || d.harvests.length > 0 || d.fixedRoutines.length > 0 || d.taskItems.length > 0 || d.taskTemplates.length > 0 || d.trashItems.length > 0
-    || d.courses.length > 0 || d.semester.length > 0 || d.ddls.length > 0;
+    || d.courses.length > 0 || d.semester.length > 0 || d.ddls.length > 0 || d.important.length > 0 || d.backlog.length > 0 || d.taskBoard.length > 0;
 }
 
 async function readDayArray<T>(dir: string, rel: string): Promise<T[]> {
@@ -493,7 +518,10 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const courses = await readCategory<Course>(dir, CATEGORY_FILES.courses);
   const semester = await readCategory<SemesterRecord>(dir, CATEGORY_FILES.semester);
   const ddls = await readCategory<DdlItem>(dir, CATEGORY_FILES.ddls);
-  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls) return null;
+  const important = await readCategory<ImportantItem>(dir, CATEGORY_FILES.important);
+  const backlog = await readCategory<BacklogItem>(dir, CATEGORY_FILES.backlog);
+  const taskBoard = await readCategory<TaskBoard>(dir, CATEGORY_FILES.taskBoard);
+  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !taskBoard) return null;
   return {
     version: 1,
     savedAt: 0,
@@ -508,6 +536,9 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     courses: (courses ?? []).map(normalizeCourseDayOfWeek),
     semester: semester ?? [],
     ddls: ddls ?? [],
+    important: important ?? [],
+    backlog: backlog ?? [],
+    taskBoard: taskBoard ?? [],
   };
 }
 
@@ -519,13 +550,117 @@ async function readOldSingleFile(dir: string): Promise<StorageData | 'CORRUPT' |
   return data ?? 'CORRUPT';
 }
 
+/** 只列出「有哪些文件」（不读内容），用于判断能否复用快照 */
+async function listBackendNames(dir: string): Promise<{ dates: string[]; files: string[] }> {
+  if (isCapacitor()) {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    let dates: string[] = [];
+    try {
+      const res = await Filesystem.readdir({ path: nativePath(dir, DAY_DIR), directory: Directory.Documents });
+      dates = res.files.map(f => f.name).filter(n => /^\d{4}-\d{2}-\d{2}$/.test(n));
+    } catch {
+      dates = [];
+    }
+    let files: string[] = [];
+    try {
+      const sub = dir.replace(/^Documents[\/\\]/, '');
+      const res = await Filesystem.readdir({ path: sub || '', directory: Directory.Documents });
+      files = res.files.filter(f => f.type === 'file' && f.name.endsWith('.json')).map(f => f.name);
+    } catch {
+      files = [];
+    }
+    return { dates, files };
+  }
+
+  const keys = await idbKvKeys();
+  const dates = new Set<string>();
+  const files = new Set<string>();
+  for (const k of keys) {
+    const parts = k.split('/');
+    if (parts[0] === DAY_DIR && parts[1] && /^\d{4}-\d{2}-\d{2}$/.test(parts[1])) dates.add(parts[1]);
+    else if (parts.length === 1 && k.endsWith('.json')) files.add(k);
+  }
+  return { dates: [...dates], files: [...files] };
+}
+
+const CATEGORY_NAMES = ['goals.json', 'routines.json', 'trash.json', 'templates.json', 'courses.json', 'semester.json', 'ddls.json', 'important.json', 'backlog.json', 'taskboard.json'];
+
+/** 由内存数据推算目录结构（写快照用，不访问磁盘） */
+function currentNames(): { dates: string[]; files: string[] } {
+  const dates = new Set<string>();
+  for (const p of store.dailyPlans) dates.add(p.date);
+  for (const r of store.reflections) dates.add(r.date);
+  for (const h of store.harvests) dates.add(h.date);
+  for (const t of store.taskItems) dates.add(t.date);
+  return { dates: [...dates], files: CATEGORY_NAMES };
+}
+
+/** 由读到的数据推算目录结构（首次写快照用） */
+function namesFromData(data: StorageData): { dates: string[]; files: string[] } {
+  const dates = new Set<string>();
+  for (const p of data.dailyPlans) dates.add(p.date);
+  for (const r of data.reflections) dates.add(r.date);
+  for (const h of data.harvests) dates.add(h.date);
+  for (const t of data.taskItems) dates.add(t.date);
+  return { dates: [...dates], files: CATEGORY_NAMES };
+}
+
+/** 落一份快照（失败不影响主流程） */
+function saveSnapshot(): void {
+  const { dates, files } = currentNames();
+  void writeSnapshot({ root: getStoragePath(), dates, files, savedAt: Date.now(), data: snapshot() });
+}
+
+/** 快照防抖：连续写操作只落一次 */
+let snapTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleSnapshot(): void {
+  if (snapTimer) clearTimeout(snapTimer);
+  snapTimer = setTimeout(() => {
+    snapTimer = null;
+    saveSnapshot();
+  }, 400);
+}
+
+/** 立即落快照（flush / 切后台时用） */
+function flushSnapshot(): void {
+  if (snapTimer) {
+    clearTimeout(snapTimer);
+    snapTimer = null;
+  }
+  saveSnapshot();
+}
+
 /** 读取当前路径的后端数据（新布局优先；旧单文件存在则视为迁移未完成，优先取它） */
 async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boolean }> {
   const dir = getStoragePath();
+
+  // 旧单文件仍在 → 走迁移路径（本来就要读它）
   const old = await readOldSingleFile(dir);
   if (old === 'CORRUPT') console.warn('旧版数据文件损坏，尝试读取新布局:', dir);
   if (old && old !== 'CORRUPT') return { data: old, oldFormat: true };
+
+  // 快照命中：日期目录没变就直接用，不再逐文件读取
+  // （只比日期集合：分类文件由本应用自己维护，外部改动靠「重新扫描」）
+  if (!old) {
+    const names = await listBackendNames(dir);
+    const snap = await readSnapshot(dir);
+    if (snap && sameNames(snap.dates, names.dates)) {
+      return { data: snap.data, oldFormat: false };
+    }
+  }
+
   const data = await readNewStructure(dir);
+  if (data) {
+    const names = await listBackendNames(dir);
+    const { dates, files } = namesFromData(data);
+    void writeSnapshot({
+      root: dir,
+      dates: names.dates.length ? names.dates : dates,
+      files: names.files.length ? names.files : files,
+      savedAt: Date.now(),
+      data,
+    });
+  }
   return { data, oldFormat: false };
 }
 
@@ -548,7 +683,7 @@ interface FileWrite {
   table: AnyStoreTable;
 }
 
-const DEFAULT_WRITE_ORDER: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems', 'longTermGoals', 'fixedRoutines', 'taskTemplates', 'courses', 'semester', 'ddls', 'trashItems'];
+const DEFAULT_WRITE_ORDER: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems', 'longTermGoals', 'fixedRoutines', 'taskTemplates', 'courses', 'semester', 'ddls', 'important', 'backlog', 'taskBoard', 'trashItems'];
 
 function snapshot(): StorageData {
   return {
@@ -565,6 +700,9 @@ function snapshot(): StorageData {
     courses: store.courses,
     semester: store.semester,
     ddls: store.ddls,
+    important: store.important,
+    backlog: store.backlog,
+    taskBoard: store.taskBoard,
   };
 }
 
@@ -623,6 +761,9 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
   writes.push({ relPath: CATEGORY_FILES.courses, json: JSON.stringify(store.courses, null, 2), table: 'courses' });
   writes.push({ relPath: CATEGORY_FILES.semester, json: JSON.stringify(store.semester, null, 2), table: 'semester' });
   writes.push({ relPath: CATEGORY_FILES.ddls, json: JSON.stringify(store.ddls, null, 2), table: 'ddls' });
+  writes.push({ relPath: CATEGORY_FILES.important, json: JSON.stringify(store.important, null, 2), table: 'important' });
+  writes.push({ relPath: CATEGORY_FILES.backlog, json: JSON.stringify(store.backlog, null, 2), table: 'backlog' });
+  writes.push({ relPath: CATEGORY_FILES.taskBoard, json: JSON.stringify(store.taskBoard, null, 2), table: 'taskBoard' });
   writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
   return { writes, deletes: [] };
 }
@@ -638,6 +779,9 @@ interface Fp {
   courses: string;
   semester: string;
   ddls: string;
+  important: string;
+  backlog: string;
+  taskBoard: string;
   trashItems: string;
 }
 
@@ -665,6 +809,9 @@ function fingerprint(): Fp {
     courses: JSON.stringify(store.courses),
     semester: JSON.stringify(store.semester),
     ddls: JSON.stringify(store.ddls),
+    important: JSON.stringify(store.important),
+    backlog: JSON.stringify(store.backlog),
+    taskBoard: JSON.stringify(store.taskBoard),
     trashItems: JSON.stringify(store.trashItems),
   };
 }
@@ -719,6 +866,15 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
   if (a.ddls !== b.ddls) {
     writes.push({ relPath: CATEGORY_FILES.ddls, json: JSON.stringify(store.ddls, null, 2), table: 'ddls' });
   }
+  if (a.important !== b.important) {
+    writes.push({ relPath: CATEGORY_FILES.important, json: JSON.stringify(store.important, null, 2), table: 'important' });
+  }
+  if (a.backlog !== b.backlog) {
+    writes.push({ relPath: CATEGORY_FILES.backlog, json: JSON.stringify(store.backlog, null, 2), table: 'backlog' });
+  }
+  if (a.taskBoard !== b.taskBoard) {
+    writes.push({ relPath: CATEGORY_FILES.taskBoard, json: JSON.stringify(store.taskBoard, null, 2), table: 'taskBoard' });
+  }
   if (a.trashItems !== b.trashItems) {
     writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
   }
@@ -732,11 +888,15 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
 }
 
 export function persist(): Promise<boolean> {
-  return enqueue(() => buildWriteSetFromStore());
+  return enqueue(() => buildWriteSetFromStore()).then(ok => {
+    if (ok) scheduleSnapshot();
+    return ok;
+  });
 }
 
 export async function flush(): Promise<void> {
   await persistQueue;
+  flushSnapshot();
 }
 
 export function getLastPersistError(): string | null {
@@ -751,7 +911,9 @@ export async function mutate(fn: () => void, opts?: { writeOrder?: AnyStoreTable
   const before = fingerprint();
   fn();
   const after = fingerprint();
-  return enqueue(() => buildWriteSetDirty(before, after, opts?.writeOrder));
+  const ok = await enqueue(() => buildWriteSetDirty(before, after, opts?.writeOrder));
+  if (ok) scheduleSnapshot();
+  return ok;
 }
 
 // ============ 合并逻辑 ============
@@ -797,6 +959,9 @@ function mergeIntoStore(data: StorageData): number {
     { key: 'courses', items: data.courses, numeric: true },
     { key: 'semester', items: data.semester, numeric: true },
     { key: 'ddls', items: data.ddls, numeric: true },
+    { key: 'important', items: data.important, numeric: true },
+    { key: 'backlog', items: data.backlog, numeric: true },
+    { key: 'taskBoard', items: data.taskBoard, numeric: true },
     { key: 'trashItems', items: data.trashItems, numeric: true },
   ];
   for (const { key, items, numeric } of tables) {
@@ -839,6 +1004,9 @@ function mergeLegacy(legacy: Partial<StoreShape>): void {
     { key: 'courses', items: legacy.courses },
     { key: 'semester', items: legacy.semester },
     { key: 'ddls', items: legacy.ddls },
+    { key: 'important', items: legacy.important },
+    { key: 'backlog', items: legacy.backlog },
+    { key: 'taskBoard', items: legacy.taskBoard },
     { key: 'trashItems', items: legacy.trashItems },
   ];
   for (const { key, items } of tables) {
@@ -867,6 +1035,9 @@ function liveArr(table: string): any[] {
     case 'taskTemplates': return store.taskTemplates;
     case 'courses': return store.courses;
     case 'ddls': return store.ddls;
+    case 'important': return store.important;
+    case 'backlog': return store.backlog;
+    case 'taskBoard': return store.taskBoard;
     default: return [];
   }
 }
@@ -959,6 +1130,9 @@ function applyData(data: StorageData): void {
   store.courses = data.courses;
   store.semester = data.semester;
   store.ddls = data.ddls;
+  store.important = data.important;
+  store.backlog = data.backlog;
+  store.taskBoard = data.taskBoard;
 }
 
 async function readLegacyTablesSafe(): Promise<Partial<StoreShape> | null> {
@@ -1097,6 +1271,15 @@ export function getStore(): StoreShape {
 
 export { deepClone, countData, store };
 
+/**
+ * 忽略快照，按磁盘现状全量重读（外部改过文件时用）。
+ * 返回与 initStore 相同：-2 权限阻塞 / -1 首次使用 / >0 记录数。
+ */
+export async function rescanFromDisk(): Promise<number> {
+  await flush();
+  await clearSnapshot();
+  return initStore();
+}
 // ============ 测试专用重置 ============
 
 export async function _resetForTest(): Promise<void> {
@@ -1104,6 +1287,7 @@ export async function _resetForTest(): Promise<void> {
   resetNextId();
   persistQueue = Promise.resolve();
   lastPersistError = null;
+  await clearSnapshot();
   if (kvDbPromise) {
     try { (await kvDbPromise).close(); } catch { /* ignore */ }
     kvDbPromise = null;

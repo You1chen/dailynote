@@ -91,6 +91,41 @@ export interface BlockRectGeometry {
   gridHeight: number;   // 网格总高（含折叠条）
 }
 
+/** 分钟 → 网格 top（折叠睡眠时段的统一映射；-1 表示落在折叠时段内） */
+export function minutesToTop(m: number, g: BlockRectGeometry): number {
+  if (!g.hideSleep) return (m / 60) * g.hourHeight;
+  const s = timeToMinutes(g.sleepStart);
+  const e = timeToMinutes(g.sleepEnd);
+  const crosses = e < s;
+  if (crosses) {
+    return m >= e && m < s ? ((m - e) / 60) * g.hourHeight + g.barHeight : -1;
+  }
+  if (m < s) return (m / 60) * g.hourHeight + g.barHeight;
+  if (m >= e) return ((m - (e - s)) / 60) * g.hourHeight + g.barHeight;
+  return -1;
+}
+
+/**
+ * 网格 y → 分钟（minutesToTop 的逆映射；返回 null 表示点在折叠条上）。
+ * 落在折叠时段内的一律贴到折叠窗口的边界（与 blockRenderRect 的贴边规则一致）。
+ */
+export function topToMinutes(y: number, g: BlockRectGeometry): number | null {
+  if (!g.hideSleep) return (y * 60) / g.hourHeight;
+  const s = timeToMinutes(g.sleepStart);
+  const e = timeToMinutes(g.sleepEnd);
+  const crosses = e < s;
+  const adjusted = y - g.barHeight;
+  if (adjusted < 0) return null;
+  if (crosses) {
+    let m = (adjusted * 60) / g.hourHeight + e;
+    if (m >= 1440) m -= 1440;
+    if (m >= s) m = s - 5;
+    return m;
+  }
+  let m = (adjusted * 60) / g.hourHeight;
+  if (m >= s) m += (e - s);
+  return m;
+}
 /**
  * 计算时间块在（可能折叠睡眠时段的）时间网格中的渲染矩形 { top, height }。
  *
@@ -112,16 +147,8 @@ export function blockRenderRect(
   const e = timeToMinutes(g.sleepEnd);
   const crosses = e < s;
 
-  // 分钟 → 网格 top（与两个视图组件内的 minutesToTop 同一公式）
-  const map = (m: number): number => {
-    if (!g.hideSleep) return (m / 60) * g.hourHeight;
-    if (crosses) {
-      return m >= e && m < s ? ((m - e) / 60) * g.hourHeight + g.barHeight : -1;
-    }
-    if (m < s) return (m / 60) * g.hourHeight + g.barHeight;
-    if (m >= e) return ((m - (e - s)) / 60) * g.hourHeight + g.barHeight;
-    return -1;
-  };
+  // 分钟 → 网格 top（统一走 minutesToTop）
+  const map = (m: number): number => minutesToTop(m, g);
 
   let top = map(startMin);
   let btm = map(endMin);
@@ -140,6 +167,59 @@ export function blockRenderRect(
   }
 
   return { top, height: Math.max(20, btm - top) };
+}
+
+// ============ 只看未来（折叠当前时刻之前的时间段） ============
+
+/**
+ * 「只看未来」的折叠起点：当前小时起点。
+ * 取整到小时而不是精确到分钟，网格每小时才跳一次；00:xx 无内容可折叠，返回 0。
+ */
+export function futureFoldStart(nowMinutes: number): number {
+  if (!Number.isFinite(nowMinutes)) return 0;
+  const t = Math.floor(Math.max(0, nowMinutes) / 60) * 60;
+  return t >= 1440 ? 0 : t;
+}
+
+/** 折叠窗口几何：顶部一条折叠条 + 起点之后的线性时间轴 */
+export interface FutureWindowGeometry {
+  startMin: number;                      // 折叠起点：该点之前全部折叠
+  barHeight: number;                     // 顶部折叠条高度
+  gridHeight: number;                    // 网格总高（含折叠条）
+  minuteToTop: (m: number) => number;    // 落在已折叠区间返回 -1
+  topToMinutes: (y: number) => number;   // 反映射；折叠条内按起点算
+  /** 块矩形：整块落在折叠区间 → null（不显示）；跨起点 → 从折叠条下方开始 */
+  rect: (start: string, end: string) => { top: number; height: number } | null;
+}
+
+export function futureWindow(startMin: number, hourHeight: number, barHeight: number): FutureWindowGeometry {
+  const gridHeight = barHeight + ((1440 - startMin) / 60) * hourHeight;
+
+  const minuteToTop = (m: number): number => {
+    if (m < startMin) return -1;
+    return barHeight + ((Math.min(m, 1440) - startMin) / 60) * hourHeight;
+  };
+
+  const topToMinutes = (y: number): number => {
+    const adjusted = y - barHeight;
+    if (adjusted <= 0) return startMin;
+    return startMin + (adjusted * 60) / hourHeight;
+  };
+
+  const rect = (start: string, end: string) => {
+    const s = timeToMinutes(start);
+    let e = timeToMinutes(end);
+    if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+    if (e <= startMin) {
+      if (s <= startMin) return null;    // 整块都在已折叠区间
+      e = 1440;                          // 结束时间跨到次日，按当天末尾算
+    }
+    const top = s <= startMin ? barHeight : minuteToTop(s);
+    const btm = minuteToTop(e);
+    return { top, height: Math.max(20, btm - top) };
+  };
+
+  return { startMin, barHeight, gridHeight, minuteToTop, topToMinutes, rect };
 }
 
 // ============ 多段折叠网格（课程表视图） ============
