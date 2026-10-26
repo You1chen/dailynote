@@ -1041,3 +1041,37 @@ Web/PWA 重新构建后打开还是旧页面（例如新加的「DDL 关联」�
 ### 备注
 
 - 打包命令因为 Gradle daemon 继承了 stdout，会让外层任务一直「不结束」——APK 其实 1 分钟就产出了（11:57:44），按文件时间戳/`output-metadata.json` 判断完成即可。
+
+## 2026-10-26 — 修复：识别结果没有填进字段，只进了备注
+
+### 现象
+
+图片识别后核对面板里的条目是对的（名称/日期/时间/地点/要求），但点「填入」后只有备注变了，时间、地点等控件始终为空。
+
+### 根因
+
+`planExtraction` 返回的行里**没有 `field` 字段**，而组件 `applyRecog` 用的是 `row.field`：
+
+- 标量行的 `row.field` 恒为 `undefined` → 落进 `else` 分支 → 被当成邮箱写进备注；
+- 组件里另有一份 `ReviewRow` 接口（自己声明了 `field`），类型上"看着有"，运行时没有 → TypeScript 也没能拦住。
+
+### 修复
+
+- `PlannedRow` 增加 `field`（name / deadlineDate / deadlineTime / location）与 `useValue`，标量行创建时写入。
+- 新增纯函数 `collectApplied(rows)`：标量 → 表单字段，要求/邮箱 → 备注；未知类型忽略，不再兜底塞邮箱。
+- 组件的 `ReviewRow` 改为直接复用 `PlannedRow`，删掉重复定义（这次漂移的根源）。
+- 5 项回归测试：时间进 `deadlineTime` 且不进邮箱、冲突保留原值时不写入、skip 不写入、空值忽略。
+
+### 验证
+
+- 
+px tsc --noEmit` 通过；
+px vitest run` **633/633**（25 文件）；
+pm run build:apk` 成功（24.82 MB）。
+- 同步修正 `structure.md` 测试表（新增 5 个测试文件的用例数、合计 633）。
+
+### 涉及文件
+
+```
+修改：src/utils/extract.ts、src/components/DeadlineListPage.tsx、test/识别/extract.test.ts、structure.md
+```
