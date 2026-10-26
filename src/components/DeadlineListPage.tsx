@@ -5,7 +5,15 @@ import { ArrowLeft, Plus, Trash2, X, MapPin, ScanText, type LucideIcon } from 'l
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { minutesUntilDeadline, ddlRemainText, splitDeadlineItems } from '../utils/ddl';
 import { renderMarkdown } from '../utils/markdown';
-import { extractFromText, buildNotes, planExtraction, mergeExtractions, type MergedExtraction } from '../utils/extract';
+import {
+  extractFromText,
+  buildNotes,
+  planExtraction,
+  collectApplied,
+  mergeExtractions,
+  type MergedExtraction,
+  type PlannedRow,
+} from '../utils/extract';
 import { linkIcon, linkKey, linkText, normalizeLinks } from '../utils/ddlLinks';
 import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { recognizeImage, ocrAvailable } from '../services/ocr';
@@ -41,25 +49,8 @@ interface Form {
   links: DdlLink[];
 }
 
-/** 识别结果的一行：可改、可删，并与表单现有值比对出「填入 / 已存在 / 冲突」 */
-type RowAction = 'fill' | 'skip' | 'conflict';
-type RowKind = 'scalar' | 'req' | 'email';
-type ScalarField = 'name' | 'deadlineDate' | 'deadlineTime' | 'location';
-
-interface ReviewRow {
-  id: string;
-  kind: RowKind;
-  label: string;
-  value: string;
-  /** 表单里已有的对应值（冲突时展示） */
-  current: string;
-  action: RowAction;
-  /** 冲突时是否采用识别值（默认保留原值） */
-  useValue: boolean;
-  /** 多张图给出不同值时的全部候选 */
-  candidates?: string[];
-  field?: ScalarField;
-}
+/** 识别结果的一行：直接复用抽取层的 PlannedRow，避免两处字段定义漂移 */
+type ReviewRow = PlannedRow;
 
 export interface DeadlineListProps<T extends DeadlineBase> {
   title: string;
@@ -234,7 +225,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
         notes: f.notes,
       },
       merged.candidates,
-    ).map(r => ({ ...r, useValue: r.action !== 'conflict' }));
+    );
   /** 识别全部备注图片，文本合并后再抽取 */
   const handleOcr = async () => {
     if (!form) return;
@@ -274,25 +265,15 @@ export default function DeadlineListPage<T extends DeadlineBase>({
 
   const applyRecog = (rows: ReviewRow[]) => {
     if (!form) return;
+    const { fields, requirements, emails } = collectApplied(rows);
+
     const next = { ...form };
-    const reqs: string[] = [];
-    const emails: string[] = [];
+    if (fields.name) next.name = fields.name.slice(0, 30);
+    if (fields.deadlineDate) next.deadlineDate = fields.deadlineDate;
+    if (fields.deadlineTime) next.deadlineTime = fields.deadlineTime;
+    if (fields.location) next.location = fields.location;
 
-    for (const row of rows) {
-      const take = row.action === 'fill' || (row.action === 'conflict' && row.useValue);
-      if (!take) continue;
-      const v = row.value.trim();
-      if (!v) continue;
-      if (row.kind === 'scalar' && row.field) {
-        if (row.field === 'name') next.name = v.slice(0, 30);
-        else if (row.field === 'deadlineDate') next.deadlineDate = v;
-        else if (row.field === 'deadlineTime') next.deadlineTime = v;
-        else next.location = v;
-      } else if (row.kind === 'req') reqs.push(v);
-      else emails.push(v);
-    }
-
-    const added = buildNotes(reqs, emails);
+    const added = buildNotes(requirements, emails);
     if (added) next.notes = next.notes.trim() ? `${next.notes.trim()}\n\n${added}` : added;
 
     setForm(next);

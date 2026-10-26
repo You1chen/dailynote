@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractFromText, buildNotes, planExtraction, parseExistingNotes, mergeExtractions } from '../../src/utils/extract';
+import { extractFromText, buildNotes, planExtraction, collectApplied, parseExistingNotes, mergeExtractions } from '../../src/utils/extract';
 
 const TODAY = new Date('2026-10-25T09:00:00');
 
@@ -287,5 +287,59 @@ describe('回归：状态栏时钟 / 截止行 / 界面噪声', () => {
   it('孤立的 HH:MM 一律不当时间', () => {
     expect(extractFromText('20:02', TODAY).time).toBe('');
     expect(extractFromText('9:05\n随便一段话', TODAY).time).toBe('');
+  });
+});
+describe('回归：识别结果要落到对应字段（不能全进备注）', () => {
+  const empty = { name: '', deadlineDate: '', deadlineTime: '', location: '', notes: '' };
+
+  // 用户实测截图：作业通知 + 状态栏时钟
+  const shot = [
+    '20:02',
+    '传感技术第3章作业',
+    '截止时间：2026-11-02 23:59',
+    '要求：携带学生证',
+    '联系 teacher@school.edu.cn',
+  ].join('\n');
+
+  it('标量行带 field，时间行是 deadlineTime', () => {
+    const rows = planExtraction(extractFromText(shot, TODAY), empty);
+    const byLabel = (l: string) => rows.find(r => r.label === l)!;
+    expect(byLabel('名称').field).toBe('name');
+    expect(byLabel('日期').field).toBe('deadlineDate');
+    expect(byLabel('时间').field).toBe('deadlineTime');
+  });
+
+  it('collectApplied：时间进时间字段，不进邮箱、不进备注', () => {
+    const rows = planExtraction(extractFromText(shot, TODAY), empty);
+    const { fields, requirements, emails } = collectApplied(rows);
+    expect(fields.deadlineTime).toBe('23:59');
+    expect(fields.deadlineDate).toBe('2026-11-02');
+    expect(fields.name).toContain('传感技术');
+    expect(emails).toEqual(['teacher@school.edu.cn']);
+    expect(requirements).toEqual(['携带学生证']);
+    expect(Object.values(fields)).not.toContain('teacher@school.edu.cn');
+  });
+
+  it('冲突且保留原值 → 不采用识别值', () => {
+    const rows = planExtraction(extractFromText(shot, TODAY), { ...empty, deadlineTime: '09:00' });
+    const timeRow = rows.find(r => r.field === 'deadlineTime')!;
+    expect(timeRow.action).toBe('conflict');
+    expect(collectApplied(rows).fields.deadlineTime).toBeUndefined();
+
+    const applied = collectApplied([{ ...timeRow, useValue: true }]);
+    expect(applied.fields.deadlineTime).toBe('23:59');
+  });
+
+  it('已存在（skip）的行不会被写入', () => {
+    const rows = planExtraction(extractFromText(shot, TODAY), { ...empty, notes: '- 携带学生证' });
+    const { requirements } = collectApplied(rows);
+    expect(requirements).toEqual([]);
+  });
+
+  it('空行与空值被忽略', () => {
+    const rows = planExtraction(extractFromText('随便一段话', TODAY), empty);
+    const applied = collectApplied(rows);
+    expect(applied.requirements).toEqual([]);
+    expect(applied.emails).toEqual([]);
   });
 });

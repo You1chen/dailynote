@@ -295,6 +295,8 @@ export function parseExistingNotes(notes: string): { lines: string[]; emails: st
 export type RowAction = 'fill' | 'skip' | 'conflict';
 export type RowKind = 'scalar' | 'req' | 'email';
 
+export type ScalarField = 'name' | 'deadlineDate' | 'deadlineTime' | 'location';
+
 export interface PlannedRow {
   id: string;
   kind: RowKind;
@@ -303,6 +305,10 @@ export interface PlannedRow {
   /** 现有内容（冲突时用于展示） */
   current: string;
   action: RowAction;
+  /** 标量行对应的表单字段（名称/日期/时间/地点） */
+  field?: ScalarField;
+  /** 冲突时是否采用识别值（默认保留原值） */
+  useValue: boolean;
   /** 多张图片给出不同值时，全部候选（>1 表示图与图冲突） */
   candidates?: string[];
 }
@@ -332,19 +338,28 @@ export function planExtraction(
   const rows: PlannedRow[] = [];
   const existing = parseExistingNotes(cur.notes);
 
-  const scalar = (id: string, label: string, value: string, current: string, candKey?: ScalarKey) => {
+  const scalar = (
+    field: ScalarField,
+    label: string,
+    value: string,
+    current: string,
+    candKey?: ScalarKey,
+  ) => {
     const v = value.trim();
     if (!v) return;
     const c = current.trim();
     const same = !!c && c.toLowerCase() === v.toLowerCase();
     const cands = candKey ? candidates[candKey] : undefined;
+    const action: RowAction = !c ? 'fill' : same ? 'skip' : 'conflict';
     rows.push({
-      id,
+      id: field,
       kind: 'scalar',
       label,
       value: v,
       current: c,
-      action: !c ? 'fill' : same ? 'skip' : 'conflict',
+      action,
+      field,
+      useValue: action !== 'conflict',
       ...(cands && cands.length > 1 ? { candidates: cands } : {}),
     });
   };
@@ -365,6 +380,7 @@ export function planExtraction(
       value: v,
       current: exists ? '备注里已有' : '',
       action: exists ? 'skip' : 'fill',
+      useValue: !exists,
     });
   }
 
@@ -380,6 +396,7 @@ export function planExtraction(
       value: v,
       current: same ? '备注里已有' : others.join('、'),
       action: same ? 'skip' : others.length > 0 ? 'conflict' : 'fill',
+      useValue: !same && others.length === 0,
     });
   }
 
@@ -435,4 +452,36 @@ export function mergeExtractions(list: ExtractedInfo[]): MergedExtraction {
     },
     candidates,
   };
+}
+
+/**
+ * 把核对面板的行落到表单：标量 → 字段，要求/邮箱 → 备注各归各位。
+ * 与 planExtraction 配套使用，纯函数便于测试（历史上这里错过一次，标量被塞进了邮箱）。
+ */
+export function collectApplied(rows: PlannedRow[]): {
+  fields: Partial<Record<ScalarField, string>>;
+  requirements: string[];
+  emails: string[];
+} {
+  const fields: Partial<Record<ScalarField, string>> = {};
+  const requirements: string[] = [];
+  const emails: string[] = [];
+
+  for (const row of rows) {
+    const take = row.action === 'fill' || (row.action === 'conflict' && row.useValue);
+    if (!take) continue;
+    const v = row.value.trim();
+    if (!v) continue;
+
+    if (row.kind === 'scalar') {
+      if (row.field) fields[row.field] = v;
+    } else if (row.kind === 'req') {
+      requirements.push(v);
+    } else if (row.kind === 'email') {
+      emails.push(v);
+    }
+    // 未知类型一律忽略，不再兜底塞进备注
+  }
+
+  return { fields, requirements, emails };
 }
