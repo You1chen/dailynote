@@ -193,6 +193,7 @@ export interface DdlItem {
   notes: string;           // 长文字备注（Markdown，可为空）
   images: string[];        // 压缩后 JPEG dataURL（≤9 张，单条约 ≤3MB）
   links?: DdlLink[];       // 关联内容（课程 / 自定义分组条目；「重要的事」不使用）
+  dismissedAt?: number;    // 解除威胁的时间戳（0/空 = 未解除；解除后褪色、30 秒后隐藏）
   createdAt: number;
   updatedAt: number;
 }

@@ -48,11 +48,12 @@ export const DDL_NEAR_MIN = 7 * 24 * 60;
  * 格式非法的条目不计入。
  */
 export function countDdlNear(
-  ddls: { deadlineDate: string; deadlineTime: string }[],
+  ddls: { deadlineDate: string; deadlineTime: string; dismissedAt?: number }[],
   now: Date = new Date(),
 ): number {
   let n = 0;
   for (const d of ddls) {
+    if ((d.dismissedAt ?? 0) > 0) continue;   // 已解除的不算威胁
     const m = minutesUntilDeadline(d, now);
     if (m !== null && m < DDL_NEAR_MIN) n++;
   }
@@ -88,13 +89,58 @@ export function splitDeadlineItems<T extends { deadlineDate: string; deadlineTim
 
 /** 侧栏红点：重要的事里剩余不足三天、且还没被收起来的条数 */
 export function countImportantNear(
-  items: { deadlineDate: string; deadlineTime: string }[],
+  items: { deadlineDate: string; deadlineTime: string; dismissedAt?: number }[],
   now: Date = new Date(),
 ): number {
   let n = 0;
   for (const d of items) {
+    if ((d.dismissedAt ?? 0) > 0) continue;   // 已解除的不算威胁
     const m = minutesUntilDeadline(d, now);
     if (m !== null && m < IMPORTANT_NEAR_MIN && m > -IMPORTANT_KEEP_AFTER_MIN) n++;
   }
   return n;
+}
+// ============ 解除威胁 ============
+
+/** 解除后继续显示多久（毫秒）：褪色 + 显示「危机解除」，到点隐藏 */
+export const DDL_DISMISS_HIDE_MS = 30_000;
+
+export interface Dismissable {
+  dismissedAt?: number;
+}
+
+/** 是否已解除（含尚未隐藏的） */
+export function isDismissed(item: Dismissable): boolean {
+  return (item.dismissedAt ?? 0) > 0;
+}
+
+/** 解除后还要显示多久（毫秒）；未解除或已隐藏返回 0 */
+export function dismissRemainMs(item: Dismissable, now: number = Date.now()): number {
+  const at = item.dismissedAt ?? 0;
+  if (!at) return 0;
+  return Math.max(0, DDL_DISMISS_HIDE_MS - (now - at));
+}
+
+/**
+ * 按「解除」状态分三组：
+ * - active：正常显示
+ * - dismissing：刚解除，褪色并显示「危机解除」（30 秒内）
+ * - dismissed：已隐藏（超过 30 秒）
+ */
+export function splitDismissed<T extends Dismissable>(
+  items: T[],
+  now: number = Date.now(),
+): { active: T[]; dismissing: T[]; dismissed: T[] } {
+  const active: T[] = [];
+  const dismissing: T[] = [];
+  const dismissed: T[] = [];
+
+  for (const item of items) {
+    const at = item.dismissedAt ?? 0;
+    if (!at) active.push(item);
+    else if (now - at < DDL_DISMISS_HIDE_MS) dismissing.push(item);
+    else dismissed.push(item);
+  }
+
+  return { active, dismissing, dismissed };
 }

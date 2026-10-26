@@ -1075,3 +1075,34 @@ pm run build:apk` 成功（24.82 MB）。
 ```
 修改：src/utils/extract.ts、src/components/DeadlineListPage.tsx、test/识别/extract.test.ts、structure.md
 ```
+## 2026-10-26 — DDL 新增「解除威胁」
+
+### 需求
+
+DDL 除了删除，还需要「解除威胁」：解除后条目褪色，倒计时控件显示「危机解除」，30 秒后隐藏。
+
+### 实现
+
+- **数据**：`DdlItem` 增加 `dismissedAt?: number`（0/空 = 未解除）。`ImportantItem` 是它的别名，自动同步。
+- **判定**（`utils/ddl.ts`）：`DDL_DISMISS_HIDE_MS = 30_000`、`splitDismissed(items, now)` 分 active / dismissing（30 秒内）/ dismissed、`dismissRemainMs`、`isDismissed`。
+- **列表页**（`DeadlineListPage`，DDL 与重要的事共用）：
+  - 卡片右上角新增「解除」按钮（盾牌图标），与删除并列；已解除的卡片改为「恢复显示」（撤销解除）。
+  - 解除状态：卡片 `opacity .5` + 去色；倒计时徽标换成「危机解除」。
+  - 30 秒后自动从主列表隐藏，收进底部「已解除 N 件 · 展开」，可恢复或删除，不会静默丢失。
+  - 只有存在「刚解除」条目时才开 1 秒定时器，避免常驻重渲染。
+- **红点**：`countDdlNear` 与 `countImportantNear` 跳过已解除的条目，解除后不再计入威胁数。
+- **编辑保留状态**：保存表单时带上原 `dismissedAt`，编辑已解除的条不会把它悄悄放回列表。
+
+### 验证
+
+- `test/DDL清单/ddlTime.test.ts` 扩到 20 项（三态分组、30 秒边界、倒计时、红点排除）。
+- 
+px tsc --noEmit` 通过；
+px vitest run` **639/639**（25 文件）；
+pm run build:apk` 成功（24.65 MB）。
+
+### 涉及文件
+
+```
+修改：src/types/index.ts、src/utils/ddl.ts、src/components/DeadlineListPage.tsx/.css、test/DDL清单/ddlTime.test.ts、structure.md
+```

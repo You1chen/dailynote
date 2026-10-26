@@ -5,7 +5,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { minutesUntilDeadline, ddlRemainText } from '../../src/utils/ddl';
+import {
+  splitDismissed,
+  dismissRemainMs,
+  isDismissed,
+  DDL_DISMISS_HIDE_MS,
+  countDdlNear,
+  minutesUntilDeadline,
+  ddlRemainText,
+} from '../../src/utils/ddl';
 
 const NOW = new Date('2026-08-13T12:00:00'); // 本地时间固定基准
 
@@ -85,5 +93,49 @@ describe('ddlRemainText', () => {
 
   it('10080 分钟 → 剩 7 天', () => {
     expect(ddlRemainText(10080)).toBe('剩 7 天');
+  });
+});
+
+describe('解除威胁', () => {
+  const at = Date.parse('2026-10-26T10:00:00');
+  const mk = (dismissedAt?: number) => ({
+    name: 'x', deadlineDate: '2026-11-01', deadlineTime: '23:59', dismissedAt,
+  });
+
+  it('未解除 → active', () => {
+    const r = splitDismissed([mk(0), mk(undefined)], at);
+    expect(r.active).toHaveLength(2);
+    expect(r.dismissing).toHaveLength(0);
+    expect(r.dismissed).toHaveLength(0);
+  });
+
+  it('刚解除（30 秒内）→ dismissing，仍显示', () => {
+    const r = splitDismissed([mk(at - 10_000)], at);
+    expect(r.dismissing).toHaveLength(1);
+    expect(r.dismissed).toHaveLength(0);
+  });
+
+  it('满 30 秒 → dismissed，隐藏', () => {
+    const r = splitDismissed([mk(at - DDL_DISMISS_HIDE_MS)], at);
+    expect(r.dismissing).toHaveLength(0);
+    expect(r.dismissed).toHaveLength(1);
+  });
+
+  it('dismissRemainMs 倒计时', () => {
+    expect(dismissRemainMs(mk(at - 10_000), at)).toBe(20_000);
+    expect(dismissRemainMs(mk(at - 40_000), at)).toBe(0);
+    expect(dismissRemainMs(mk(0), at)).toBe(0);
+  });
+
+  it('isDismissed 只看有没有时间戳', () => {
+    expect(isDismissed(mk(0))).toBe(false);
+    expect(isDismissed(mk(undefined))).toBe(false);
+    expect(isDismissed(mk(at))).toBe(true);
+  });
+
+  it('已解除的条目不再计入红点', () => {
+    const soon = { deadlineDate: '2026-10-28', deadlineTime: '09:00' };
+    expect(countDdlNear([{ ...soon }], new Date('2026-10-26T10:00:00'))).toBe(1);
+    expect(countDdlNear([{ ...soon, dismissedAt: at }], new Date('2026-10-26T10:00:00'))).toBe(0);
   });
 });

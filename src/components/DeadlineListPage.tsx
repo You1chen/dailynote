@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { ArrowLeft, Plus, Trash2, X, MapPin, ScanText, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, X, MapPin, ScanText, ShieldCheck, RotateCcw, type LucideIcon } from 'lucide-react';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
-import { minutesUntilDeadline, ddlRemainText, splitDeadlineItems } from '../utils/ddl';
+import { minutesUntilDeadline, ddlRemainText, splitDeadlineItems, splitDismissed } from '../utils/ddl';
 import { renderMarkdown } from '../utils/markdown';
 import {
   extractFromText,
@@ -35,6 +35,7 @@ export interface DeadlineBase {
   notes: string;
   images: string[];
   links?: DdlLink[];
+  dismissedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -99,6 +100,8 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   const [busyImages, setBusyImages] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<T | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [showDismissed, setShowDismissed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   // 备注：编辑 / 预览
   const [notePreview, setNotePreview] = useState(false);
   // 图片查看器
@@ -193,6 +196,8 @@ export default function DeadlineListPage<T extends DeadlineBase>({
       location: form.location.trim(),
       notes: form.notes,
       images: form.images,
+      links: form.links,
+      dismissedAt: editing?.dismissedAt ?? 0,
       // 「重要的事」不写关联字段（共用组件，按 allowLinks 关闭）
       ...(allowLinks ? { links: normalizeLinks(form.links) } : {}),
       createdAt: editing?.createdAt ?? Date.now(),
@@ -288,7 +293,34 @@ export default function DeadlineListPage<T extends DeadlineBase>({
     setRecog(rows => rows?.filter(r => r.id !== id) ?? null);
   };
 
+  // 解除后 30 秒要隐藏，只有存在「刚解除」的条目时才开秒表
+  const hasDismissing = items.some(i => {
+    const at = (i as { dismissedAt?: number }).dismissedAt ?? 0;
+    return at > 0 && now - at < 30_000;
+  });
+
+  useEffect(() => {
+    if (!hasDismissing) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [hasDismissing]);
+
+  /** 解除威胁：褪色 + 显示「危机解除」，30 秒后隐藏 */
+  const dismissItem = async (item: T) => {
+    await api.save({ ...item, dismissedAt: Date.now() } as T);
+    setNow(Date.now());
+    await reload();
+  };
+
+  /** 撤销解除，重新显示 */
+  const restoreItem = async (item: T) => {
+    await api.save({ ...item, dismissedAt: 0 } as T);
+    await reload();
+  };
   const badge = (item: T) => {
+    if ((item.dismissedAt ?? 0) > 0) {
+      return <span className="ddl-badge ddl-badge--resolved">危机解除</span>;
+    }
     const m = minutesUntilDeadline(item);
     if (m == null) return <span className="ddl-badge">—</span>;
     return (
@@ -298,11 +330,20 @@ export default function DeadlineListPage<T extends DeadlineBase>({
     );
   };
 
-  // 过期太久的收进「已过期」，主列表只留还需要的
-  const { visible, hidden } = splitDeadlineItems(items, new Date(), hideAfterMinutes);
+  // 先按「解除」状态分组，再对未解除的应用过期收起
+  const dismiss = splitDismissed(items, now);
+  const { visible, hidden } = splitDeadlineItems(
+    dismiss.active.concat(dismiss.dismissing),
+    new Date(),
+    hideAfterMinutes,
+  );
 
   const renderCard = (item: T) => (
-    <div key={item.id} className="ddl-card" onClick={() => openEdit(item)}>
+    <div
+      key={item.id}
+      className={`ddl-card${(item.dismissedAt ?? 0) > 0 ? ' ddl-card--dismissed' : ''}`}
+      onClick={() => openEdit(item)}
+    >
       <div className="ddl-name">{item.name}</div>
 
       <div className="ddl-deadline-row">
@@ -343,13 +384,33 @@ export default function DeadlineListPage<T extends DeadlineBase>({
         </button>
       )}
 
-      <button
-        className="btn btn-ghost btn-icon ddl-card-del"
-        title="删除"
-        onClick={e => { e.stopPropagation(); setPendingDelete(item); }}
-      >
-        <Trash2 size={16} />
-      </button>
+      <div className="ddl-card-actions">
+        {((item as { dismissedAt?: number }).dismissedAt ?? 0) > 0 ? (
+          <button
+            className="btn btn-ghost btn-icon ddl-card-restore"
+            title="恢复显示"
+            onClick={e => { e.stopPropagation(); restoreItem(item); }}
+          >
+            <RotateCcw size={16} />
+          </button>
+        ) : (
+          <button
+            className="btn btn-ghost btn-icon ddl-card-dismiss"
+            title="解除威胁"
+            onClick={e => { e.stopPropagation(); dismissItem(item); }}
+          >
+            <ShieldCheck size={16} />
+          </button>
+        )}
+
+        <button
+          className="btn btn-ghost btn-icon ddl-card-del"
+          title="删除"
+          onClick={e => { e.stopPropagation(); setPendingDelete(item); }}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
     </div>
   );
 
@@ -392,6 +453,14 @@ export default function DeadlineListPage<T extends DeadlineBase>({
                 已过期 {hidden.length} 件 · {showHidden ? '收起' : '展开'}
               </button>
               {showHidden && <div className="ddl-list">{hidden.map(renderCard)}</div>}
+            </div>
+          )}
+          {dismiss.dismissed.length > 0 && (
+            <div className="ddl-hidden">
+              <button className="ddl-hidden-toggle" onClick={() => setShowDismissed(v => !v)}>
+                已解除 {dismiss.dismissed.length} 件 · {showDismissed ? '收起' : '展开'}
+              </button>
+              {showDismissed && <div className="ddl-list">{dismiss.dismissed.map(renderCard)}</div>}
             </div>
           )}
         </>
