@@ -6,7 +6,7 @@
  * 保持与旧版完全一致的导出函数签名，页面/Hook 无需改动。
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
 import { toggleLeafDone, removeLeaf, normalizeOrder } from '../utils/taskTree';
@@ -318,6 +318,46 @@ export async function deleteDdl(id: number): Promise<void> {
   notifyDdlChanged();
 }
 
+// ============ 关联分组 CRUD（内置的「课程」组直接读课程表，不落库） ============
+
+export async function getAllLinkGroups(): Promise<LinkGroup[]> {
+  // 按创建顺序，用户自己排的组不会每次打开都跳位置
+  return [...store.linkGroups].sort((a, b) => a.createdAt - b.createdAt || (a.id ?? 0) - (b.id ?? 0));
+}
+
+export async function saveLinkGroup(group: LinkGroup): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (group.id != null) {
+      const idx = store.linkGroups.findIndex(g => g.id === group.id);
+      if (idx >= 0) store.linkGroups[idx] = { ...group, updatedAt: Date.now() };
+      resultId = group.id;
+      return;
+    }
+    resultId = allocId('linkGroups');
+    store.linkGroups.push({ ...group, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteLinkGroup(id: number): Promise<void> {
+  await mutate(() => {
+    const group = store.linkGroups.find(g => g.id === id);
+    if (group) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'linkGroups',
+        originalId: id,
+        originalData: deepClone(group),
+        title: `关联分组 - ${group.name}`,
+        deletedAt: Date.now(),
+      });
+      store.linkGroups = store.linkGroups.filter(g => g.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'linkGroups'] });
+}
+
 // ============ 回收站 CRUD ============
 
 export async function getTrashItems(): Promise<TrashItem[]> {
@@ -336,6 +376,7 @@ const TRASH_TARGET: Record<string, AnyStoreTable> = {
   ddls: 'ddls',
   important: 'important',
   backlog: 'backlog',
+  linkGroups: 'linkGroups',
   timeBlocks: 'dailyPlans',
 };
 
@@ -410,6 +451,12 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
           const rec = originalData as BacklogItem;
           if (rec.id != null && store.backlog.some(b => b.id === rec.id)) { ok = false; return; }
           store.backlog.push(rec);
+          break;
+        }
+        case 'linkGroups': {
+          const rec = originalData as LinkGroup;
+          if (rec.id != null && store.linkGroups.some(g => g.id === rec.id)) { ok = false; return; }
+          store.linkGroups.push(rec);
           break;
         }
         case 'timeBlocks':

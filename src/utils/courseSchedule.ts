@@ -68,3 +68,29 @@ export function computeDayCourses(
     .filter(c => c.dayOfWeek.includes(dw) && isCourseActiveOnWeek(c, week))
     .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime));
 }
+
+/**
+ * 「有效课程」：本学期、且当前周还在课程周期内的课程（供 DDL 关联用）。
+ * - 未设置开学时间 / 还没开学 → 空
+ * - 课程还没开讲（startWeek 大于本周）或已经结课（超过 startWeek+weekCount-1）→ 不算
+ * - 单双周课程在本周不上 → 不算
+ * 按课程名排序，保证选择列表顺序稳定。
+ */
+export function effectiveCourses(
+  courses: Course[],
+  semester: SemesterRecord | undefined,
+  dateStr: string,
+): Course[] {
+  if (!semester?.startDate) return [];
+  const week = weekIndex(dateStr, semester.startDate);
+  if (week < 1) return [];
+  return courses
+    .filter(c => isCourseActiveOnWeek(c, week))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh') || a.startTime.localeCompare(b.startTime));
+}
+
+/** 当前学期周次（未设置开学时间或未开学 → 0），供「第 N 周」文案使用 */
+export function currentWeekOf(semester: SemesterRecord | undefined, dateStr: string): number {
+  if (!semester?.startDate) return 0;
+  return weekIndex(dateStr, semester.startDate);
+}

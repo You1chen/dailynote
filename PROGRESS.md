@@ -957,3 +957,41 @@
 修改：src/utils/time.ts、src/utils/taskTree.ts、src/hooks/usePreferences.ts、src/pages/DailyPlan.tsx/.css、src/components/TaskBall.tsx、structure.md
 删除：test/_visual/（临时视觉验证脚本与截图）
 ```
+
+## 2026-10-26 — DDL 关联内容：内置课程组 + 自定义分组
+
+### 需求
+
+创建 DDL 时可以直接关联内容。第一批能关联的是课程表里的**有效课程**（在本学期、且在课程周期之内；上学期的课不算，还没开讲的课不算）。「课程」是内置组、永远跟课程表同步；此外可以自定义别的分组。
+注意：DDL 与「重要的事」共用同一个列表组件，**重要的事里必须没有关联入口**。
+
+### 实现
+
+- **数据模型**：`DdlLink { kind:'course'|'group', id, label, groupName? }`，存的是快照 —— 课程/分组以后被删，DDL 上仍显示当时的名字。`DdlItem.links?`；新增 `LinkGroup { name, items[] }`，即第 15 张表 `linkGroups`（`linkGroups.json`）。
+- **新表全部触点**（store.ts）：`StorageData`/`StoreShape`、`CATEGORY_FILES`、`NumericTable`、`nextId`/`resetNextId`、`clearStore`、`countData`、`applyData`、`snapshot`、`fingerprint`/`Fp`、`buildWriteSetFromStore`、`buildWriteSetDirty`、`DEFAULT_WRITE_ORDER`、`mergeIntoStore`、`mergeLegacy`、`liveArr`、`parseStorageData`、`readNewStructure`、`hasAny`、`CATEGORY_NAMES`。
+- **有效课程** `utils/courseSchedule.ts#effectiveCourses`：学期已设置 + 当前周在 `[startWeek, startWeek+weekCount-1]` + 单双周匹配；另加 `currentWeekOf`（面板上的「第 N 周」）。未开讲、已结课、本周不上（单双周不合）都不算。
+- **关联纯函数** `utils/ddlLinks.ts`：生成（`courseLink`/`groupLink`）、`linkKey`、`toggleLink`/`hasLink`、展示（`linkText`/`linkIcon`/`courseWeeksText`）、落库前整理 `normalizeLinks`（去空名、去重、保序）。
+- **存储与 Hook**：`db.getAllLinkGroups/saveLinkGroup/deleteLinkGroup`（软删除进回收站，`originalTable='linkGroups'`）+ `TRASH_TARGET`/还原分支 + 回收站标签「关联分组」；`hooks/useLinkGroups.ts`。
+- **UI**：`components/LinkPicker.tsx/.css` 底部选择器 —— 「📚 课程」显示「第 N 周 · 有效 M 门」和每门课的周期/星期/时间；自定义分组可新建组、加条目、删条目、删组（走 ConfirmDialog）；底部「已选 N 项 / 完成」；Android 返回键先关选择器而不是整个表单。`DeadlineListPage` 新增 `allowLinks`：表单里多一块「关联」（`+ 关联` 打开选择器，chips 可单个取消），卡片上以 chips 展示关联；`DdlPage` 开启，`ImportantPage` 显式 `allowLinks={false}`（表单里没有关联区，保存也不写 `links`）。
+
+### 验证
+
+- 新增 `test/课程表/effectiveCourses.test.ts` 12 项、`test/DDL清单/ddlLinks.test.ts` 15 项、`test/DDL清单/linkGroups.test.ts` 8 项（CRUD、回收站还原、落盘重载、旧备份兼容、导入导出往返、DDL 关联快照）。
+- `npx tsc --noEmit` 通过；`npx vitest run` **628/628**（25 文件）。
+- 无头 Chrome 跑**真实 App**（临时脚本预置学期/课程/分组/DDL，走启动流程）核对行为：
+  - 列表卡片显示 `📚 高等数学`、`🗂 实验 · 服务器 A`。
+  - 选择器「第 8 周 · 有效 2 门」：高等数学、线性代数（双周课，本周第 8 周）；大学物理（第 12 周才开讲）、概率论（单周课）、已结课（第 1-6 周）全部被排除。
+  - 新建分组「社团」→ 加条目「海报模板」→ 选中 → 保存后卡片显示 3 个关联；重新打开编辑回显一致。
+  - 切到「重要的事」：表单字段只有 `名称,截止时间,地点,备注,备注图片`，DOM 里没有关联入口。
+  - 全程无 React key 警告（第一轮发现是测试种子数据缺 `id`，已修正种子）。
+- 临时脚本与截图已删除。
+
+### 涉及文件
+
+```
+新增：src/utils/ddlLinks.ts、src/hooks/useLinkGroups.ts、src/components/LinkPicker.tsx/.css
+     test/课程表/effectiveCourses.test.ts、test/DDL清单/ddlLinks.test.ts、test/DDL清单/linkGroups.test.ts
+修改：src/types/index.ts、src/services/store.ts、src/db/index.ts、src/utils/courseSchedule.ts、
+      src/components/DeadlineListPage.tsx/.css、src/pages/DdlPage.tsx、src/pages/ImportantPage.tsx、
+      src/pages/Trash.tsx、structure.md
+```

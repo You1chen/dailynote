@@ -15,6 +15,7 @@ const TABLE_LABELS: Record<string, string> = {
   ddls: 'DDL',
   important: '重要的事',
   backlog: '遗留问题',
+  linkGroups: '关联分组',
   timeBlocks: '时间块',
 };
 

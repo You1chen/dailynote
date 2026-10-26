@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.2.2（`versionName 1.2.2` / `versionCode 5`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 88 文件；`test/` 22 文件 / 593 用例 |
+| 规模 | `src/` 92 文件；`test/` 25 文件 / 628 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -36,8 +36,8 @@
 | `/backlog` | BacklogPage | 遗留问题（状态、历时、气泡） |
 | `/reflection` | Reflection | 三段式反思 |
 | `/harvest` | Harvest | 每日收获 |
-| `/ddl` | DdlPage | 截止事项（地点、Markdown 备注、图片） |
-| `/important` | ImportantPage | 与 DDL 同构；三天内气泡；过期一天收起 |
+| `/ddl` | DdlPage | 截止事项（地点、Markdown 备注、图片、关联课程/自定义分组） |
+| `/important` | ImportantPage | 与 DDL 同构但**无关联**；三天内气泡；过期一天收起 |
 | `/courses` | CoursesPage | 课程 CRUD、学期、特殊日期、列表/课表双视图 |
 | `/week` | WeekViewPage | 周日程（课程过滤 + 当天任务块） |
 | `/trash` | Trash | 回收站 |
@@ -63,6 +63,7 @@ src/
 │   ├── courseSchedule.ts 周次、单双周、节假日、当日课程
 │   ├── holidays.ts     内置节假日表（2026 精确 / 2027 推定）
 │   ├── ddl.ts          剩余时间、一周与三天阈值、过期收起
+│   ├── ddlLinks.ts     关联项生成/切换/去重、展示文案
 │   ├── backlog.ts      距今折算、历时文案、一周宽限、排序
 │   ├── taskTree.ts     标准文本 ⇄ 层级 ⇄ 末级并列、完成状态回填
 │   ├── markdown.ts     Markdown → HTML（先转义后套标签）
@@ -82,9 +83,9 @@ src/
 │
 ├── contexts/BackButtonContext.tsx   Android 返回键
 │
-├── hooks/              12 个数据 Hook（见 §8）
+├── hooks/              13 个数据 Hook（见 §8）
 │
-├── components/         15 个 tsx（见 §9）
+├── components/         16 个 tsx（见 §9）
 │
 └── pages/              13 个页面
 ```
@@ -115,7 +116,7 @@ utils/  →  types/
 
 ## 5. 数据模型
 
-持久化 14 张表。字段定义见 `src/types/index.ts`。
+持久化 15 张表。字段定义见 `src/types/index.ts`。
 
 | 表 | 文件 | 形态 | 关键字段 |
 | --- | --- | --- | --- |
@@ -128,16 +129,18 @@ utils/  →  types/
 | taskTemplates | `templates.json` | 数组 | `name, items[]` |
 | courses | `courses.json` | 数组 | `dayOfWeek:number[], weekType, startWeek, weekCount` |
 | semester | `semester.json` | 单记录（id=1） | `startDate:string\|null, specialDates[]` |
-| ddls | `ddls.json` | 数组 | `name, deadlineDate, deadlineTime, location, notes, images[]` |
-| important | `important.json` | 数组 | 同 ddls |
+| ddls | `ddls.json` | 数组 | `name, deadlineDate, deadlineTime, location, notes, images[], links[]` |
+| important | `important.json` | 数组 | 同 ddls（`links` 不使用） |
 | backlog | `backlog.json` | 数组 | `title, startMode, startAt, startText, blocker, status` |
 | taskBoard | `taskboard.json` | 单记录（id=1） | `nodes:TaskNode[], order:string[]` |
+| linkGroups | `linkGroups.json` | 数组 | `name, items:LinkGroupItem[]`（自定义关联分组；内置「课程」组不落库） |
 | trashItems | `trash.json` | 数组 | `originalTable, originalId, originalData, deletedAt` |
 
 约定：
 - `TimeBlock.focusScore / efficiencyScore`：0–10，0 = 未评分。
 - `TaskItem.id` 为字符串；其余表主键 `number`；`TrashItem.originalId` 为 `number|string`。
 - `TaskNode` 只有末级节点的 `done` 有意义；末级用完整链 `a/b/c` 标识。
+- `DdlLink` 存的是**快照**（`kind, id, label, groupName`）：课程/分组被删后 DDL 仍显示当时的名字。
 - `todayStr()` 为 UTC 日期；本地日期用 `utils/ddl` 与 `localDateStr`。
 
 ---
@@ -153,7 +156,7 @@ Documents/<dir>/
 ├── days/<YYYY-MM-DD>/{plan,reflections,harvests,tasks}.json
 ├── goals.json  routines.json  templates.json  courses.json
 ├── semester.json  ddls.json  important.json  backlog.json
-├── taskboard.json  trash.json
+├── taskboard.json  linkGroups.json  trash.json
 └── dailynote-backup-<时间戳>.json     （导出存档，不参与读取）
 ```
 
@@ -197,14 +200,14 @@ Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。
 ### 6.5 回收站
 
 - 软删除：`deepClone` 入 `trashItems` 再移出原表；30 天过期（删除入口与打开回收站时清理）。
-- `originalTable` 11 种：longTermGoals、reflections、harvests、fixedRoutines、taskItems、taskTemplates、courses、ddls、important、backlog、timeBlocks。
+- `originalTable` 12 种：longTermGoals、reflections、harvests、fixedRoutines、taskItems、taskTemplates、courses、ddls、important、backlog、linkGroups、timeBlocks。
 - `timeBlocks`：原数据存 `{date, ...block}`，还原时 push 回当天计划。
 
 ### 6.6 导入导出
 
 - 导出：单 JSON 备份包（`version:1`）。
 - 导入：剥 BOM → 校验（空 / 非 JSON / 损坏 / 缺 `version`+`dailyPlans`）→ 纯合并（存在则更新，永不删除）。
-- 兼容：14 张表缺字段均兜底空数组；`courses` 额外归一化 `dayOfWeek`。
+- 兼容：15 张表缺字段均兜底空数组；`courses` 额外归一化 `dayOfWeek`。
 
 ---
 
@@ -239,6 +242,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | useDdlBadge() | count（剩余 < 7 天） |
 | useImportantBadge() | count（剩余 < 3 天且未收起） |
 | useTrash() | items, loading, restore, permDelete, clearAll, reload |
+| useLinkGroups() | groups, loading, addGroup, removeGroup, addItem, removeItem, reload（DDL 关联的自定义分组） |
 | usePreferences() | prefs（含 `futureOnly` 只看未来）、updatePrefs、resetPrefs |
 
 ---
@@ -247,7 +251,8 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 | 组件 | 行 | 职责 | 使用方 |
 | --- | --- | --- | --- |
-| DeadlineListPage | 542 | 截止事项列表页（DDL 与重要的事共用，文案参数化） | DdlPage、ImportantPage |
+| DeadlineListPage | 689 | 截止事项列表页（DDL 与重要的事共用，文案参数化；`allowLinks` 控制是否有关联） | DdlPage、ImportantPage |
+| LinkPicker | 234 | 关联内容选择器：内置「课程」组（本学期有效课程，随课程表同步）+ 自定义分组增删 | DeadlineListPage |
 | TaskBall | 390 | 任务悬浮球（可拖动）+ 清单面板 + 层级/文本填写；勾掉最后一条未完成时弹庆祝 | App |
 | CelebrationDialog | 150 | 清单全部完成的庆祝弹窗（内联 SVG 插画 + 随机走心文案 + 纸屑动画） | TaskBall |
 | FullscreenSchedule | 306 | 全屏日程网格 | DailyPlan |
@@ -272,7 +277,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | DailyPlan | 粘性头部（日期/周条/统计/工具）、FAB 新建、点空白新建、点块编辑或验收、睡眠折叠、只看未来（折叠当前小时之前）、课程块只读、支持 `?date=&new=&block=` |
 | CoursesPage | 列表/课表双视图、学期与特殊日期、折叠不重要时段（24px 条） |
 | WeekViewPage | 7 列周日程、课程按周过滤、点空白/点块跳日计划编辑、睡眠折叠 |
-| DdlPage / ImportantPage | 共用 DeadlineListPage：地点、Markdown 备注（编辑/预览）、图片查看（Lightbox）、图片识别（识别全部备注图片）；重要的事三天气泡 + 过期一天收起 |
+| DdlPage / ImportantPage | 共用 DeadlineListPage：地点、Markdown 备注（编辑/预览）、图片查看（Lightbox）、图片识别（识别全部备注图片）；**关联内容只有 DDL 有**（`allowLinks`，重要的事关闭）；重要的事三天气泡 + 过期一天收起 |
 | BacklogPage | 阻塞中/可推进/已解决/已终止；起始三态（距今/日期/文字）；历时排序；一周宽限气泡 |
 | LongTermGoals | 新建目标、子任务、进度、分类标签（无编辑、无筛选） |
 | Reflection / Harvest | 三段式反思；收获 #标签；均支持 `?date=` |
@@ -306,6 +311,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 300 | 全屏日程、全屏编辑器、SearchOverlay |
 | 310 | 日计划编辑面板、课程详情 |
 | 320 | PreferencePanel |
+| 330 | 关联内容选择器 LinkPicker |
 | 400 | 验收弹窗、头像裁剪、ConfirmDialog |
 | 500 | Lightbox |
 | 600 | 庆祝弹窗 CelebrationDialog |
@@ -314,7 +320,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npx vitest run`：22 文件 / 593 用例。
+`npx vitest run`：25 文件 / 628 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -335,12 +341,15 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 时间网格点击映射/blockRenderRect | 16 | 睡眠折叠下的块矩形 |
 | 偏好设置/preferences | 15 | 默认值、存取、主题 |
 | DDL清单/ddlTime | 14 | 剩余分钟、23:59 默认、文案边界 |
+| 课程表/effectiveCourses | 12 | 有效课程：学期前提、周期边界、单双周、排序 |
+| DDL清单/ddlLinks | 15 | 关联项生成/切换/去重/展示文案 |
+| DDL清单/linkGroups | 8 | 关联分组 CRUD、回收站、落盘、导入导出、DDL 关联快照 |
 | 任务清单/taskTemplate | 13 | 模板 CRUD、软删除、持久化、套用 |
 | DDL清单/markdownAndLocation | 10 | Markdown 语法、XSS 转义、地点往返 |
 | 数据存储/storageAccess | 8 | 权限守卫、阻塞时零写入 |
 | 数据存储/nativeWriteEncoding | 3 | 原生写入 utf8 与往返 |
 | 数据存储/startupSnapshot | 6 | 快照命中、目录变化失效、rescan 读入外部改动、换目录不复用 |
-| **合计** | **593** | 22 个文件 |
+| **合计** | **628** | 25 个文件 |
 
 环境：无 `vitest.config.*`，`vite.config.ts` 无 `test` 段；`tsconfig.json` 的 `include:["src"]` 意味着 `tsc` 不检查 `test/`。
 
@@ -386,4 +395,5 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | `todayStr()` | UTC 语义，凌晨 0–8 点会算成前一天 |
 | 分数备注 | `types` 注释写 1–10，实际 0–10 |
 | icon-192 | `index.html` 引用不存在的 `icons/icon-192.png` |
+| 有效课程 | 课程没有「所属学期」字段：只按学期开学时间 + 课程周次判断。若课程表里仍留着上学期的课、且其周次与本周重合，它仍会被算作有效 |
 | NDK | 未安装；端侧 VLM（LFM2.5-VL-450M）路线因此未接入 |

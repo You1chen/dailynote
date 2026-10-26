@@ -20,6 +20,7 @@ export default function DdlPage() {
       emptyHint="点击「添加 DDL」收录带截止时间的事项"
       countText={n => `共 ${n} 个截止事项`}
       icon={CalendarClock}
+      allowLinks
       api={api}
     />
   );

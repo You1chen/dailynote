@@ -6,10 +6,13 @@ import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { minutesUntilDeadline, ddlRemainText, splitDeadlineItems } from '../utils/ddl';
 import { renderMarkdown } from '../utils/markdown';
 import { extractFromText, buildNotes, planExtraction, mergeExtractions, type MergedExtraction } from '../utils/extract';
+import { linkIcon, linkKey, linkText, normalizeLinks } from '../utils/ddlLinks';
 import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { recognizeImage, ocrAvailable } from '../services/ocr';
 import ConfirmDialog from './ConfirmDialog';
 import Lightbox from './Lightbox';
+import LinkPicker from './LinkPicker';
+import type { DdlLink } from '../types';
 import './DeadlineListPage.css';
 
 /** 备注图片上限（压缩后单条约 ≤3MB） */
@@ -23,6 +26,7 @@ export interface DeadlineBase {
   location: string;
   notes: string;
   images: string[];
+  links?: DdlLink[];
   createdAt: number;
   updatedAt: number;
 }
@@ -34,6 +38,7 @@ interface Form {
   location: string;
   notes: string;
   images: string[];
+  links: DdlLink[];
 }
 
 /** 识别结果的一行：可改、可删，并与表单现有值比对出「填入 / 已存在 / 冲突」 */
@@ -66,6 +71,8 @@ export interface DeadlineListProps<T extends DeadlineBase> {
   countText: (n: number) => string;
   /** 过期超过多少分钟就收起来（不传 = 全部显示） */
   hideAfterMinutes?: number;
+  /** 是否允许「关联内容」（课程 / 自定义分组）。只有 DDL 用，重要的事传 false */
+  allowLinks?: boolean;
   icon: LucideIcon;
   api: {
     getAll: () => Promise<T[]>;
@@ -87,6 +94,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   emptyHint,
   countText,
   hideAfterMinutes,
+  allowLinks = false,
   icon: Icon,
   api,
 }: DeadlineListProps<T>) {
@@ -108,6 +116,8 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   const [ocrBusy, setOcrBusy] = useState(false);
   const [recog, setRecog] = useState<ReviewRow[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // 关联内容选择器（仅 allowLinks 时可用）
+  const [pickerOpen, setPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
@@ -124,6 +134,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
     setError('');
     setNotePreview(false);
     setRecog(null);
+    setPickerOpen(false);
   }, []);
 
   // Android 返回键：先关查看器/弹窗，再退出页面
@@ -136,10 +147,11 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   }, [editing, closeModal, viewer, recog]);
 
   const openCreate = () => {
-    setForm({ name: '', deadlineDate: '', deadlineTime: '', location: '', notes: '', images: [] });
+    setForm({ name: '', deadlineDate: '', deadlineTime: '', location: '', notes: '', images: [], links: [] });
     setEditing(null);
     setNotePreview(false);
     setRecog(null);
+    setPickerOpen(false);
   };
 
   const openEdit = (item: T) => {
@@ -150,10 +162,12 @@ export default function DeadlineListPage<T extends DeadlineBase>({
       location: item.location ?? '',
       notes: item.notes,
       images: [...item.images],
+      links: allowLinks ? [...(item.links ?? [])] : [],
     });
     setEditing(item);
     setNotePreview(false);
     setRecog(null);
+    setPickerOpen(false);
   };
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,6 +202,8 @@ export default function DeadlineListPage<T extends DeadlineBase>({
       location: form.location.trim(),
       notes: form.notes,
       images: form.images,
+      // 「重要的事」不写关联字段（共用组件，按 allowLinks 关闭）
+      ...(allowLinks ? { links: normalizeLinks(form.links) } : {}),
       createdAt: editing?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
     } as T;
@@ -319,6 +335,14 @@ export default function DeadlineListPage<T extends DeadlineBase>({
         )}
       </div>
 
+      {(item.links?.length ?? 0) > 0 && (
+        <div className="ddl-card-links">
+          {item.links!.map(l => (
+            <span key={linkKey(l)} className="ddl-card-link">{linkIcon(l)} {linkText(l)}</span>
+          ))}
+        </div>
+      )}
+
       {item.notes.trim() && (
         <div
           className="ddl-notes-preview md"
@@ -444,6 +468,38 @@ export default function DeadlineListPage<T extends DeadlineBase>({
               />
             </div>
 
+            {allowLinks && (
+              <div className="ddl-field">
+                <div className="ddl-field-head">
+                  <label className="ddl-field-label">关联</label>
+                  <button className="ddl-link-add" onClick={() => setPickerOpen(true)}>
+                    <Plus size={13} /> 关联
+                  </button>
+                </div>
+                {form.links.length > 0 ? (
+                  <div className="ddl-link-chips">
+                    {form.links.map(l => (
+                      <span key={linkKey(l)} className={`ddl-link-chip ddl-link-chip--${l.kind}`}>
+                        <span className="ddl-link-chip-text">{linkIcon(l)} {linkText(l)}</span>
+                        <button
+                          className="ddl-link-chip-x"
+                          title="取消关联"
+                          onClick={() => setForm({
+                            ...form,
+                            links: form.links.filter(x => linkKey(x) !== linkKey(l)),
+                          })}
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="ddl-hint">可关联本学期在上的课程，或自定义分组里的条目</p>
+                )}
+              </div>
+            )}
+
             <div className="ddl-field">
               <div className="ddl-field-head">
                 <label className="ddl-field-label">备注</label>
@@ -542,6 +598,16 @@ export default function DeadlineListPage<T extends DeadlineBase>({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 关联选择器：放在弹窗外面，避免被弹窗的层叠/裁剪影响 */}
+      {allowLinks && (
+        <LinkPicker
+          open={pickerOpen}
+          links={form?.links ?? []}
+          onChange={next => setForm(prev => (prev ? { ...prev, links: next } : prev))}
+          onClose={() => setPickerOpen(false)}
+        />
       )}
 
       {/* 识别结果：逐行可改可删，冲突行由用户取舍 */}

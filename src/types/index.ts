@@ -157,6 +157,32 @@ export interface SemesterRecord {
 
 // ============ DDL 截止清单 ============
 
+/** DDL 关联项：保存时快照名字，课程/分组被删后仍能看到当时关联了什么 */
+export interface DdlLink {
+  kind: 'course' | 'group';
+  id: string;              // 课程 id 或分组条目的 id
+  label: string;           // 显示名（快照）
+  groupName?: string;      // 自定义组：组名（快照）
+}
+
+/** 自定义关联分组里的条目 */
+export interface LinkGroupItem {
+  id: string;
+  name: string;
+}
+
+/**
+ * 自定义关联分组。
+ * 内置的「课程」组不落库——它直接读课程表，永远是当前学期的有效课程。
+ */
+export interface LinkGroup {
+  id?: number;
+  name: string;
+  items: LinkGroupItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** DDL 事件（专门收录带截止时间的事项） */
 export interface DdlItem {
   id?: number;
@@ -166,6 +192,7 @@ export interface DdlItem {
   location: string;        // 地点（可为空）
   notes: string;           // 长文字备注（Markdown，可为空）
   images: string[];        // 压缩后 JPEG dataURL（≤9 张，单条约 ≤3MB）
+  links?: DdlLink[];       // 关联内容（课程 / 自定义分组条目；「重要的事」不使用）
   createdAt: number;
   updatedAt: number;
 }

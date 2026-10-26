@@ -28,7 +28,7 @@
  *   - 启动时若发现旧版单文件 dailynote-data.json → 迁移到新布局并删除旧文件（提交标记）
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, TaskBoard, ImportantItem } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, TaskBoard, ImportantItem, LinkGroup } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
@@ -53,6 +53,7 @@ export interface StorageData {
   important: ImportantItem[];
   backlog: BacklogItem[];
   taskBoard: TaskBoard[];
+  linkGroups: LinkGroup[];
 }
 
 export interface StoreShape {
@@ -70,6 +71,7 @@ export interface StoreShape {
   important: ImportantItem[];
   backlog: BacklogItem[];
   taskBoard: TaskBoard[];
+  linkGroups: LinkGroup[];
 }
 
 export type AnyStoreTable = keyof StoreShape;
@@ -86,7 +88,7 @@ function oldSingleRel(): string {
 }
 const DAY_DIR = 'days';
 const DAY_TYPES = ['reflections', 'harvests', 'tasks'] as const;
-const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 'taskTemplates' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'taskBoard', string> = {
+const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 'taskTemplates' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'taskBoard' | 'linkGroups', string> = {
   longTermGoals: 'goals.json',
   fixedRoutines: 'routines.json',
   trashItems: 'trash.json',
@@ -97,6 +99,7 @@ const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 
   important: 'important.json',
   backlog: 'backlog.json',
   taskBoard: 'taskboard.json',
+  linkGroups: 'linkGroups.json',
 };
 
 function dayPlan(date: string): string {
@@ -109,7 +112,7 @@ function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks'): 
 const KV_DB = 'dailynote_kv';
 const KV_STORE = 'kv';
 
-type NumericTable = 'dailyPlans' | 'longTermGoals' | 'reflections' | 'harvests' | 'fixedRoutines' | 'taskTemplates' | 'trashItems' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'taskBoard';
+type NumericTable = 'dailyPlans' | 'longTermGoals' | 'reflections' | 'harvests' | 'fixedRoutines' | 'taskTemplates' | 'trashItems' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'taskBoard' | 'linkGroups';
 
 // ============ 内存 store ============
 
@@ -128,6 +131,7 @@ const store: StoreShape = {
   important: [],
   backlog: [],
   taskBoard: [],
+  linkGroups: [],
 };
 
 /**
@@ -148,6 +152,7 @@ const nextId: Record<NumericTable, number> = {
   important: 1,
   backlog: 1,
   taskBoard: 1,
+  linkGroups: 1,
 };
 
 export function allocId(table: NumericTable): number {
@@ -155,7 +160,7 @@ export function allocId(table: NumericTable): number {
 }
 
 function resetNextId(): void {
-  const tables: NumericTable[] = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines', 'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls', 'important', 'backlog', 'taskBoard'];
+  const tables: NumericTable[] = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines', 'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls', 'important', 'backlog', 'taskBoard', 'linkGroups'];
   for (const t of tables) {
     let max = 0;
     for (const rec of store[t] as { id?: number }[]) {
@@ -180,12 +185,14 @@ function clearStore(): void {
   store.important = [];
   store.backlog = [];
   store.taskBoard = [];
+  store.linkGroups = [];
 }
 
 function countData(): number {
   return store.dailyPlans.length + store.longTermGoals.length + store.reflections.length
     + store.harvests.length + store.fixedRoutines.length + store.taskItems.length + store.taskTemplates.length + store.trashItems.length
-    + store.courses.length + store.semester.length + store.ddls.length + store.important.length + store.backlog.length + store.taskBoard.length;
+    + store.courses.length + store.semester.length + store.ddls.length + store.important.length + store.backlog.length + store.taskBoard.length
+    + store.linkGroups.length;
 }
 
 // ============ 路径管理 ============
@@ -454,6 +461,7 @@ function parseStorageData(text: string): StorageData | null {
       important: Array.isArray(data.important) ? data.important : [],
       backlog: Array.isArray(data.backlog) ? data.backlog : [],
       taskBoard: Array.isArray(data.taskBoard) ? data.taskBoard : [],
+      linkGroups: Array.isArray(data.linkGroups) ? data.linkGroups : [],
     };
   } catch {
     return null;
@@ -463,7 +471,8 @@ function parseStorageData(text: string): StorageData | null {
 function hasAny(d: StorageData): boolean {
   return d.dailyPlans.length > 0 || d.longTermGoals.length > 0 || d.reflections.length > 0
     || d.harvests.length > 0 || d.fixedRoutines.length > 0 || d.taskItems.length > 0 || d.taskTemplates.length > 0 || d.trashItems.length > 0
-    || d.courses.length > 0 || d.semester.length > 0 || d.ddls.length > 0 || d.important.length > 0 || d.backlog.length > 0 || d.taskBoard.length > 0;
+    || d.courses.length > 0 || d.semester.length > 0 || d.ddls.length > 0 || d.important.length > 0 || d.backlog.length > 0 || d.taskBoard.length > 0
+    || d.linkGroups.length > 0;
 }
 
 async function readDayArray<T>(dir: string, rel: string): Promise<T[]> {
@@ -521,7 +530,8 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const important = await readCategory<ImportantItem>(dir, CATEGORY_FILES.important);
   const backlog = await readCategory<BacklogItem>(dir, CATEGORY_FILES.backlog);
   const taskBoard = await readCategory<TaskBoard>(dir, CATEGORY_FILES.taskBoard);
-  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !taskBoard) return null;
+  const linkGroups = await readCategory<LinkGroup>(dir, CATEGORY_FILES.linkGroups);
+  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !taskBoard && !linkGroups) return null;
   return {
     version: 1,
     savedAt: 0,
@@ -539,6 +549,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     important: important ?? [],
     backlog: backlog ?? [],
     taskBoard: taskBoard ?? [],
+    linkGroups: linkGroups ?? [],
   };
 }
 
@@ -583,7 +594,7 @@ async function listBackendNames(dir: string): Promise<{ dates: string[]; files: 
   return { dates: [...dates], files: [...files] };
 }
 
-const CATEGORY_NAMES = ['goals.json', 'routines.json', 'trash.json', 'templates.json', 'courses.json', 'semester.json', 'ddls.json', 'important.json', 'backlog.json', 'taskboard.json'];
+const CATEGORY_NAMES = ['goals.json', 'routines.json', 'trash.json', 'templates.json', 'courses.json', 'semester.json', 'ddls.json', 'important.json', 'backlog.json', 'taskboard.json', 'linkGroups.json'];
 
 /** 由内存数据推算目录结构（写快照用，不访问磁盘） */
 function currentNames(): { dates: string[]; files: string[] } {
@@ -683,7 +694,7 @@ interface FileWrite {
   table: AnyStoreTable;
 }
 
-const DEFAULT_WRITE_ORDER: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems', 'longTermGoals', 'fixedRoutines', 'taskTemplates', 'courses', 'semester', 'ddls', 'important', 'backlog', 'taskBoard', 'trashItems'];
+const DEFAULT_WRITE_ORDER: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems', 'longTermGoals', 'fixedRoutines', 'taskTemplates', 'courses', 'semester', 'ddls', 'important', 'backlog', 'taskBoard', 'linkGroups', 'trashItems'];
 
 function snapshot(): StorageData {
   return {
@@ -703,6 +714,7 @@ function snapshot(): StorageData {
     important: store.important,
     backlog: store.backlog,
     taskBoard: store.taskBoard,
+    linkGroups: store.linkGroups,
   };
 }
 
@@ -764,6 +776,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
   writes.push({ relPath: CATEGORY_FILES.important, json: JSON.stringify(store.important, null, 2), table: 'important' });
   writes.push({ relPath: CATEGORY_FILES.backlog, json: JSON.stringify(store.backlog, null, 2), table: 'backlog' });
   writes.push({ relPath: CATEGORY_FILES.taskBoard, json: JSON.stringify(store.taskBoard, null, 2), table: 'taskBoard' });
+  writes.push({ relPath: CATEGORY_FILES.linkGroups, json: JSON.stringify(store.linkGroups, null, 2), table: 'linkGroups' });
   writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
   return { writes, deletes: [] };
 }
@@ -782,6 +795,7 @@ interface Fp {
   important: string;
   backlog: string;
   taskBoard: string;
+  linkGroups: string;
   trashItems: string;
 }
 
@@ -812,6 +826,7 @@ function fingerprint(): Fp {
     important: JSON.stringify(store.important),
     backlog: JSON.stringify(store.backlog),
     taskBoard: JSON.stringify(store.taskBoard),
+    linkGroups: JSON.stringify(store.linkGroups),
     trashItems: JSON.stringify(store.trashItems),
   };
 }
@@ -874,6 +889,9 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
   }
   if (a.taskBoard !== b.taskBoard) {
     writes.push({ relPath: CATEGORY_FILES.taskBoard, json: JSON.stringify(store.taskBoard, null, 2), table: 'taskBoard' });
+  }
+  if (a.linkGroups !== b.linkGroups) {
+    writes.push({ relPath: CATEGORY_FILES.linkGroups, json: JSON.stringify(store.linkGroups, null, 2), table: 'linkGroups' });
   }
   if (a.trashItems !== b.trashItems) {
     writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
@@ -962,6 +980,7 @@ function mergeIntoStore(data: StorageData): number {
     { key: 'important', items: data.important, numeric: true },
     { key: 'backlog', items: data.backlog, numeric: true },
     { key: 'taskBoard', items: data.taskBoard, numeric: true },
+    { key: 'linkGroups', items: data.linkGroups, numeric: true },
     { key: 'trashItems', items: data.trashItems, numeric: true },
   ];
   for (const { key, items, numeric } of tables) {
@@ -1007,6 +1026,7 @@ function mergeLegacy(legacy: Partial<StoreShape>): void {
     { key: 'important', items: legacy.important },
     { key: 'backlog', items: legacy.backlog },
     { key: 'taskBoard', items: legacy.taskBoard },
+    { key: 'linkGroups', items: legacy.linkGroups },
     { key: 'trashItems', items: legacy.trashItems },
   ];
   for (const { key, items } of tables) {
@@ -1038,6 +1058,7 @@ function liveArr(table: string): any[] {
     case 'important': return store.important;
     case 'backlog': return store.backlog;
     case 'taskBoard': return store.taskBoard;
+    case 'linkGroups': return store.linkGroups;
     default: return [];
   }
 }
@@ -1133,6 +1154,7 @@ function applyData(data: StorageData): void {
   store.important = data.important;
   store.backlog = data.backlog;
   store.taskBoard = data.taskBoard;
+  store.linkGroups = data.linkGroups;
 }
 
 async function readLegacyTablesSafe(): Promise<Partial<StoreShape> | null> {

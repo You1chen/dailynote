@@ -10,7 +10,8 @@ const api = {
   remove: (id: number) => deleteImportant(id),
 };
 
-/** 重要的事：与 DDL 同一个页面组件，只是文案不同（三天内冒气泡） */
+/** 重要的事：与 DDL 同一个页面组件，只是文案不同（三天内冒气泡）
+ *  关联内容只给 DDL 用，这里显式关闭（allowLinks 默认 false）。 */
 export default function ImportantPage() {
   return (
     <DeadlineListPage<ImportantItem>
@@ -22,6 +23,7 @@ export default function ImportantPage() {
       emptyHint="把快到的重要日子记在这里"
       countText={n => `共 ${n} 件重要的事`}
       icon={Star}
+      allowLinks={false}
       api={api}
     />
   );
