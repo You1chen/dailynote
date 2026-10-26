@@ -337,3 +337,34 @@ body {
 
 /* ============ 滚动条 ============ */
 ::-webkit-scrollbar { width: 0; }
+
+/* ============ 新版本提示（PWA） ============ */
+.app-update-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(78px + var(--safe-bottom));
+  transform: translateX(-50%);
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px 9px 16px;
+  border-radius: 999px;
+  background: var(--color-text);
+  color: var(--color-surface);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-lg);
+  animation: fadeInUp 0.25s ease-out;
+}
+
+.app-update-bar button {
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: var(--color-primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}

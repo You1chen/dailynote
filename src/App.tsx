@@ -20,6 +20,7 @@ import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import { useBacklogBadge } from './hooks/useBacklog';
 import { useDdlBadge } from './hooks/useDdlBadge';
 import { useImportantBadge } from './hooks/useImportantBadge';
+import { watchServiceWorkerUpdate } from './services/swUpdate';
 import './App.css';
 
 function applyTheme(theme: ThemeMode) {
@@ -37,6 +38,9 @@ function AppShell() {
   const backlogBadge = useBacklogBadge();
   const ddlBadge = useDdlBadge();
   const importantBadge = useImportantBadge();
+  // 有新版本接管（PWA）：提示刷新，避免一直看在旧缓存上
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => { watchServiceWorkerUpdate(() => setUpdateReady(true)); }, []);
 
   // 应用主题
   useEffect(() => {
@@ -71,6 +75,13 @@ function AppShell() {
       </div>
       <TabBar />
       <TaskBall />
+
+      {updateReady && (
+        <div className="app-update-bar" role="status">
+          <span>有新版本</span>
+          <button onClick={() => window.location.reload()}>刷新</button>
+        </div>
+      )}
     </>
   );
 }

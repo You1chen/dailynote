@@ -79,6 +79,7 @@ src/
 │   ├── store.ts        权威存储：内存投影 + 指纹增量写 + 双后端 + 迁移 + 权限守卫
 │   ├── storage.ts      兼容 facade（旧导出名）
 │   ├── ocr.ts          OCR 桥（原生 ML Kit；Web 端不可用）
+│   ├── swUpdate.ts     PWA 更新检测（新版本接管 → 提示刷新）
 │   └── snapshot.ts     启动快照（IndexedDB 缓存，按日期集合判定是否可复用）
 │
 ├── contexts/BackButtonContext.tsx   Android 返回键
@@ -307,6 +308,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 90 | SideNav |
 | 100 | TabBar |
 | 120 | TaskBall |
+| 150 | 新版本提示条 `.app-update-bar` |
 | 200 | `.modal-overlay`（编辑弹窗、列表弹窗） |
 | 300 | 全屏日程、全屏编辑器、SearchOverlay |
 | 310 | 日计划编辑面板、课程详情 |

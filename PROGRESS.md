@@ -995,3 +995,36 @@
       src/components/DeadlineListPage.tsx/.css、src/pages/DdlPage.tsx、src/pages/ImportantPage.tsx、
       src/pages/Trash.tsx、structure.md
 ```
+
+## 2026-10-26 — 旧版本卡在缓存里：加「有新版本 · 刷新」提示
+
+### 问题
+
+Web/PWA 重新构建后打开还是旧页面（例如新加的「DDL 关联」怎么都看不到）。原因不是构建：`/` 返回的是新 `index.html`、新 asset 也是 200；是 Service Worker 的 precache 继续把旧 `index.html` 喂给浏览器。
+
+实证（复制一份 dist 起 preview，先把 index.html 改个标题模拟重新构建）：
+
+| 操作 | 页面标题 |
+| --- | --- |
+| 普通刷新一次 | 仍是旧标题（SW 命中 precache） |
+| 普通刷新两次 | 仍是旧标题（sw.js 没变时浏览器不会更新 SW） |
+| 硬刷新 Ctrl+Shift+R（ignoreCache） | 新标题 ✅ |
+| 清 SW + 清 caches 后刷新 | 新标题 ✅ |
+
+### 实现
+
+- 新增 `services/swUpdate.ts#watchServiceWorkerUpdate`：页面已在 SW 接管状态（`navigator.serviceWorker.controller` 非空）时，一旦 `controllerchange`（新版本接管）就通知上层；另外每次回到前台顺手 `registration.update()`（只查不刷新）。首次访问的 SW 安装不算更新。
+- `App.tsx`：收到通知后在底部弹出 `有新版本 [刷新]` 提示条（`.app-update-bar`，z-index 150），点「刷新」重新加载。原生端没有 Service Worker，模块直接返回。
+
+### 验证
+
+- 构建产物里含 `app-update-bar`；无头 Chrome 打开构建版：先 reload 让页面在「已有 SW 接管」状态下加载 → 无提示条；派发 `controllerchange` → 提示条出现（文案「有新版本 刷新」）→ 点「刷新」页面确实重新加载。
+- `npx tsc --noEmit` 通过；`npx vitest run` **628/628**（25 文件）；`npm run build` 通过。
+- 实证用的 `dist-test/`、临时 CDP 脚本与截图已删除。
+
+### 涉及文件
+
+```
+新增：src/services/swUpdate.ts
+修改：src/App.tsx、src/App.css、structure.md
+```
