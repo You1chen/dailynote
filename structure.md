@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| 应用版本 | 1.2.2（`versionName 1.2.2` / `versionCode 5`） |
+| 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
 | 规模 | `src/` 92 文件；`test/` 25 文件 / 628 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |

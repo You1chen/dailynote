@@ -1028,3 +1028,16 @@ Web/PWA 重新构建后打开还是旧页面（例如新加的「DDL 关联」�
 新增：src/services/swUpdate.ts
 修改：src/App.tsx、src/App.css、structure.md
 ```
+
+## 2026-10-26 — 版本 1.3.0（6）并重新打包 APK
+
+### 内容
+
+- 把这一天的三件事打进手机包：计划页「只看未来」、TODO 全部完成庆祝弹窗、DDL 关联内容（内置课程组 + 自定义分组）。
+- `versionCode 5 → 6`、`versionName 1.2.2 → 1.3.0`（`android/app/build.gradle`、`package.json`、`package-lock.json` 根包字段、structure.md），装上后在启动页能看到版本号，便于确认换的是新包。
+- `npm run build:apk` 成功：`android/app/build/outputs/apk/debug/app-debug.apk`，**24.65 MB**，`output-metadata.json` 里 versionCode 6 / versionName 1.3.0；APK 内含 `assets/public/index.html`、新 bundle、`classes.dex`、`AndroidManifest.xml`、`lib/arm64-v8a/libmlkit_google_ocr_pipeline.so`。
+- 打完 APK 后重新跑了一次 `npm run build`，把 `dist/` 恢复成 Web/PWA 产物（APK 构建会把它改成 Capacitor 版本）。
+
+### 备注
+
+- 打包命令因为 Gradle daemon 继承了 stdout，会让外层任务一直「不结束」——APK 其实 1 分钟就产出了（11:57:44），按文件时间戳/`output-metadata.json` 判断完成即可。
