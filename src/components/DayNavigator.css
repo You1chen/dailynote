@@ -49,6 +49,7 @@
 }
 
 .cal-day {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -107,4 +108,26 @@
 
 .cal-day-dot--sel {
   background: #fff;
+}
+
+/* 日期号上的气泡（灵感数量） */
+.cal-day-mark {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--color-warning, #ff9f0a);
+  color: #fff;
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-day-mark--sel {
+  background: #fff;
+  color: var(--color-warning, #ff9f0a);
 }

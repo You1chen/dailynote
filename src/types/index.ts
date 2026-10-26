@@ -183,6 +183,16 @@ export interface LinkGroup {
   updatedAt: number;
 }
 
+/** 灵感：随手记下的一句话，后期会重点扩展（先保持字段宽松） */
+export interface Idea {
+  id?: number;
+  text: string;              // 内容
+  date: string;              // "YYYY-MM-DD"，记下它的日子
+  source?: 'todo' | 'harvest' | 'other';  // 记录入口，便于以后做来源统计
+  tags?: string[];           // 预留：标签
+  createdAt: number;
+  updatedAt: number;
+}
 /** DDL 事件（专门收录带截止时间的事项） */
 export interface DdlItem {
   id?: number;

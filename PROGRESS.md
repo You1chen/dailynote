@@ -1106,3 +1106,40 @@ pm run build:apk` 成功（24.65 MB）。
 ```
 修改：src/types/index.ts、src/utils/ddl.ts、src/components/DeadlineListPage.tsx/.css、test/DDL清单/ddlTime.test.ts、structure.md
 ```
+## 2026-10-26 — 重要的事去掉解除、TODO 完成先收输入、下线即时任务、新增灵感
+
+### 需求
+
+1. 重要的事不需要「解除」，过期安静隐藏即可。
+2. TODO 编辑点「完成」时没检查输入框：有内容应先填入再完成。
+3. 计划添加里的「即时任务」与 TODO 重复且不好用，删除。
+4. TODO 面板留一个「灵感」按钮，可记若干条灵感；灵感在收获页的窗口里查看；收获页日历日期号上显示气泡。
+5. 灵感后期会重点加强，字段不要写死。
+
+### 实现
+
+- **重要的事**：`DeadlineListPage` 新增 `allowDismiss` 参数，`ImportantPage` 传 `false`，解除按钮与解除状态不再出现。
+- **TODO 完成**：`finish()` 先看输入框 `pending`，非空就作为新的一行并入（含层级钳制），再保存；
+  同时把就地编辑的值合并进待保存内容，避免"输入了却丢掉"。
+- **即时任务**：删除计划添加面板里的「规划模式 / ⚡ 即时 / 任务形式」入口，只保留预规划。
+  既有数据里的即时块仍按普通时间块渲染，不会显示异常（内部即时分支待后续清理）。
+- **灵感**（新表 `ideas` / `ideas.json`）：
+  - 字段 `text / date / source? / tags?`，保留了 `source` 与 `tags` 给以后扩展（来源统计、标签）。
+  - 存储层 15 张表全部接通：读写、脏检测、导出导入、旧数据兜底、回收站还原。
+  - 入口一：任务面板表头「灵感」，可随手记、按日期看最近 50 条、删除。
+  - 入口二：收获页「灵感 N」按钮，弹窗按当前日期记录与查看。
+  - 日历气泡：`DayNavigator` 新增 `marks` 参数，日期号右上角显示该日灵感条数（有灵感的日期不再是灰点）。
+### 验证
+
+- 新增 `test/灵感/ideas.test.ts` 6 项（往返、排序、更新、回收站还原、initStore 后仍在、导出导入）。
+- 
+px tsc --noEmit` 通过；
+px vitest run` **645/645**（26 文件）；
+pm run build:apk` 成功（24.65 MB）。
+
+### 涉及文件
+
+```
+新增：src/hooks/useIdeas.ts、test/灵感/ideas.test.ts
+修改：src/types/index.ts、src/services/store.ts、src/db/index.ts、src/components/DeadlineListPage.tsx、src/pages/ImportantPage.tsx、src/components/TaskBall.tsx/.css、src/components/DayNavigator.tsx/.css、src/pages/Harvest.tsx/.css、src/pages/DailyPlan.tsx、structure.md
+```

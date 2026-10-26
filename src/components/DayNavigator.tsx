@@ -12,9 +12,11 @@ interface Props {
   date: string; // "YYYY-MM-DD"
   onDateChange: (date: string) => void;
   compact?: boolean;
+  /** 日期 → 数量：有值时在日期号上显示气泡（如收获页的灵感数） */
+  marks?: Record<string, number>;
 }
 
-export default function DayNavigator({ date, onDateChange, compact }: Props) {
+export default function DayNavigator({ date, onDateChange, compact, marks }: Props) {
   const selectedDate = new Date(date + 'T00:00:00');
   const [viewMonth, setViewMonth] = useState(startOfMonth(selectedDate));
   const [datesWithPlan, setDatesWithPlan] = useState<Set<string>>(new Set());
@@ -128,7 +130,11 @@ export default function DayNavigator({ date, onDateChange, compact }: Props) {
                   onClick={() => onDateChange(dateStr)}
                 >
                   <span className="cal-day-num">{format(d, 'd')}</span>
-                  {hasPlan && <span className={`cal-day-dot ${isSelected ? 'cal-day-dot--sel' : ''}`} />}
+                  {marks?.[dateStr] ? (
+                    <span className={`cal-day-mark ${isSelected ? 'cal-day-mark--sel' : ''}`}>{marks[dateStr]}</span>
+                  ) : hasPlan ? (
+                    <span className={`cal-day-dot ${isSelected ? 'cal-day-dot--sel' : ''}`} />
+                  ) : null}
                 </button>
               );
             })}

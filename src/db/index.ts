@@ -6,7 +6,7 @@
  * 保持与旧版完全一致的导出函数签名，页面/Hook 无需改动。
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
 import { toggleLeafDone, removeLeaf, normalizeOrder } from '../utils/taskTree';
@@ -453,6 +453,12 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
           store.backlog.push(rec);
           break;
         }
+        case 'ideas': {
+          const rec = originalData as Idea;
+          if (rec.id != null && store.ideas.some(i => i.id === rec.id)) { ok = false; return; }
+          store.ideas.push(rec);
+          break;
+        }
         case 'linkGroups': {
           const rec = originalData as LinkGroup;
           if (rec.id != null && store.linkGroups.some(g => g.id === rec.id)) { ok = false; return; }
@@ -621,6 +627,48 @@ export async function deleteTaskTemplate(id: number): Promise<void> {
   }, { writeOrder: ['trashItems', 'taskTemplates'] });
 }
 
+// ============ 灵感 CRUD ============
+
+/** 按日期倒序、同日按创建时间倒序 */
+export async function getAllIdeas(): Promise<Idea[]> {
+  return [...store.ideas].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return b.createdAt - a.createdAt;
+  });
+}
+
+export async function saveIdea(item: Idea): Promise<number> {
+  let resultId = 0;
+  await mutate(() => {
+    if (item.id != null) {
+      const idx = store.ideas.findIndex(x => x.id === item.id);
+      if (idx >= 0) store.ideas[idx] = { ...item, updatedAt: Date.now() };
+      resultId = item.id;
+      return;
+    }
+    resultId = allocId('ideas');
+    store.ideas.push({ ...item, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+export async function deleteIdea(id: number): Promise<void> {
+  await mutate(() => {
+    const item = store.ideas.find(x => x.id === id);
+    if (item) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'ideas',
+        originalId: id,
+        title: `灵感 - ${item.text.slice(0, 12)}`,
+        originalData: JSON.parse(JSON.stringify(item)),
+        deletedAt: Date.now(),
+      });
+      store.ideas = store.ideas.filter(x => x.id !== id);
+      cleanOldTrashSync();
+    }
+  }, { writeOrder: ['trashItems', 'ideas'] });
+}
 // ============ 遗留问题 CRUD ============
 
 export async function getAllBacklog(): Promise<BacklogItem[]> {

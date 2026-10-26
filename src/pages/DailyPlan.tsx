@@ -825,43 +825,9 @@ export default function DailyPlanPage() {
             </h3>
 
             <div className="bs-body">
-              {/* 规划模式切换 */}
-              <div className="form-group">
-                <label className="label">规划模式</label>
-                <div className="bs-time-mode">
-                  <button
-                    className={`bs-mode-btn ${planningMode === 'pre' ? 'bs-mode-btn--active' : ''}`}
-                    onClick={() => setPlanningMode('pre')}
-                  >📅 预规划</button>
-                  <button
-                    className={`bs-mode-btn ${planningMode === 'instant' ? 'bs-mode-btn--active' : ''}`}
-                    onClick={() => {
-                      setPlanningMode('instant');
-                      // 保留切换前的开始时间，并冻结每30秒的自动跟随，避免时间被重置为当前时刻
-                      manualStartRef.current = true;
-                    }}
-                  >⚡ 即时</button>
-                </div>
-              </div>
+                            {/* 即时任务已下线：只保留预规划 */}
 
-              {/* 即时模式下：整块内容 / 清单模式 */}
-              {planningMode === 'instant' && (
-                <div className="form-group">
-                  <label className="label">任务形式</label>
-                  <div className="bs-time-mode">
-                    <button
-                      className={`bs-mode-btn ${instantStyle === 'block' ? 'bs-mode-btn--active' : ''}`}
-                      onClick={() => setInstantStyle('block')}
-                    >📦 整块内容</button>
-                    <button
-                      className={`bs-mode-btn ${instantStyle === 'list' ? 'bs-mode-btn--active' : ''}`}
-                      onClick={() => setInstantStyle('list')}
-                    >📋 清单模式</button>
-                  </div>
-                </div>
-              )}
-
-              {/* 预规划模式 或 即时整块模式：显示时间设置 */}
+{/* 预规划模式 或 即时整块模式：显示时间设置 */}
               {(planningMode === 'pre' || instantStyle === 'block') && (<>
                 <div className="form-group">
                   <label className="label">时间设置</label>

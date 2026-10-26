@@ -416,3 +416,38 @@
   color: var(--color-primary);
   padding: 3px 0;
 }
+
+/* 灵感 */
+.tb-head-acts { display: flex; gap: 10px; }
+
+.tb-idea-input {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 10px;
+}
+
+.tb-idea-input .tb-input { flex: 1; }
+
+.tb-idea-list { max-height: 46vh; overflow-y: auto; }
+
+.tb-idea-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 16px;
+  border-bottom: 1px solid rgba(17, 17, 27, 0.05);
+}
+
+.tb-idea-date {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-idea-text {
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--color-text);
+  word-break: break-word;
+}

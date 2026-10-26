@@ -63,6 +63,8 @@ export interface DeadlineListProps<T extends DeadlineBase> {
   countText: (n: number) => string;
   /** 过期超过多少分钟就收起来（不传 = 全部显示） */
   hideAfterMinutes?: number;
+  /** 是否提供「解除威胁」（重要的事不需要） */
+  allowDismiss?: boolean;
   /** 是否允许「关联内容」（课程 / 自定义分组）。只有 DDL 用，重要的事传 false */
   allowLinks?: boolean;
   icon: LucideIcon;
@@ -87,6 +89,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   countText,
   hideAfterMinutes,
   allowLinks = false,
+  allowDismiss = true,
   icon: Icon,
   api,
 }: DeadlineListProps<T>) {
@@ -385,7 +388,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
       )}
 
       <div className="ddl-card-actions">
-        {((item as { dismissedAt?: number }).dismissedAt ?? 0) > 0 ? (
+        {!allowDismiss ? null : ((item as { dismissedAt?: number }).dismissedAt ?? 0) > 0 ? (
           <button
             className="btn btn-ghost btn-icon ddl-card-restore"
             title="恢复显示"
