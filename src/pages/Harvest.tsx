@@ -5,6 +5,7 @@ import DayNavigator from '../components/DayNavigator';
 import FullscreenEditor from '../components/FullscreenEditor';
 import { useHarvests } from '../hooks/useHarvests';
 import { useIdeas } from '../hooks/useIdeas';
+import MindSheet from '../components/MindSheet';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { todayStr } from '../types';
 import type { Harvest } from '../types';
@@ -43,10 +44,10 @@ export default function HarvestPage() {
     if (d) setDate(d);
   }, [searchParams]);
   const { harvests, loading, addOrUpdate, remove } = useHarvests(date);
-  const { ideas, addIdea, removeIdea, countByDate } = useIdeas();
+  const { byKind, countByDate } = useIdeas();
   const [editorOpen, setEditorOpen] = useState(false);
   const [ideaOpen, setIdeaOpen] = useState(false);
-  const [ideaDraft, setIdeaDraft] = useState('');
+
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
 
@@ -96,7 +97,7 @@ export default function HarvestPage() {
           <Edit3 size={18} /> 记录今天的收获
         </button>
         <button className="btn btn-outline harvest-idea-btn" onClick={() => setIdeaOpen(true)}>
-          <Lightbulb size={18} /> 灵感{ideas.length > 0 ? ` ${ideas.length}` : ''}
+          <Lightbulb size={18} /> 灵感{byKind.idea.length > 0 ? ` ${byKind.idea.length}` : ''}
         </button>
       </div>
 
@@ -139,55 +140,12 @@ export default function HarvestPage() {
       )}
 
       {ideaOpen && (
-        <div className="modal-overlay" onClick={() => setIdeaOpen(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="harvest-idea-head">
-              <h3 className="modal-title">灵感</h3>
-              <button className="btn btn-ghost btn-icon" onClick={() => setIdeaOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="harvest-idea-input">
-              <input
-                className="input"
-                value={ideaDraft}
-                placeholder="想到什么就写什么"
-                onChange={e => setIdeaDraft(e.target.value)}
-                onKeyDown={async e => {
-                  if (e.key !== 'Enter') return;
-                  e.preventDefault();
-                  const text = ideaDraft.trim();
-                  if (!text) return;
-                  setIdeaDraft('');
-                  await addIdea(text, date, 'harvest');
-                }}
-              />
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={async () => {
-                  const text = ideaDraft.trim();
-                  if (!text) return;
-                  setIdeaDraft('');
-                  await addIdea(text, date, 'harvest');
-                }}
-              >记下</button>
-            </div>
-
-            <div className="harvest-idea-list">
-              {ideas.filter(i => i.date === date).length === 0 ? (
-                <p className="harvest-idea-empty">{date} 还没有灵感</p>
-              ) : ideas.filter(i => i.date === date).map(i => (
-                <div key={i.id} className="harvest-idea-item">
-                  <span className="harvest-idea-text">{i.text}</span>
-                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => i.id != null && removeIdea(i.id)}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <MindSheet
+          initialKind="idea"
+          kinds={['idea']}
+          date={date}
+          onClose={() => setIdeaOpen(false)}
+        />
       )}
       <FullscreenEditor
         visible={editorOpen}

@@ -1143,3 +1143,39 @@ pm run build:apk` 成功（24.65 MB）。
 新增：src/hooks/useIdeas.ts、test/灵感/ideas.test.ts
 修改：src/types/index.ts、src/services/store.ts、src/db/index.ts、src/components/DeadlineListPage.tsx、src/pages/ImportantPage.tsx、src/components/TaskBall.tsx/.css、src/components/DayNavigator.tsx/.css、src/pages/Harvest.tsx/.css、src/pages/DailyPlan.tsx、structure.md
 ```
+## 2026-10-27 — 灵感升级为「杂念」：小愿望 / 琐事 / 灵感三型
+
+### 需求
+
+原「灵感」单入口太草率。改为「杂念」，点击后三选一，三型各自一套界面与图标：
+小愿望（活泼俏皮，可加音效）、琐事（简约严肃）、灵感（标题 + 详情 + 自定义标签，灵光一闪的感觉）。
+灵感仍走原路径；小愿望与琐事放在计划页。
+
+### 实现
+
+- **数据**：`Idea` 增加 `kind: 'wish' | 'chore' | 'idea'`、`title?`、`tags?`；
+ormalizeIdea()` 把缺 `kind` 的旧数据视为灵感。
+- **任务面板**：表头「灵感」改为「杂念」，打开新的 `MindSheet`。
+- **`MindSheet` 三套界面**（`components/MindSheet.tsx/.css`）：
+  - 小愿望：粉橙渐变、圆形加号、卡片弹入动画；新增时用 Web Audio 合成一声「叮」（`utils/sound.ts`，不引入音频资源）。
+  - 琐事：细边框输入、短横线列表、无动画、灰黑色系。
+  - 灵感：渐变卡片 + 缓慢流动的光晕，标题输入、详情文本域、标签胶囊（回车添加、退格删除）、「记住这一下」按钮。
+  - 支持 `kinds` 参数：收获页只用灵感一类时自动隐藏切换条。
+- **计划页**：日期下增加一条「小愿望 N / 琐事 N」药丸入口（有内容才出现），点击直接打开对应类别的面板。
+- **收获页**：灵感按钮改为复用 `MindSheet`（只开灵感一类），删掉原来那套重复的弹窗。
+- 日历气泡仍然只统计灵感。
+
+### 验证
+
+- `test/灵感/ideas.test.ts` 扩到 10 项（三型互不混淆、标题/标签往返、旧数据视为灵感、删除互不影响）。
+- 
+px tsc --noEmit` 通过；
+px vitest run` **649/649**（26 文件）；
+pm run build:apk` 成功（24.7 MB）。
+
+### 涉及文件
+
+```
+新增：src/components/MindSheet.tsx/.css、src/utils/sound.ts
+修改：src/types/index.ts、src/hooks/useIdeas.ts、src/services/store.ts、src/db/index.ts、src/components/TaskBall.tsx、src/pages/Harvest.tsx、src/pages/DailyPlan.tsx/.css、test/灵感/ideas.test.ts、structure.md
+```

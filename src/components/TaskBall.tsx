@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTaskBoard } from '../hooks/useTaskBoard';
-import { useIdeas } from '../hooks/useIdeas';
+import MindSheet from './MindSheet';
 import { usePreferences } from '../hooks/usePreferences';
 import CelebrationDialog from './CelebrationDialog';
 import type { TaskLeaf } from '../types';
@@ -16,7 +16,7 @@ import {
 } from '../utils/taskTree';
 import './TaskBall.css';
 
-type Panel = 'list' | 'editor' | 'ideas' | null;
+type Panel = 'list' | 'editor' | null;
 
 const POS_KEY = 'dailynote_task_ball_pos';
 
@@ -40,10 +40,9 @@ function clamp(n: number, min: number, max: number): number {
 export default function TaskBall() {
   const { nodes, leaves, undone, saveTree, toggle, remove, reorder } = useTaskBoard();
   const { prefs } = usePreferences();
-  const { ideas, addIdea, removeIdea } = useIdeas();
 
   const [panel, setPanel] = useState<Panel>(null);
-  const [ideaDraft, setIdeaDraft] = useState('');
+  const [mindOpen, setMindOpen] = useState(false);
   const [mode, setMode] = useState<'lines' | 'text'>('lines');
   const [lines, setLines] = useState<TaskLine[]>([]);
   const [text, setText] = useState('');
@@ -277,7 +276,7 @@ export default function TaskBall() {
             <div className="tb-head">
               <span className="tb-title">任务</span>
               <span className="tb-head-acts">
-                <button className="tb-link" onClick={() => setPanel('ideas')}>灵感</button>
+                <button className="tb-link" onClick={() => setMindOpen(true)}>杂念</button>
                 <button className="tb-link" onClick={openEditor}>继续编辑</button>
               </span>
             </div>
@@ -314,57 +313,6 @@ export default function TaskBall() {
         </div>
       )}
 
-      {panel === 'ideas' && (
-        <div className="tb-mask" onClick={() => setPanel(null)}>
-          <div className="tb-sheet" onClick={e => e.stopPropagation()}>
-            <div className="tb-grip" />
-            <div className="tb-head">
-              <span className="tb-title">灵感</span>
-              <button className="tb-link" onClick={() => setPanel('list')}>返回任务</button>
-            </div>
-
-            <div className="tb-idea-input">
-              <input
-                className="tb-input"
-                value={ideaDraft}
-                placeholder="记下此刻的想法"
-                onChange={e => setIdeaDraft(e.target.value)}
-                onKeyDown={async e => {
-                  if (e.key !== 'Enter') return;
-                  e.preventDefault();
-                  const text = ideaDraft.trim();
-                  if (!text) return;
-                  setIdeaDraft('');
-                  await addIdea(text, undefined, 'todo');
-                }}
-              />
-              <button
-                className="tb-key"
-                onClick={async () => {
-                  const text = ideaDraft.trim();
-                  if (!text) return;
-                  setIdeaDraft('');
-                  await addIdea(text, undefined, 'todo');
-                }}
-              >记下</button>
-            </div>
-
-            <div className="tb-list tb-idea-list">
-              {ideas.length === 0 ? (
-                <div className="tb-empty">还没有灵感</div>
-              ) : ideas.slice(0, 50).map(idea => (
-                <div key={idea.id} className="tb-idea-item">
-                  <span className="tb-idea-date">{idea.date.slice(5)}</span>
-                  <span className="tb-idea-text">{idea.text}</span>
-                  <button className="tb-ic" onClick={() => idea.id != null && removeIdea(idea.id)}>✕</button>
-                </div>
-              ))}
-            </div>
-
-            <div className="tb-foot">共 {ideas.length} 条灵感</div>
-          </div>
-        </div>
-      )}
       {panel === 'editor' && (
         <div className="tb-mask" onClick={() => setPanel(null)}>
           <div className="tb-sheet tb-sheet--editor" onClick={e => e.stopPropagation()}>
@@ -469,6 +417,7 @@ export default function TaskBall() {
         </div>
       )}
 
+      {mindOpen && <MindSheet onClose={() => setMindOpen(false)} />}
       {/* 全部完成：自动跳出庆祝 */}
       <CelebrationDialog
         open={celebration !== null}

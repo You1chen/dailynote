@@ -3,6 +3,8 @@ import { Plus, X, Save, Trash2, CheckCircle2, Settings, Maximize2, ClipboardList
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import FullscreenSchedule from '../components/FullscreenSchedule';
+import MindSheet from '../components/MindSheet';
+import { useIdeas } from '../hooks/useIdeas';
 import PreferencePanel from '../components/PreferencePanel';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useDailyPlan } from '../hooks/useDailyPlan';
@@ -98,6 +100,8 @@ export default function DailyPlanPage() {
   const [timeMode, setTimeMode] = useState<'range' | 'duration'>('range');
   const [durationMinutes, setDurationMinutes] = useState(prefs.defaultDuration);
   const [planningMode, setPlanningMode] = useState<'pre' | 'instant'>('pre');
+  const [mindKind, setMindKind] = useState<'wish' | 'chore' | null>(null);
+  const { byKind: minds } = useIdeas();
   const [instantStyle, setInstantStyle] = useState<'block' | 'list'>('block');
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -647,6 +651,21 @@ export default function DailyPlanPage() {
           </button>
         </div>
       </div>
+
+      {(minds.wish.length > 0 || minds.chore.length > 0) && (
+        <div className="dp-minds">
+          {minds.wish.length > 0 && (
+            <button className="dp-mind dp-mind--wish" onClick={() => setMindKind('wish')}>
+              <span className="dp-mind-dot" /> 小愿望 {minds.wish.length}
+            </button>
+          )}
+          {minds.chore.length > 0 && (
+            <button className="dp-mind dp-mind--chore" onClick={() => setMindKind('chore')}>
+              <span className="dp-mind-dash" /> 琐事 {minds.chore.length}
+            </button>
+          )}
+        </div>
+      )}
       </div>
 
       {/* 时间网格 */}
@@ -786,6 +805,15 @@ export default function DailyPlanPage() {
           })()}
         </div>
       </div>
+
+      {mindKind && (
+        <MindSheet
+          initialKind={mindKind}
+          kinds={[mindKind]}
+          date={date}
+          onClose={() => setMindKind(null)}
+        />
+      )}
 
       {/* 全屏日程视图 */}
       <FullscreenSchedule

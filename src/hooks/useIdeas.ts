@@ -1,29 +1,41 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAllIdeas, saveIdea, deleteIdea } from '../db';
-import { todayStr } from '../types';
-import type { Idea } from '../types';
+import { todayStr, normalizeIdea } from '../types';
+import type { Idea, MindKind } from '../types';
 
-/** 灵感：随手记下的一句话，按日期倒序 */
+export interface NewMind {
+  kind: MindKind;
+  text: string;
+  title?: string;
+  tags?: string[];
+  date?: string;
+  source?: Idea['source'];
+}
+
+/** 杂念：小愿望 / 琐事 / 灵感，共用一张表，按日期倒序 */
 export function useIdeas() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    setIdeas(await getAllIdeas());
+    setIdeas((await getAllIdeas()).map(normalizeIdea));
   }, []);
 
   useEffect(() => {
     (async () => { await reload(); setLoading(false); })();
   }, [reload]);
 
-  /** 新增一条（默认记在今天），返回新 id */
-  const addIdea = useCallback(async (text: string, date = todayStr(), source: Idea['source'] = 'todo') => {
-    const trimmed = text.trim();
-    if (!trimmed) return 0;
+  /** 新增一条杂念，返回新 id */
+  const addMind = useCallback(async (input: NewMind) => {
+    const text = input.text.trim();
+    if (!text) return 0;
     const id = await saveIdea({
-      text: trimmed,
-      date,
-      source,
+      kind: input.kind,
+      title: input.title?.trim() || undefined,
+      text,
+      date: input.date || todayStr(),
+      source: input.source ?? 'todo',
+      tags: input.tags?.map(t => t.trim()).filter(Boolean) ?? [],
       createdAt: 0,
       updatedAt: 0,
     });
@@ -31,10 +43,10 @@ export function useIdeas() {
     return id;
   }, [reload]);
 
-  const updateIdea = useCallback(async (idea: Idea, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    await saveIdea({ ...idea, text: trimmed });
+  const updateIdea = useCallback(async (idea: Idea, patch: Partial<Idea>) => {
+    const next = { ...idea, ...patch };
+    if (!next.text.trim()) return;
+    await saveIdea(next);
     await reload();
   }, [reload]);
 
@@ -43,12 +55,21 @@ export function useIdeas() {
     await reload();
   }, [reload]);
 
-  /** 某天有几条灵感（日历气泡用） */
+  const byKind = useMemo(() => ({
+    wish: ideas.filter(i => i.kind === 'wish'),
+    chore: ideas.filter(i => i.kind === 'chore'),
+    idea: ideas.filter(i => i.kind === 'idea'),
+  }), [ideas]);
+
+  /** 某天有几条灵感（日历气泡用，只算灵感） */
   const countByDate = useCallback((): Record<string, number> => {
     const map: Record<string, number> = {};
-    for (const i of ideas) map[i.date] = (map[i.date] ?? 0) + 1;
+    for (const i of ideas) {
+      if (i.kind !== 'idea') continue;
+      map[i.date] = (map[i.date] ?? 0) + 1;
+    }
     return map;
   }, [ideas]);
 
-  return { ideas, loading, addIdea, updateIdea, removeIdea, countByDate, reload };
+  return { ideas, byKind, loading, addMind, updateIdea, removeIdea, countByDate, reload };
 }

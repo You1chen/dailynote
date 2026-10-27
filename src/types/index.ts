@@ -183,15 +183,28 @@ export interface LinkGroup {
   updatedAt: number;
 }
 
-/** 灵感：随手记下的一句话，后期会重点扩展（先保持字段宽松） */
+/** 杂念的三种：小愿望 / 琐事 / 灵感 */
+export type MindKind = 'wish' | 'chore' | 'idea';
+
+/**
+ * 杂念：一句话的愿望与琐事、带标题详情的灵感，共用一张表。
+ * kind 缺省视为 'idea'（兼容只有灵感的旧数据）。
+ */
 export interface Idea {
   id?: number;
-  text: string;              // 内容
+  kind?: MindKind;
+  title?: string;            // 灵感标题（愿望/琐事不用）
+  text: string;              // 详情 / 一句话
   date: string;              // "YYYY-MM-DD"，记下它的日子
-  source?: 'todo' | 'harvest' | 'other';  // 记录入口，便于以后做来源统计
-  tags?: string[];           // 预留：标签
+  source?: 'todo' | 'harvest' | 'plan' | 'other';
+  tags?: string[];           // 自定义标签（灵感用）
   createdAt: number;
   updatedAt: number;
+}
+
+/** 把旧数据补齐成新形状 */
+export function normalizeIdea(idea: Idea): Idea {
+  return { ...idea, kind: idea.kind ?? 'idea', tags: idea.tags ?? [] };
 }
 /** DDL 事件（专门收录带截止时间的事项） */
 export interface DdlItem {

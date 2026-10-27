@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 92 文件；`test/` 26 文件 / 645 用例 |
+| 规模 | `src/` 92 文件；`test/` 26 文件 / 649 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -130,7 +130,7 @@ utils/  →  types/
 | taskTemplates | `templates.json` | 数组 | `name, items[]` |
 | courses | `courses.json` | 数组 | `dayOfWeek:number[], weekType, startWeek, weekCount` |
 | semester | `semester.json` | 单记录（id=1） | `startDate:string\|null, specialDates[]` |
-| ideas | `ideas.json` | 数组 | `text, date, source?`（灵感的展示入口在收获页与任务面板） |
+| ideas | `ideas.json` | 数组 | 杂念：`kind`(wish/chore/idea)、`title?`、`text`、`date`、`tags?`；缺 `kind` 视为 idea |
 | ddls | `ddls.json` | 数组 | `name, deadlineDate, deadlineTime, location, notes, images[], links[]`；`dismissedAt>0` = 已解除威胁（褪色 30 秒后隐藏） |
 | important | `important.json` | 数组 | 同 ddls（`links` 不使用） |
 | backlog | `backlog.json` | 数组 | `title, startMode, startAt, startText, blocker, status` |
@@ -323,7 +323,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npx vitest run`：26 文件 / 645 用例。
+`npx vitest run`：26 文件 / 649 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -339,7 +339,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 时间网格点击映射/futureWindow | 19 | 只看未来：折叠起点、映射与反算、跨起点块、边界与密度 |
 | 任务/celebration | 7 | 全部完成庆祝的判定（最后一条才弹） |
 | 偏好设置/avatarCrop | 17 | 缩放、钳制、裁剪矩形 |
-| 灵感/ideas | 6 | ideas.json 往返、排序、更新、回收站还原、导出导入 |
+| 灵感/ideas | 10 | ideas.json 往返、排序、更新、回收站还原、导出导入 |
 | 识别/extract | 41 | 全角、补年份、相对日期、地点防误判、要求/邮箱、去重与冲突、图与图冲突、状态栏时钟与界面噪声回归 |
 | 重要的事/important | 16 | CRUD、回收站、持久化、三天阈值、过期收起 |
 | 时间网格点击映射/blockRenderRect | 16 | 睡眠折叠下的块矩形 |
@@ -353,7 +353,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 数据存储/storageAccess | 8 | 权限守卫、阻塞时零写入 |
 | 数据存储/nativeWriteEncoding | 3 | 原生写入 utf8 与往返 |
 | 数据存储/startupSnapshot | 6 | 快照命中、目录变化失效、rescan 读入外部改动、换目录不复用 |
-| **合计** | **645** | 26 个文件 |
+| **合计** | **649** | 26 个文件 |
 
 环境：无 `vitest.config.*`，`vite.config.ts` 无 `test` 段；`tsconfig.json` 的 `include:["src"]` 意味着 `tsc` 不检查 `test/`。
 

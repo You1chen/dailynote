@@ -15,6 +15,7 @@ const memStore: Record<string, string> = {};
 
 import { _resetForTest, initStore, exportJSON, importJSONIntoStore, getStore } from '../../src/services/store';
 import * as db from '../../src/db';
+import { normalizeIdea } from '../../src/types';
 
 beforeEach(async () => {
   Object.keys(memStore).forEach(k => delete memStore[k]);
@@ -81,5 +82,42 @@ describe('灵感', () => {
     expect(s.ideas).toHaveLength(1);
     expect(s.ddls).toHaveLength(0);
     expect(s.harvests).toHaveLength(0);
+  });
+});
+
+describe('杂念三型', () => {
+  it('kind 区分小愿望 / 琐事 / 灵感，互不混淆', async () => {
+    await db.saveIdea({ kind: 'wish', text: '想去看海', date: '2026-10-27', createdAt: 0, updatedAt: 0 });
+    await db.saveIdea({ kind: 'chore', text: '交电费', date: '2026-10-27', createdAt: 0, updatedAt: 0 });
+    await db.saveIdea({ kind: 'idea', title: '一个念头', text: '详情', date: '2026-10-27', createdAt: 0, updatedAt: 0 });
+
+    const list = (await db.getAllIdeas()).map(normalizeIdea);
+    expect(list.filter(i => i.kind === 'wish')).toHaveLength(1);
+    expect(list.filter(i => i.kind === 'chore')).toHaveLength(1);
+    expect(list.filter(i => i.kind === 'idea')).toHaveLength(1);
+  });
+
+  it('灵感可带标题、详情与标签', async () => {
+    const id = await db.saveIdea({
+      kind: 'idea', title: '标题', text: '详情内容',
+      tags: ['产品', '想法'], date: '2026-10-27', createdAt: 0, updatedAt: 0,
+    });
+    const item = (await db.getAllIdeas()).find(i => i.id === id)!;
+    expect(item.title).toBe('标题');
+    expect(item.tags).toEqual(['产品', '想法']);
+  });
+
+  it('旧数据缺 kind 视为灵感', () => {
+    expect(normalizeIdea({ text: 'x', date: '2026-10-27', createdAt: 0, updatedAt: 0 }).kind).toBe('idea');
+    expect(normalizeIdea({ text: 'x', date: '2026-10-27', createdAt: 0, updatedAt: 0 }).tags).toEqual([]);
+  });
+
+  it('三类共用一张表，删除互不影响', async () => {
+    const w = await db.saveIdea({ kind: 'wish', text: '愿望', date: '2026-10-27', createdAt: 0, updatedAt: 0 });
+    await db.saveIdea({ kind: 'chore', text: '琐事', date: '2026-10-27', createdAt: 0, updatedAt: 0 });
+    await db.deleteIdea(w);
+    const list = (await db.getAllIdeas()).map(normalizeIdea);
+    expect(list).toHaveLength(1);
+    expect(list[0].kind).toBe('chore');
   });
 });

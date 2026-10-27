@@ -1295,3 +1295,45 @@
 .dp-fab {
   bottom: calc(72px + var(--safe-bottom));
 }
+
+/* 计划页的杂念条：小愿望活泼、琐事克制 */
+.dp-minds {
+  display: flex;
+  gap: 8px;
+  padding: 2px 16px 10px;
+}
+
+.dp-mind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.dp-mind--wish {
+  background: linear-gradient(135deg, #ffe6f2, #fff3d6);
+  color: #c2537f;
+}
+
+.dp-mind--chore {
+  background: #eef0f3;
+  color: #4b5260;
+}
+
+.dp-mind-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff8ab5;
+}
+
+.dp-mind-dash {
+  width: 9px;
+  height: 1.5px;
+  background: #8b93a1;
+}
