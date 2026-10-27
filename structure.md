@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 92 文件；`test/` 26 文件 / 649 用例 |
+| 规模 | `src/` 92 文件；`test/` 26 文件 / 654 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -134,7 +134,7 @@ utils/  →  types/
 | ddls | `ddls.json` | 数组 | `name, deadlineDate, deadlineTime, location, notes, images[], links[]`；`dismissedAt>0` = 已解除威胁（褪色 30 秒后隐藏） |
 | important | `important.json` | 数组 | 同 ddls（`links` 不使用） |
 | backlog | `backlog.json` | 数组 | `title, startMode, startAt, startText, blocker, status` |
-| taskBoard | `taskboard.json` | 单记录（id=1） | `nodes:TaskNode[], order:string[]` |
+| taskBoard | `taskboard.json` | 单记录（id=1） | `nodes:TaskNode[], order:string[]`；末级节点可带 `shelved`（搁置）与 `doneAt`（完成后 30 秒隐去） |
 | linkGroups | `linkGroups.json` | 数组 | `name, items:LinkGroupItem[]`（自定义关联分组；内置「课程」组不落库） |
 | trashItems | `trash.json` | 数组 | `originalTable, originalId, originalData, deletedAt` |
 
@@ -323,7 +323,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npx vitest run`：26 文件 / 649 用例。
+`npx vitest run`：26 文件 / 654 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -331,7 +331,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 数据存储/store | 53 | CRUD、persist、迁移、自愈、导出、课程/DDL 存储 |
 | 课程表/courseSchedule | 32 | 周次、单双周、节假日、当日课程 |
 | 数据导入导出/jsonImport | 23 | 解析、BOM、乱码拒绝、错误分级、往返 |
-| 任务/taskTree | 23 | 文本⇄层级、完整链、状态回填、删除、排序 |
+| 任务/taskTree | 28 | 文本⇄层级、完整链、状态回填、删除、排序 |
 | 遗留问题/backlog | 20 | CRUD、回收站、持久化、历时与宽限 |
 | 搜索/search | 19 | 内容命中、路由、不命中界面文案与日期、DDL 阈值 |
 | 任务清单/taskList | 18 | 创建、切换、排序、日期隔离 |
@@ -353,7 +353,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 数据存储/storageAccess | 8 | 权限守卫、阻塞时零写入 |
 | 数据存储/nativeWriteEncoding | 3 | 原生写入 utf8 与往返 |
 | 数据存储/startupSnapshot | 6 | 快照命中、目录变化失效、rescan 读入外部改动、换目录不复用 |
-| **合计** | **649** | 26 个文件 |
+| **合计** | **654** | 26 个文件 |
 
 环境：无 `vitest.config.*`，`vite.config.ts` 无 `test` 段；`tsconfig.json` 的 `include:["src"]` 意味着 `tsc` 不检查 `test/`。
 

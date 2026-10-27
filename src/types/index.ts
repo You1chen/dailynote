@@ -272,6 +272,10 @@ export interface TaskNode {
   title: string;
   done: boolean;
   children: TaskNode[];
+  /** 已搁置：不进任务清单，进搁置清单 */
+  shelved?: boolean;
+  /** 完成时刻：完成 30 秒后从清单里隐去 */
+  doneAt?: number;
 }
 
 /** 任务板（单记录数组表，id 恒 1） */
@@ -289,6 +293,8 @@ export interface TaskLeaf {
   label: string;     // 显示 "近代物理学实验-ppt"（一级末级则只有自身）
   chain: string[];   // 完整链数组
   done: boolean;
+  shelved?: boolean; // 是否已搁置
+  doneAt?: number;   // 完成时刻（用于 30 秒后隐去）
 }
 
 // ============ 遗留问题（backlog） ============

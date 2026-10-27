@@ -9,7 +9,7 @@
 import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
-import { toggleLeafDone, removeLeaf, normalizeOrder } from '../utils/taskTree';
+import { toggleLeafDone, removeLeaf, setLeafShelved, normalizeOrder } from '../utils/taskTree';
 import { searchStore, type SearchHit } from '../utils/search';
 import { DDL_DEFAULT_TIME } from '../utils/ddl';
 
@@ -735,6 +735,13 @@ export async function saveTaskBoard(next: { nodes: TaskNode[]; order: string[] }
 export async function toggleTaskLeaf(key: string): Promise<void> {
   const board = await getTaskBoard();
   const nodes = toggleLeafDone(board.nodes, key);
+  await saveTaskBoard({ nodes, order: board.order });
+}
+
+/** 搁置 / 撤销搁置：只改标记，链结构原样保留 */
+export async function shelveTaskLeaf(key: string, shelved = true): Promise<void> {
+  const board = await getTaskBoard();
+  const nodes = setLeafShelved(board.nodes, key, shelved);
   await saveTaskBoard({ nodes, order: board.order });
 }
 

@@ -84,6 +84,15 @@ export function prevDoneMap(nodes: TaskNode[]): Map<string, boolean> {
   return map;
 }
 
+/** 旧树里末级的附加状态（搁置 / 完成时刻），编辑文本后按完整链回填 */
+export function prevLeafState(nodes: TaskNode[]): Map<string, { shelved?: boolean; doneAt?: number }> {
+  const map = new Map<string, { shelved?: boolean; doneAt?: number }>();
+  walkLeaves(nodes, (node, chain) => {
+    map.set(leafKey(chain), { shelved: node.shelved, doneAt: node.doneAt });
+  });
+  return map;
+}
+
 /**
  * 行 → 树。
  * - 层级不能跳：超过当前可缩进的层数会被压到最深一层（避免出现断层）
@@ -91,6 +100,7 @@ export function prevDoneMap(nodes: TaskNode[]): Map<string, boolean> {
  */
 export function linesToTree(lines: TaskLine[], prev?: TaskNode[]): TaskNode[] {
   const doneMap = prev ? prevDoneMap(prev) : new Map<string, boolean>();
+  const extraMap = prev ? prevLeafState(prev) : new Map<string, { shelved?: boolean; doneAt?: number }>();
   const root: TaskNode[] = [];
   const stack: TaskNode[] = [];
 
@@ -104,8 +114,14 @@ export function linesToTree(lines: TaskLine[], prev?: TaskNode[]): TaskNode[] {
   }
 
   walkLeaves(root, (node, chain) => {
-    const prevDone = doneMap.get(leafKey(chain));
+    const key = leafKey(chain);
+    const prevDone = doneMap.get(key);
     if (prevDone !== undefined) node.done = prevDone;
+    const extra = extraMap.get(key);
+    if (extra) {
+      if (extra.shelved) node.shelved = true;
+      if (extra.doneAt) node.doneAt = extra.doneAt;
+    }
   });
 
   return root;
@@ -133,7 +149,14 @@ export function walkLeaves(
 export function leavesOf(nodes: TaskNode[], order: string[] = []): TaskLeaf[] {
   const raw: TaskLeaf[] = [];
   walkLeaves(nodes, (node, chain) => {
-    raw.push({ key: leafKey(chain), label: leafLabel(chain), chain, done: node.done });
+    raw.push({
+      key: leafKey(chain),
+      label: leafLabel(chain),
+      chain,
+      done: node.done,
+      shelved: !!node.shelved,
+      doneAt: node.doneAt,
+    });
   });
 
   const idx = new Map<string, number>();
@@ -175,7 +198,10 @@ export function toggleLeafDone(nodes: TaskNode[], key: string): TaskNode[] {
   const rec = (list: TaskNode[], depth: number): TaskNode[] =>
     list.map(n => {
       if (n.title !== parts[depth]) return n;
-      if (depth === parts.length - 1) return { ...n, done: !n.done };
+      if (depth === parts.length - 1) {
+        const done = !n.done;
+        return { ...n, done, doneAt: done ? Date.now() : undefined };
+      }
       return { ...n, children: rec(n.children, depth + 1) };
     });
   return rec(nodes, 0);
@@ -217,4 +243,22 @@ export function normalizeOrder(nodes: TaskNode[], order: string[]): string[] {
   const keep = order.filter(k => keys.includes(k));
   for (const k of keys) if (!keep.includes(k)) keep.push(k);
   return keep;
+}
+
+/** 搁置 / 撤销搁置某个末级（保持链结构不动，只改标记） */
+export function setLeafShelved(
+  nodes: TaskNode[],
+  key: string,
+  shelved: boolean,
+  chain: string[] = [],
+): TaskNode[] {
+  return nodes.map(node => {
+    const nextChain = [...chain, node.title];
+    if (node.children.length === 0) {
+      if (leafKey(nextChain) !== key) return node;
+      return { ...node, shelved };
+    }
+    const children = setLeafShelved(node.children, key, shelved, nextChain);
+    return children === node.children ? node : { ...node, children };
+  });
 }

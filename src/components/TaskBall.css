@@ -451,3 +451,14 @@
   color: var(--color-text);
   word-break: break-word;
 }
+
+/* 搁置清单 */
+.tb-foot--split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tb-foot--split .tb-link {
+  font-size: 12px;
+}

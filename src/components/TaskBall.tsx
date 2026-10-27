@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTaskBoard } from '../hooks/useTaskBoard';
 import MindSheet from './MindSheet';
 import { usePreferences } from '../hooks/usePreferences';
+import { Archive, CornerUpLeft } from 'lucide-react';
 import CelebrationDialog from './CelebrationDialog';
 import type { TaskLeaf } from '../types';
 import type { TaskLine } from '../utils/taskTree';
@@ -16,7 +17,7 @@ import {
 } from '../utils/taskTree';
 import './TaskBall.css';
 
-type Panel = 'list' | 'editor' | null;
+type Panel = 'list' | 'editor' | 'shelved' | null;
 
 const POS_KEY = 'dailynote_task_ball_pos';
 
@@ -38,11 +39,12 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export default function TaskBall() {
-  const { nodes, leaves, undone, saveTree, toggle, remove, reorder } = useTaskBoard();
+  const { nodes, leaves, shelved, undone, saveTree, toggle, remove, shelve, reorder } = useTaskBoard();
   const { prefs } = usePreferences();
 
   const [panel, setPanel] = useState<Panel>(null);
   const [mindOpen, setMindOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const [mode, setMode] = useState<'lines' | 'text'>('lines');
   const [lines, setLines] = useState<TaskLine[]>([]);
   const [text, setText] = useState('');
@@ -246,6 +248,20 @@ export default function TaskBall() {
     return () => window.removeEventListener('dailynote-open-tasks', onOpen);
   }, [leaves.length]);
   const done = useMemo(() => leaves.filter(l => l.done).length, [leaves]);
+
+  /** 完成的条目先褪色显示 30 秒，之后从清单里隐去 */
+  const visibleLeaves = useMemo(
+    () => leaves.filter(l => !(l.done && l.doneAt && now - l.doneAt >= 30_000)),
+    [leaves, now],
+  );
+  const hasRecentDone = leaves.some(l => l.done && l.doneAt && now - l.doneAt < 30_000);
+
+  useEffect(() => {
+    if (!hasRecentDone) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [hasRecentDone]);
+
   const shownLevel = editing ? (lines[editing.index]?.level ?? 0) : level;
 
   /** 勾掉最后一条未完成的 → 立刻庆祝 */
@@ -282,9 +298,9 @@ export default function TaskBall() {
             </div>
 
             <div className="tb-list">
-              {leaves.length === 0 ? (
+              {visibleLeaves.length === 0 ? (
                 <div className="tb-empty">还没有任务</div>
-              ) : leaves.map(leaf => (
+              ) : visibleLeaves.map(leaf => (
                 <div
                   key={leaf.key}
                   data-leaf-key={leaf.key}
@@ -299,6 +315,9 @@ export default function TaskBall() {
                   >⋮⋮</span>
                   <span className="tb-item-text">{leaf.label}</span>
                   <button className="tb-ic" onClick={() => setChain(leaf.chain)}>…</button>
+                  <button className="tb-ic" title="搁置" onClick={() => void shelve(leaf.key, true)}>
+                    <Archive size={13} />
+                  </button>
                   <button
                     className={`tb-ic tb-ic--box ${leaf.done ? 'tb-ic--on' : ''}`}
                     onClick={() => toggleLeaf(leaf)}
@@ -308,20 +327,62 @@ export default function TaskBall() {
               ))}
             </div>
 
-            <div className="tb-foot">待办 {undone} · 已结束 {done}</div>
+            <div className="tb-foot tb-foot--split">
+              <span>待办 {undone} · 已结束 {done}</span>
+              <button className="tb-link" onClick={() => setPanel('shelved')}>
+                搁置清单{shelved.length > 0 ? ` ${shelved.length}` : ''}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      {panel === 'shelved' && (
+        <div className="tb-mask" onClick={() => setPanel(null)}>
+          <div className="tb-sheet" onClick={e => e.stopPropagation()}>
+            <div className="tb-grip" />
+            <div className="tb-head">
+              <span className="tb-title">搁置清单</span>
+              <button className="tb-link" onClick={() => setPanel('list')}>返回任务</button>
+            </div>
+
+            <div className="tb-list">
+              {shelved.length === 0 ? (
+                <div className="tb-empty">没有搁置的任务</div>
+              ) : shelved.map(leaf => (
+                <div key={leaf.key} className={`tb-item ${leaf.done ? 'tb-item--done' : ''}`}>
+                  <span className="tb-item-text">{leaf.label}</span>
+                  <button className="tb-ic" onClick={() => setChain(leaf.chain)}>…</button>
+                  <button
+                    className={`tb-ic tb-ic--box ${leaf.done ? 'tb-ic--on' : ''}`}
+                    onClick={() => toggleLeaf(leaf)}
+                  >✓</button>
+                  <button className="tb-ic" title="并入任务清单" onClick={() => void shelve(leaf.key, false)}>
+                    <CornerUpLeft size={13} />
+                  </button>
+                  <button className="tb-ic" onClick={() => remove(leaf.key)}>✕</button>
+                </div>
+              ))}
+            </div>
+
+            <div className="tb-foot">搁置 {shelved.length} 条 · 并入后回到原位置</div>
+          </div>
+        </div>
+      )}
       {panel === 'editor' && (
         <div className="tb-mask" onClick={() => setPanel(null)}>
           <div className="tb-sheet tb-sheet--editor" onClick={e => e.stopPropagation()}>
             <div className="tb-grip" />
             <div className="tb-head">
               <span className="tb-title">任务</span>
-              <span className="tb-modes">
-                <button className={mode === 'lines' ? 'tb-mode--on' : ''} onClick={() => switchMode('lines')}>层级</button>
-                <button className={mode === 'text' ? 'tb-mode--on' : ''} onClick={() => switchMode('text')}>文本</button>
+              <span className="tb-head-acts">
+                <button className="tb-link" onClick={() => setPanel('shelved')}>
+                  搁置清单{shelved.length > 0 ? ` ${shelved.length}` : ''}
+                </button>
+                <span className="tb-modes">
+                  <button className={mode === 'lines' ? 'tb-mode--on' : ''} onClick={() => switchMode('lines')}>层级</button>
+                  <button className={mode === 'text' ? 'tb-mode--on' : ''} onClick={() => switchMode('text')}>文本</button>
+                </span>
               </span>
             </div>
 

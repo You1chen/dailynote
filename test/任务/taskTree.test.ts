@@ -49,10 +49,13 @@ async function kvKeys(): Promise<string[]> {
   });
 }
 
-import { initStore, importJSONIntoStore, _resetForTest } from '../../src/services/store';
+import {
+  initStore, importJSONIntoStore, _resetForTest } from '../../src/services/store';
 import * as db from '../../src/db';
 import type { TaskNode } from '../../src/types';
 import {
+  setLeafShelved,
+  prevLeafState,
   chainText,
   countUndone,
   leafKey,
@@ -324,5 +327,46 @@ describe('任务板持久化', () => {
     const board = await db.getTaskBoard();
     expect(board.nodes).toEqual([]);
     expect(board.order).toEqual([]);
+  });
+});
+
+describe('搁置与完成时刻', () => {
+  const tree = (): TaskNode[] => linesToTree(parseTaskText('- 学习\n\t- 看书\n\t- 做题\n- 生活\n\t- 买菜'));
+
+  it('搁置只改标记，链结构不动', () => {
+    const nodes = setLeafShelved(tree(), '学习/看书', true);
+    expect(treeToText(nodes)).toBe(treeToText(tree()));
+    const leaves = leavesOf(nodes);
+    expect(leaves.find(l => l.key === '学习/看书')!.shelved).toBe(true);
+    expect(leaves.find(l => l.key === '学习/做题')!.shelved).toBe(false);
+  });
+
+  it('撤销搁置后回到未搁置', () => {
+    const on = setLeafShelved(tree(), '生活/买菜', true);
+    const off = setLeafShelved(on, '生活/买菜', false);
+    expect(leavesOf(off).find(l => l.key === '生活/买菜')!.shelved).toBe(false);
+  });
+
+  it('编辑文本后，搁置状态按完整链保留', () => {
+    const on = setLeafShelved(tree(), '学习/做题', true);
+    const edited = linesToTree(parseTaskText(treeToText(on)), on);
+    expect(leavesOf(edited).find(l => l.key === '学习/做题')!.shelved).toBe(true);
+  });
+
+  it('完成时记录 doneAt，撤销完成时清空', () => {
+    const done = toggleLeafDone(tree(), '学习/看书');
+    const leaf = leavesOf(done).find(l => l.key === '学习/看书')!;
+    expect(leaf.done).toBe(true);
+    expect(typeof leaf.doneAt).toBe('number');
+
+    const undone = toggleLeafDone(done, '学习/看书');
+    expect(leavesOf(undone).find(l => l.key === '学习/看书')!.doneAt).toBeUndefined();
+  });
+
+  it('prevLeafState 给出旧树的附加状态', () => {
+    const on = setLeafShelved(tree(), '学习/看书', true);
+    const map = prevLeafState(on);
+    expect(map.get('学习/看书')!.shelved).toBe(true);
+    expect(map.get('生活/买菜')!.shelved).toBeFalsy();
   });
 });

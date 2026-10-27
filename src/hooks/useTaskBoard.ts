@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { TaskBoard, TaskLeaf, TaskNode } from '../types';
-import { getTaskBoard, saveTaskBoard, toggleTaskLeaf, removeTaskLeaf } from '../db';
+import { getTaskBoard, saveTaskBoard, toggleTaskLeaf, removeTaskLeaf, shelveTaskLeaf } from '../db';
 import { countUndone, leavesOf, moveKey, normalizeOrder } from '../utils/taskTree';
 
 const EMPTY: TaskBoard = { id: 1, nodes: [], order: [], updatedAt: 0 };
@@ -13,12 +13,16 @@ function notifyChanged(): void {
 
 export interface TaskBoardApi {
   nodes: TaskNode[];
+  /** 任务清单里的末级（不含搁置） */
   leaves: TaskLeaf[];
+  /** 搁置清单里的末级 */
+  shelved: TaskLeaf[];
   undone: number;
   loading: boolean;
   saveTree: (nodes: TaskNode[]) => Promise<void>;
   toggle: (key: string) => Promise<void>;
   remove: (key: string) => Promise<void>;
+  shelve: (key: string, shelved?: boolean) => Promise<void>;
   reorder: (fromKey: string, toKey: string) => Promise<void>;
   reload: () => Promise<void>;
 }
@@ -36,7 +40,9 @@ export function useTaskBoard(): TaskBoardApi {
 
   useEffect(() => { load(); }, [load]);
 
-  const leaves = useMemo(() => leavesOf(board.nodes, board.order), [board]);
+  const allLeaves = useMemo(() => leavesOf(board.nodes, board.order), [board]);
+  const leaves = useMemo(() => allLeaves.filter(l => !l.shelved), [allLeaves]);
+  const shelved = useMemo(() => allLeaves.filter(l => l.shelved), [allLeaves]);
   const undone = useMemo(() => countUndone(leaves), [leaves]);
 
   const saveTree = useCallback(async (nodes: TaskNode[]) => {
@@ -52,6 +58,12 @@ export function useTaskBoard(): TaskBoardApi {
     notifyChanged();
   }, []);
 
+  const shelve = useCallback(async (key: string, on = true) => {
+    await shelveTaskLeaf(key, on);
+    await load();
+    notifyChanged();
+  }, [load]);
+
   const remove = useCallback(async (key: string) => {
     await removeTaskLeaf(key);
     setBoard(b => ({ ...b, order: b.order.filter(k => k !== key) }));
@@ -66,7 +78,7 @@ export function useTaskBoard(): TaskBoardApi {
     notifyChanged();
   }, [board.nodes, board.order]);
 
-  return { nodes: board.nodes, leaves, undone, loading, saveTree, toggle, remove, reorder, reload: load };
+  return { nodes: board.nodes, leaves, shelved, undone, loading, saveTree, toggle, remove, shelve, reorder, reload: load };
 }
 
 /** 本地翻转入参树里对应末级的 done（避免整表重读） */
@@ -75,7 +87,10 @@ function updateDone(nodes: TaskNode[], key: string): TaskNode[] {
   const rec = (list: TaskNode[], depth: number): TaskNode[] =>
     list.map(n => {
       if (n.title !== parts[depth]) return n;
-      if (depth === parts.length - 1) return { ...n, done: !n.done };
+      if (depth === parts.length - 1) {
+        const done = !n.done;
+        return { ...n, done, doneAt: done ? Date.now() : undefined };
+      }
       return { ...n, children: rec(n.children, depth + 1) };
     });
   return rec(nodes, 0);
@@ -90,7 +105,7 @@ export function useTaskBadge(): number {
     const refresh = async () => {
       try {
         const board = await getTaskBoard();
-        if (alive) setCount(countUndone(leavesOf(board.nodes, board.order)));
+        if (alive) setCount(countUndone(leavesOf(board.nodes, board.order).filter(l => !l.shelved)));
       } catch { /* 读失败就不显示 */ }
     };
     refresh();

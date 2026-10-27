@@ -1179,3 +1179,35 @@ pm run build:apk` 成功（24.7 MB）。
 新增：src/components/MindSheet.tsx/.css、src/utils/sound.ts
 修改：src/types/index.ts、src/hooks/useIdeas.ts、src/services/store.ts、src/db/index.ts、src/components/TaskBall.tsx、src/pages/Harvest.tsx、src/pages/DailyPlan.tsx/.css、test/灵感/ideas.test.ts、structure.md
 ```
+## 2026-10-27 — 任务清单：搁置清单 + 完成 30 秒后隐去
+
+### 需求
+
+1. 每个任务多一个「搁置」图标，搁置后离开任务清单、进入搁置清单。
+2. 任务清单页与编辑页都有「搁置清单」入口；清单里每行同样是「…」、方框、叉叉，外加「并入」，并入后回到任务清单且保持链结构。
+3. 任务完成后在原来位置褪色，30 秒后隐藏（与 DDL 解除同款节奏）。
+
+### 实现
+
+- **数据**：`TaskNode` / `TaskLeaf` 增加 `shelved?` 与 `doneAt?`。搁置只改标记，**树结构与顺序都不动**，所以并入后自动回到原来的层级位置。
+- **工具**：`taskTree` 新增 `setLeafShelved`、`prevLeafState`；`toggleLeafDone` 完成时写 `doneAt`，撤销时清空；
+  `leavesOf` 带出 `shelved/doneAt`；编辑文本后 `linesToTree` 按完整链回填这两个状态（改名才丢）。
+- **db / hook**：`shelveTaskLeaf(key, shelved)`；`useTaskBoard` 输出 `leaves`（已滤掉搁置）与 `shelved`，气泡数字只数未搁置的。
+- **界面**（`TaskBall`）：
+  - 任务行新增 📦 搁置图标（`…` 方框 叉叉 之外）。
+  - 底部「搁置清单 N」；编辑页顶部也放了一个，进入后每行是 `…` / 方框 / ↗ 并入 / 叉叉。
+  - 完成的行先是 `tb-item--done` 褪色，`doneAt` 满 30 秒后从清单隐去；只在有"刚完成"的条目时开 1 秒定时器。
+
+### 验证
+
+- `test/任务/taskTree.test.ts` 扩到 28 项（搁置不改结构、撤销、编辑文本后状态保留、doneAt 写入与清空、prevLeafState）。
+- 
+px tsc --noEmit` 通过；
+px vitest run` **654/654**（26 文件）；
+pm run build:apk` 成功（24.67 MB）。
+
+### 涉及文件
+
+```
+修改：src/types/index.ts、src/utils/taskTree.ts、src/db/index.ts、src/hooks/useTaskBoard.ts、src/components/TaskBall.tsx/.css、test/任务/taskTree.test.ts、structure.md
+```
