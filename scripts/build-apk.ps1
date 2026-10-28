@@ -41,12 +41,17 @@ Write-Host "      DONE" -ForegroundColor Green
 if (-not $SyncOnly) {
     Write-Host "[4/4] Gradle APK build..." -ForegroundColor Yellow
 
-    $env:JAVA_HOME = "D:/android studio/jbr"
-    $env:ANDROID_SDK_ROOT = "D:/Android_Studio_SDK"
+    # Respect the caller's toolchain; Gradle also reads android/local.properties.
+    if (-not $env:JAVA_HOME -and -not (Get-Command java -ErrorAction SilentlyContinue)) {
+        throw "Set JAVA_HOME to a JDK installation or add java to PATH."
+    }
+    if (-not $env:ANDROID_SDK_ROOT -and $env:ANDROID_HOME) {
+        $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+    }
 
     Push-Location $AndroidDir
     try {
-        & .\gradlew.bat assembleDebug
+        & .\gradlew.bat --no-daemon assembleDebug
         if ($LASTEXITCODE -ne 0) { throw "Gradle build failed" }
     }
     finally {

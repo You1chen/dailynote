@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 92 文件；`test/` 26 文件 / 654 用例 |
+| 规模 | `src/` 93 文件；`test/` 30 个测试文件 / 682 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -21,7 +21,7 @@
 | @capacitor/filesystem 8.1 | 文件读写（必须显式 `encoding: UTF8`） |
 | @capacitor/app 8.1 | 返回键、前后台、版本号 |
 | com.google.mlkit:text-recognition-chinese 16.0.1 | 中文 OCR（原生，模型随包） |
-| date-fns 3.6 / lucide-react / recharts | 日期、图标、图表（recharts 当前无引用） |
+| date-fns 3.6 / lucide-react | 日期、图标 |
 | dexie 4.0 | 仅旧库一次性迁移 |
 | vitest 4.1 + fake-indexeddb | 测试 |
 
@@ -128,7 +128,7 @@ utils/  →  types/
 | longTermGoals | `goals.json` | 数组 | `title, category, tasks[]` |
 | fixedRoutines | `routines.json` | 数组 | `name, timeBlocks[], isActive` |
 | taskTemplates | `templates.json` | 数组 | `name, items[]` |
-| courses | `courses.json` | 数组 | `dayOfWeek:number[], weekType, startWeek, weekCount` |
+| courses | `courses.json` | 数组 | `dayOfWeek:number[], weekType, startWeek, weekCount, semesterStartDate?` |
 | semester | `semester.json` | 单记录（id=1） | `startDate:string\|null, specialDates[]` |
 | ideas | `ideas.json` | 数组 | 杂念：`kind`(wish/chore/idea)、`title?`、`text`、`date`、`tags?`；缺 `kind` 视为 idea |
 | ddls | `ddls.json` | 数组 | `name, deadlineDate, deadlineTime, location, notes, images[], links[]`；`dismissedAt>0` = 已解除威胁（褪色 30 秒后隐藏） |
@@ -143,7 +143,8 @@ utils/  →  types/
 - `TaskItem.id` 为字符串；其余表主键 `number`；`TrashItem.originalId` 为 `number|string`。
 - `TaskNode` 只有末级节点的 `done` 有意义；末级用完整链 `a/b/c` 标识。
 - `DdlLink` 存的是**快照**（`kind, id, label, groupName`）：课程/分组被删后 DDL 仍显示当时的名字。
-- `todayStr()` 为 UTC 日期；本地日期用 `utils/ddl` 与 `localDateStr`。
+- `todayStr()` 为设备本地日历日期；全屏日程同用它判断今天，凌晨不再偏到前一天。
+- `Course.semesterStartDate?` 保存所属学期开学日期。旧课程（含回收站）首次加载时补当前学期，未设置学期的在首次设置时补；切换学期不重绑；导入旧备份按备份自身学期补齐。
 
 ---
 
@@ -170,6 +171,7 @@ Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。
 | --- | --- |
 | 变更入口 | `mutate(fn, {writeOrder})`：前后指纹对比，只写变脏文件 |
 | 入队 | 入队瞬间捕获 `{目录, 待写文件}`；单条 promise 链串行 |
+| 全量保存 | 包含 ideas.json；成功写完所有文件后，仅删除 days/YYYY-MM-DD 下不在当前数据中的 plan/reflections/harvests/tasks.json，保留自定义文件和备份 |
 | 顺序 | 先写新增侧（回收站），后写移除侧（原表）；还原相反 |
 | 失败 | 记录 `getLastPersistError()` 并返回 `false`，不 throw |
 | 编码 | 原生 `writeFile` 必须 `encoding: UTF8`（缺省按 base64 解码 → 乱码） |
@@ -234,8 +236,6 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | useDailyPlan(date) | plan, loading, addBlock, addFullBlock, updateBlock, removeBlock, importFromRoutine, reload |
 | useTaskBoard() | nodes, leaves, undone, loading, saveTree, toggle, remove, reorder, reload |
 | useTaskBadge() | count |
-| useTaskList(date) | items, loading, addItem, toggleItem, removeItem, reload |
-| useTaskTemplates() | templates, loading, addTemplate, updateTemplate, removeTemplate, reload |
 | useGoals() | goals, loading, addGoal, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload |
 | useReflections(date) | reflections, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllReflections） |
 | useHarvests(date) | harvests, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllHarvests） |
@@ -260,7 +260,6 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | FullscreenSchedule | 306 | 全屏日程网格 | DailyPlan |
 | AvatarCropper | 297 | 头像裁剪 | SettingsPage |
 | CourseEditModal | 233 | 课程新建/编辑 | CoursesPage、WeekViewPage |
-| TimeBlockCard | 157 | 零引用 | — |
 | DayNavigator | 140 | 月历日期选择器 | DailyPlan、Reflection、Harvest、FullscreenSchedule |
 | PreferencePanel | 124 | 偏好底部面板 | DailyPlan |
 | SearchOverlay | 110 | 全局搜索浮层 | SideNav |
@@ -323,13 +322,13 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npx vitest run`：26 文件 / 654 用例。
+`npx vitest run`：30 文件 / 682 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
 | 时间网格点击映射/clickMapping | 207 | 像素↔时间正反映射、密度、滚动补偿 |
 | 数据存储/store | 53 | CRUD、persist、迁移、自愈、导出、课程/DDL 存储 |
-| 课程表/courseSchedule | 32 | 周次、单双周、节假日、当日课程 |
+| 课程表/courseSchedule | 36 | 周次、单双周、节假日、当日课程 |
 | 数据导入导出/jsonImport | 23 | 解析、BOM、乱码拒绝、错误分级、往返 |
 | 任务/taskTree | 28 | 文本⇄层级、完整链、状态回填、删除、排序 |
 | 遗留问题/backlog | 20 | CRUD、回收站、持久化、历时与宽限 |
@@ -345,7 +344,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 时间网格点击映射/blockRenderRect | 16 | 睡眠折叠下的块矩形 |
 | 偏好设置/preferences | 15 | 默认值、存取、主题 |
 | DDL清单/ddlTime | 20 | 剩余分钟、23:59 默认、文案边界、解除威胁的分组与倒计时 |
-| 课程表/effectiveCourses | 12 | 有效课程：学期前提、周期边界、单双周、排序 |
+| 课程表/effectiveCourses | 15 | 有效课程：学期前提、周期边界、单双周、排序 |
 | DDL清单/ddlLinks | 15 | 关联项生成/切换/去重/展示文案 |
 | DDL清单/linkGroups | 8 | 关联分组 CRUD、回收站、落盘、导入导出、DDL 关联快照 |
 | 任务清单/taskTemplate | 13 | 模板 CRUD、软删除、持久化、套用 |
@@ -353,9 +352,13 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 数据存储/storageAccess | 8 | 权限守卫、阻塞时零写入 |
 | 数据存储/nativeWriteEncoding | 3 | 原生写入 utf8 与往返 |
 | 数据存储/startupSnapshot | 6 | 快照命中、目录变化失效、rescan 读入外部改动、换目录不复用 |
-| **合计** | **654** | 26 个文件 |
+| 数据存储/knownDebt | 9 | 回收站 ID、杂念全量写、孤儿文件安全清理、课程归属迁移/导入/还原、仓库备份往返 |
+| 偏好设置/localDate | 5 | 本地凌晨、跨年、晚间日期；另在洛杉矶时区进程验证 |
+| 课程表/courseEditSemester | 4 | 新建当前学期、编辑保留归属、无学期兼容、旧课兼容 |
+| 课程表/coursesPageSemester | 3 | 当前课表过滤、历史课空态、列表保留历史归属 |
+| **合计** | **682** | 30 个文件 |
 
-环境：无 `vitest.config.*`，`vite.config.ts` 无 `test` 段；`tsconfig.json` 的 `include:["src"]` 意味着 `tsc` 不检查 `test/`。
+环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
 
 ---
 
@@ -371,8 +374,8 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 - 模式由环境变量 `CAPACITOR` 决定，非 `--mode`。
 - APK 仅打包 `arm64-v8a` / `armeabi-v7a`（`packaging.jniLibs.excludes` 去 x86/x86_64），约 24.6 MB。
-- `scripts/build-apk.ps1` 硬编码本机 `JAVA_HOME` / `ANDROID_SDK_ROOT`，仅 Windows。
-- CI：`.github/workflows/build-apk.yml` 推送构建 debug APK，不跑测试。
+- `scripts/build-apk.ps1` 为 Windows 脚本，使用外部 JAVA_HOME/PATH 与 ANDROID_SDK_ROOT/ANDROID_HOME 或 android/local.properties，不覆盖本机工具链；Gradle 使用 --no-daemon。
+- CI：`.github/workflows/build-apk.yml` 先 npm test，再直接执行 tsc / Vite / cap sync android，最后构建 debug APK；Ubuntu 不再调用 Windows PowerShell 脚本，测试改动也触发。
 
 ---
 
@@ -386,18 +389,17 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ---
 
-## 15. 已知债务
+## 15. 兼容保留与剩余限制
 
-| 项 | 说明 |
+2026-10-28 已修复：本地日期、回收站 ID 占用、全量保存孤儿日期文件清理、杂念全量写入、课程学期归属、分数注释、图标引用；已删除 TimeBlockCard、未消费的 useTaskList/useTaskTemplates Hook 和 recharts 依赖。
+
+| 项 | 当前策略 / 限制 |
 | --- | --- |
-| taskItems 数据层 | 任务清单改由 taskBoard 承载，`taskItems` 已无 UI 消费（保留旧数据） |
-| TimeBlockCard | 零引用 |
-| recharts | 已无引用（宏观视图页已删），仍留在 `package.json` |
-| 作息模板 | `fixedRoutines` 无创建入口 |
-| id 计数器 | `resetNextId` 只扫活表，跨重启可能复用已删 id |
-| `persist()` | `deletes` 恒空，不清理孤儿文件 |
-| `todayStr()` | UTC 语义，凌晨 0–8 点会算成前一天 |
-| 分数备注 | `types` 注释写 1–10，实际 0–10 |
-| icon-192 | `index.html` 引用不存在的 `icons/icon-192.png` |
-| 有效课程 | 课程没有「所属学期」字段：只按学期开学时间 + 课程周次判断。若课程表里仍留着上学期的课、且其周次与本周重合，它仍会被算作有效 |
-| NDK | 未安装；端侧 VLM（LFM2.5-VL-450M）路线因此未接入 |
+| 旧任务/模板/作息数据 | 保留 taskItems、taskTemplates、fixedRoutines 的读写、备份与回收站兼容；不新增创建功能。日计划仅有历史作息数据时显示导入按钮，不再引导去不存在的创建入口。历史时间块清单仍可编辑、勾选并按子项判定完成，不自动重写时间范围。 |
+| ID | 重建扫描活表和回收站，同会话不降低计数；已永久删除且回收站不再保留的历史 ID 没有跨安装高水位记录。 |
+| 快照 | 仍按日期集合复用，同名文件内容被外部修改后须手动重新扫描。 |
+| 文件写入 | 有串行队列和跨文件写序，但没有文件级原子替换或跨文件事务。 |
+| 旧课程归属 | 无法从旧数据推断真实历史学期，首次升级按当时设置的学期归属；此后切换不重绑。列表保留历史课，课表、日/周视图和 DDL 有效课程按当前归属过滤。 |
+| 测试类型 | 应用 tsc 检查 src；新增测试单独通过类型检查，全部历史测试尚未纳入严格类型检查。 |
+| Android | 仍需公共 Documents 的所有文件访问权限；本轮 APK 构建通过，未做真机安装验收。 |
+| NDK / VLM | 属于延期能力，不为清债安装工具链或下载/接入新模型；现有离线 ML Kit 保持使用。 |

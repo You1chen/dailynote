@@ -26,22 +26,9 @@ const WEEK_TYPE_LABELS: Record<Course['weekType'], string> = {
   even: '双周',
 };
 
-/** 清单型即时任务的占位时长（分钟）：不知道何时结束前先占位，保证时间表可见 */
-const CHECKLIST_PLACEHOLDER_MIN = 10;
-
-/** 是否为清单型即时任务（有子任务清单 = 轻量任务：不验收、不评分） */
+/** 是否为清单型任务（有子任务清单 = 轻量任务：不验收、不评分） */
 function isChecklistTask(b: TimeBlock): boolean {
   return Array.isArray(b.checklist) && b.checklist.length > 0;
-}
-
-/** 清单子任务是否全部勾选完毕 */
-function allChecklistDone(b: TimeBlock): boolean {
-  return isChecklistTask(b) && b.checklist!.every(i => i.done);
-}
-
-/** Date → "HH:mm"（不取整，反映真实完成时刻） */
-function formatHM(d: Date): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 /** "YYYY-MM-DD" → 本地 Date */
@@ -99,64 +86,18 @@ export default function DailyPlanPage() {
   const [newStartTime, setNewStartTime] = useState('08:00');
   const [timeMode, setTimeMode] = useState<'range' | 'duration'>('range');
   const [durationMinutes, setDurationMinutes] = useState(prefs.defaultDuration);
-  const [planningMode, setPlanningMode] = useState<'pre' | 'instant'>('pre');
   const [mindKind, setMindKind] = useState<'wish' | 'chore' | null>(null);
   const { byKind: minds } = useIdeas();
-  const [instantStyle, setInstantStyle] = useState<'block' | 'list'>('block');
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [templateList, setTemplateList] = useState<TaskTemplate[]>([]);
+  const [hasLegacyRoutines, setHasLegacyRoutines] = useState(false);
+  useEffect(() => { void getAllRoutines().then(items => setHasLegacyRoutines(items.length > 0)); }, []);
   const [acceptingBlock, setAcceptingBlock] = useState<TimeBlock | null>(null);
   // 课程表（只读展示：渲染时按日期实时计算，不写入当天计划）
   const [courses, setCourses] = useState<Course[]>([]);
   const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
   const [viewingCourse, setViewingCourse] = useState<Course | null>(null);
-  const checklistDoneAtRef = useRef(0);
-  /** 即时任务开始时间是否被手动微调过（微调后冻结，不再随每30秒刷新） */
-  const manualStartRef = useRef(false);
-
-  // 获取当前时间（取整到5分钟；23:55 封顶，避免 23:58 进位成 00:00 跨日）
-  function getNowRounded(): string {
-    const d = new Date();
-    const totalMin = d.getHours() * 60 + d.getMinutes();
-    const rounded = Math.min(1435, Math.round(totalMin / 5) * 5);
-    const hh = Math.floor(rounded / 60) % 24;
-    const mm = rounded % 60;
-    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-  }
-
-  // 即时模式下实时更新开始时间；清单模式同时保持 endTime = now + 占位时长
-  useEffect(() => {
-    if (planningMode === 'instant' && editingBlock) {
-      const timer = setInterval(() => {
-        setEditingBlock(prev => {
-          if (!prev) return null;
-          // 开始时间已手动微调：冻结，不再随时间更新
-          if (manualStartRef.current) return prev;
-          const now = getNowRounded();
-          return {
-            ...prev,
-            startTime: now,
-            endTime: instantStyle === 'list' && !allChecklistDone(prev)
-              ? computeEndTime(now, CHECKLIST_PLACEHOLDER_MIN)
-              : prev.endTime,
-          };
-        });
-      }, 30000); // 每30秒更新
-      return () => clearInterval(timer);
-    }
-  }, [planningMode, instantStyle, editingBlock?.id]);
-
-  // 清单型即时任务占位：未全部勾选时强制 endTime = startTime + 10min，保证时间表可见
-  useEffect(() => {
-    if (editingBlock && planningMode === 'instant' && instantStyle === 'list' && !allChecklistDone(editingBlock)) {
-      setEditingBlock(prev => prev ? { ...prev, endTime: computeEndTime(prev.startTime, CHECKLIST_PLACEHOLDER_MIN) } : null);
-    }
-  }, [planningMode, instantStyle, editingBlock?.id]);
-
-  // 每次打开新的时间块时清空上次的完成时刻记录与手动微调标记
-  useEffect(() => { checklistDoneAtRef.current = 0; manualStartRef.current = false; }, [editingBlock?.id]);
-
   // 加载课程表与学期设置（每次进入本页重新加载，课程表页修改后返回自动生效）
   useEffect(() => {
     Promise.all([getAllCourses(), getSemester()]).then(([cs, sem]) => {
@@ -275,7 +216,6 @@ export default function DailyPlanPage() {
     const endTime = minutesToTime(Math.min(1440, actualMinutes + prefs.defaultDuration) % 1440);
 
     setNewStartTime(startTime);
-    manualStartRef.current = false;
     setEditingBlock({
       id: '',
       startTime,
@@ -340,7 +280,6 @@ export default function DailyPlanPage() {
     const mm = endMin % 60;
     const endTime = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 
-    manualStartRef.current = false;
     setEditingBlock({
       id: '',
       startTime,
@@ -365,21 +304,8 @@ export default function DailyPlanPage() {
       focusScore: Math.min(10, Math.max(0, editingBlock.focusScore ?? 0)),
       efficiencyScore: Math.min(10, Math.max(0, editingBlock.efficiencyScore ?? 0)),
     };
-    // 清单型即时任务：全部子任务勾完 = 完成（结束时间 = 最后勾选时刻）；未勾完 = 占位 10 分钟、不算完成
-    if (isChecklistTask(safe)) {
-      if (allChecklistDone(safe)) {
-        safe.completed = true;
-        if (checklistDoneAtRef.current > 0) {
-          safe.endTime = formatHM(new Date(checklistDoneAtRef.current));
-        } else if (!safe.completed) {
-          // 兜底：已是全部勾选但本次编辑无完成记录（少见），用当前时刻
-          safe.endTime = formatHM(new Date());
-        }
-      } else {
-        safe.completed = false;
-        safe.endTime = computeEndTime(safe.startTime, CHECKLIST_PLACEHOLDER_MIN);
-      }
-    }
+    // 兼容历史清单块：完成状态仍由子项决定，不再自动改写时间范围。
+    if (isChecklistTask(safe)) safe.completed = safe.checklist!.every(item => item.done);
     if (safe.id) {
       await updateBlock(safe.id, safe);
     } else {
@@ -425,7 +351,7 @@ export default function DailyPlanPage() {
   const handleImportRoutine = async () => {
     const routines = await getAllRoutines();
     if (routines.length === 0) {
-      setNotice('请先在「目标」页创建作息模板');
+      setNotice('没有可导入的历史作息模板');
       return;
     }
     if (!plan) return;
@@ -450,7 +376,7 @@ export default function DailyPlanPage() {
   const handleOpenTemplatePicker = async () => {
     const list = await getAllTaskTemplates();
     if (list.length === 0) {
-      setNotice('任务清单模板请在任务悬浮球里创建');
+      setNotice('没有可套用的历史清单模板');
       return;
     }
     setTemplateList(list);
@@ -499,7 +425,6 @@ export default function DailyPlanPage() {
       if (b) setEditingBlock({ ...b });
     } else if (newAt && /^\d{2}:\d{2}$/.test(newAt)) {
       setNewStartTime(newAt);
-      manualStartRef.current = true;
       setEditingBlock({
         id: '',
         startTime: newAt,
@@ -519,11 +444,9 @@ export default function DailyPlanPage() {
   }, [loading, plan, searchParams]);
   /** 新建时间块（FAB / 空档点击共用） */
   const openNewBlock = useCallback(() => {
-    const isInstant = planningMode === 'instant';
-    const start = isInstant ? getNowRounded() : '08:00';
-    const end = isInstant ? computeEndTime(start, prefs.defaultDuration) : '09:00';
+    const start = '08:00';
+    const end = '09:00';
     setNewStartTime(start);
-    manualStartRef.current = false;
     setEditingBlock({
       id: '',
       startTime: start,
@@ -537,7 +460,7 @@ export default function DailyPlanPage() {
       completed: false,
       notes: '',
     });
-  }, [planningMode, prefs.defaultDuration]);
+  }, []);
 
   /** 顶部概览：块数 / 已验收 / 专注均值（只算已评分的块） */
   const summary = useMemo(() => {
@@ -646,9 +569,11 @@ export default function DailyPlanPage() {
           <button className="dp-tool" title="全屏视图" onClick={() => setFullscreen(true)}>
             <Maximize2 size={16} />
           </button>
-          <button className="dp-tool" title="从模板导入" onClick={handleImportRoutine}>
-            <ClipboardList size={16} />
-          </button>
+          {hasLegacyRoutines && (
+            <button className="dp-tool" title="从历史作息模板导入" onClick={handleImportRoutine}>
+              <ClipboardList size={16} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -756,7 +681,6 @@ export default function DailyPlanPage() {
                 style={{ top, height, left: 48, right: 10 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  manualStartRef.current = false;
                   setEditingBlock({ ...block, checklist: block.checklist || [] });
                 }}
               >
@@ -823,7 +747,6 @@ export default function DailyPlanPage() {
         prefs={prefs}
         onDateChange={setDate}
         onBlockClick={(block) => {
-          manualStartRef.current = false;
           setEditingBlock({ ...block });
           // 保持全屏打开，不退出
         }}
@@ -853,10 +776,8 @@ export default function DailyPlanPage() {
             </h3>
 
             <div className="bs-body">
-                            {/* 即时任务已下线：只保留预规划 */}
-
-{/* 预规划模式 或 即时整块模式：显示时间设置 */}
-              {(planningMode === 'pre' || instantStyle === 'block') && (<>
+              {/* 时间设置 */}
+              <>
                 <div className="form-group">
                   <label className="label">时间设置</label>
                   <div className="bs-time-mode">
@@ -872,44 +793,22 @@ export default function DailyPlanPage() {
                 </div>
 
                 {/* 时间输入 */}
-                {planningMode === 'pre' && (
-                  <div className="form-group">
-                    <label className="label">开始时间</label>
-                    <input
-                      className="input"
-                      type="time"
-                      value={editingBlock.startTime}
-                      onChange={e => {
-                        const start = e.target.value;
-                        const updates: Partial<TimeBlock> = { startTime: start };
-                        if (timeMode === 'duration') {
-                          updates.endTime = computeEndTime(start, durationMinutes);
-                        }
-                        setEditingBlock({ ...editingBlock, ...updates });
-                      }}
-                    />
-                  </div>
-                )}
-                {planningMode === 'instant' && instantStyle === 'block' && (
-                  <div className="form-group">
-                    <label className="label">
-                      开始时间
-                      <span className="bs-instant-badge">⚡ 现在</span>
-                    </label>
-                    <input
-                      className="input"
-                      type="time"
-                      value={editingBlock.startTime}
-                      readOnly
-                      style={{ color: 'var(--color-text-muted)', background: 'var(--color-bg)' }}
-                    />
-                    <p className="bs-instant-hint">
-                      {manualStartRef.current
-                        ? '已手动微调，不再随时间更新'
-                        : '开始时间已锁定为当前时刻'}
-                    </p>
-                  </div>
-                )}
+                <div className="form-group">
+                  <label className="label">开始时间</label>
+                  <input
+                    className="input"
+                    type="time"
+                    value={editingBlock.startTime}
+                    onChange={e => {
+                      const start = e.target.value;
+                      const updates: Partial<TimeBlock> = { startTime: start };
+                      if (timeMode === 'duration') {
+                        updates.endTime = computeEndTime(start, durationMinutes);
+                      }
+                      setEditingBlock({ ...editingBlock, ...updates });
+                    }}
+                  />
+                </div>
 
                 {timeMode === 'range' ? (
                   <div className="form-group">
@@ -955,41 +854,9 @@ export default function DailyPlanPage() {
                     />
                   </div>
                 )}
-              </>)}
+              </>
 
-              {/* 即时清单模式：开始时间可见、可微调 */}
-              {planningMode === 'instant' && instantStyle === 'list' && (
-                <div className="form-group">
-                  <label className="label">
-                    开始时间
-                    <span className="bs-instant-badge">⚡ 即时</span>
-                  </label>
-                  <input
-                    className="input"
-                    type="time"
-                    value={editingBlock.startTime}
-                    onChange={e => {
-                      const start = e.target.value;
-                      if (!start) return; // 清空时不落状态，避免非法时间
-                      manualStartRef.current = true;
-                      setEditingBlock({
-                        ...editingBlock,
-                        startTime: start,
-                        // 未勾完时占位 endTime 跟随开始时间；已全部勾完保持完成时刻不变
-                        endTime: allChecklistDone(editingBlock)
-                          ? editingBlock.endTime
-                          : computeEndTime(start, CHECKLIST_PLACEHOLDER_MIN),
-                      });
-                    }}
-                  />
-                  <p className="bs-instant-hint">
-                    {manualStartRef.current
-                      ? '已手动微调，不再随时间更新'
-                      : '默认随当前时刻更新，可手动微调'}
-                  </p>
-                </div>
-              )}
-
+              {/* 清单内容 */}
               {/* 任务名称 */}
               <div className="form-group">
                 <label className="label">任务名称</label>
@@ -1002,7 +869,7 @@ export default function DailyPlanPage() {
               </div>
 
               {/* 计划内容：清单模式 vs 整块模式 */}
-              {planningMode === 'instant' && instantStyle === 'list' ? (
+              {editingBlock.checklist && editingBlock.checklist.length > 0 ? (
                 <div className="form-group">
                   <label className="label">📋 任务清单</label>
                   <div className="bs-checklist">
@@ -1014,10 +881,6 @@ export default function DailyPlanPage() {
                           onClick={() => {
                             const updated = [...(editingBlock.checklist || [])];
                             updated[idx] = { ...updated[idx], done: !updated[idx].done };
-                            // 记录「全部勾选完成」的时刻，作为结束时间
-                            const wasAllDone = allChecklistDone(editingBlock);
-                            const nowAllDone = updated.length > 0 && updated.every(i => i.done);
-                            if (!wasAllDone && nowAllDone) checklistDoneAtRef.current = Date.now();
                             setEditingBlock({ ...editingBlock, checklist: updated });
                           }}
                           title={item.done ? '标记未完成' : '标记完成'}

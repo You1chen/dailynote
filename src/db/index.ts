@@ -8,7 +8,7 @@
 
 import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
-import { store, mutate, allocId, deepClone, type AnyStoreTable } from '../services/store';
+import { store, mutate, allocId, deepClone, bindLegacyCourses, type AnyStoreTable } from '../services/store';
 import { toggleLeafDone, removeLeaf, setLeafShelved, normalizeOrder } from '../utils/taskTree';
 import { searchStore, type SearchHit } from '../utils/search';
 import { DDL_DEFAULT_TIME } from '../utils/ddl';
@@ -227,12 +227,16 @@ export async function saveCourse(course: Course): Promise<number> {
   await mutate(() => {
     if (clean.id != null) {
       const idx = store.courses.findIndex(c => c.id === clean.id);
-      if (idx >= 0) store.courses[idx] = { ...clean, updatedAt: Date.now() };
+      if (idx >= 0) store.courses[idx] = {
+        ...clean,
+        semesterStartDate: clean.semesterStartDate ?? store.courses[idx].semesterStartDate ?? store.semester[0]?.startDate ?? undefined,
+        updatedAt: Date.now(),
+      };
       resultId = clean.id;
       return;
     }
     resultId = allocId('courses');
-    store.courses.push({ ...clean, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+    store.courses.push({ ...clean, semesterStartDate: clean.semesterStartDate ?? store.semester[0]?.startDate ?? undefined, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
   });
   return resultId;
 }
@@ -263,6 +267,7 @@ export async function getSemester(): Promise<SemesterRecord | undefined> {
 
 export async function saveSemester(record: SemesterRecord): Promise<number> {
   await mutate(() => {
+    bindLegacyCourses(store.semester[0]?.startDate ?? record.startDate);
     // 恒单记录：强制 id = 1，不调用 allocId（避免计数器膨胀）
     const clean = { ...record, id: 1, updatedAt: Date.now() };
     const idx = store.semester.findIndex(s => s.id === 1);

@@ -32,7 +32,7 @@ React 18 · TypeScript 5 · Vite 5 · Capacitor 8（Android）· Vitest 4 · ML 
 npm install
 npm run dev          # 开发服务器
 npm run build        # 类型检查 + 构建 Web/PWA
-npm run build:apk    # 构建 Android debug APK（Windows）
+npm run build:apk    # 构建 Android debug APK（Windows，须配置 JAVA_HOME/PATH 与 Android SDK）
 ```
 
 APK 输出：`android/app/build/outputs/apk/debug/app-debug.apk`
@@ -46,7 +46,7 @@ APK 输出：`android/app/build/outputs/apk/debug/app-debug.apk`
 ## 测试
 
 ```bash
-npx vitest run       # 20 个文件 / 567 个用例
+npm test            # 30 个测试文件 / 682 个用例
 ```
 
 ## 目录

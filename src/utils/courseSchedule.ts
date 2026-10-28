@@ -46,6 +46,11 @@ export function isCourseActiveOnWeek(course: Course, week: number): boolean {
   return true;
 }
 
+/** 所属学期匹配；缺字段的旧课程由存储层补齐前保持兼容，不在纯计算中重绑。 */
+export function isCourseInSemester(course: Course, semester: SemesterRecord | undefined): boolean {
+  return course.semesterStartDate === undefined || course.semesterStartDate === semester?.startDate;
+}
+
 /** 某天是否为不上课日：手动特殊日期优先，其次内置法定节假日 */
 export function isDayHoliday(dateStr: string, semester: SemesterRecord | undefined): boolean {
   const special = semester?.specialDates.find(s => s.date === dateStr);
@@ -65,13 +70,14 @@ export function computeDayCourses(
   if (isDayHoliday(dateStr, semester)) return [];
   const dw = weekdayOf(dateStr);
   return courses
-    .filter(c => c.dayOfWeek.includes(dw) && isCourseActiveOnWeek(c, week))
+    .filter(c => isCourseInSemester(c, semester) && c.dayOfWeek.includes(dw) && isCourseActiveOnWeek(c, week))
     .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime));
 }
 
 /**
  * 「有效课程」：本学期、且当前周还在课程周期内的课程（供 DDL 关联用）。
  * - 未设置开学时间 / 还没开学 → 空
+ * - 显式归属其他学期的课程 → 不算；缺字段旧课程兼容
  * - 课程还没开讲（startWeek 大于本周）或已经结课（超过 startWeek+weekCount-1）→ 不算
  * - 单双周课程在本周不上 → 不算
  * 按课程名排序，保证选择列表顺序稳定。
@@ -85,7 +91,7 @@ export function effectiveCourses(
   const week = weekIndex(dateStr, semester.startDate);
   if (week < 1) return [];
   return courses
-    .filter(c => isCourseActiveOnWeek(c, week))
+    .filter(c => isCourseInSemester(c, semester) && isCourseActiveOnWeek(c, week))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh') || a.startTime.localeCompare(b.startTime));
 }
 

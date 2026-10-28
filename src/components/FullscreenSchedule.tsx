@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Maximize2, Settings } from 'lucide-react';
 import DayNavigator from './DayNavigator';
-import type { TimeBlock, Course } from '../types';
+import { todayStr, type TimeBlock, type Course } from '../types';
 import type { UserPreferences } from '../hooks/usePreferences';
 import { timeToMinutes, isInSleepPeriod, sleepLabel, gridClickY, blockRenderRect } from '../utils/time';
 import './FullscreenSchedule.css';
@@ -63,7 +63,7 @@ export default function FullscreenSchedule({
   }, [visible, date]);
 
   // 判断是否在今天且在睡眠时段
-  const isToday = date === new Date().toISOString().slice(0, 10);
+  const isToday = date === todayStr();
   const showNowLine = isToday && !(hideSleep && isInSleepPeriod(nowMinutes, sleepStart, sleepEnd));
 
   // 将实际分钟映射到网格 top 位置

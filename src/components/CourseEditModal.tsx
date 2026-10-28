@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { saveCourse } from '../db';
+import { getSemester, saveCourse } from '../db';
 import type { Course } from '../types';
 // settings-chip / settings-time-row / settings-field-hint 等表单样式复用设置页
 import '../pages/SettingsPage.css';
@@ -87,8 +87,13 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
       setFormError('请至少选择一个星期');
       return;
     }
+    // 新课以保存时的当前学期归属；编辑旧课保留原归属，不能随切换学期重绑。
+    const semesterStartDate = course
+      ? course.semesterStartDate
+      : (await getSemester())?.startDate ?? undefined;
     const payload: Course = {
       name,
+      semesterStartDate,
       teacher: form.teacher.trim(),
       location: form.location.trim(),
       dayOfWeek: [...form.dayOfWeek].sort((a, b) => a - b),

@@ -8,6 +8,7 @@ import {
   isCourseActiveOnWeek,
   isDayHoliday,
   computeDayCourses,
+  isCourseInSemester,
 } from '../../src/utils/courseSchedule';
 import { BUILTIN_HOLIDAYS, isBuiltinHoliday } from '../../src/utils/holidays';
 import type { Course, SemesterRecord } from '../../src/types';
@@ -104,6 +105,24 @@ describe('isCourseActiveOnWeek（周数区间 + 单双周）', () => {
   });
 });
 
+describe('isCourseInSemester（学期归属兼容）', () => {
+  it('显式归属只匹配完全相同的开学时间，不按同一周视为同一学期', () => {
+    const c = makeCourse({ semesterStartDate: '2026-08-10' });
+    expect(isCourseInSemester(c, makeSemester('2026-08-10'))).toBe(true);
+    expect(isCourseInSemester(c, makeSemester('2026-08-12'))).toBe(false);
+    expect(isCourseInSemester(c, makeSemester('2027-02-22'))).toBe(false);
+    expect(isCourseInSemester(c, makeSemester(null))).toBe(false);
+    expect(isCourseInSemester(c, undefined)).toBe(false);
+  });
+
+  it('缺字段旧课程保持兼容，纯判断不写回归属', () => {
+    const c = makeCourse({});
+    expect(isCourseInSemester(c, makeSemester('2026-08-10'))).toBe(true);
+    expect(isCourseInSemester(c, makeSemester('2027-02-22'))).toBe(true);
+    expect(c).not.toHaveProperty('semesterStartDate');
+  });
+});
+
 describe('内置节假日表', () => {
   it('2026 国庆假期全部命中，10-08 不命中', () => {
     for (let d = 1; d <= 7; d++) {
@@ -160,6 +179,24 @@ describe('computeDayCourses', () => {
   });
   it('早于开学 → []', () => {
     expect(computeDayCourses([thursday], makeSemester(start), '2026-08-06')).toEqual([]);
+  });
+  it('排除其他学期课程，保留当前学期及缺字段旧课，且不改变输入', () => {
+    const current = makeCourse({ name: '当前课', dayOfWeek: [4], semesterStartDate: start });
+    const previous = makeCourse({ name: '上学期课', dayOfWeek: [4], semesterStartDate: '2026-02-23' });
+    const future = makeCourse({ name: '下学期课', dayOfWeek: [4], semesterStartDate: '2027-02-22' });
+    const legacy = makeCourse({ name: '旧格式课', dayOfWeek: [4] });
+    const list = [previous, current, future, legacy];
+    const before = JSON.stringify(list);
+    expect(computeDayCourses(list, makeSemester(start), '2026-08-13').map(c => c.name))
+      .toEqual(['当前课', '旧格式课']);
+    expect(JSON.stringify(list)).toBe(before);
+  });
+  it('同一课程切换学期后不再上课，切回原学期恢复', () => {
+    const c = makeCourse({ semesterStartDate: start });
+    expect(computeDayCourses([c], makeSemester(start), start)).toEqual([c]);
+    expect(computeDayCourses([c], makeSemester('2027-02-22'), '2027-02-22')).toEqual([]);
+    expect(computeDayCourses([c], makeSemester(start), start)).toEqual([c]);
+    expect(c.semesterStartDate).toBe(start);
   });
   it('星期过滤：周四只有周四的课', () => {
     const day = computeDayCourses([thursday, mondayA], makeSemester(start), '2026-08-13');

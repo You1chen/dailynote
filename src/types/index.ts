@@ -16,8 +16,8 @@ export interface TimeBlock {
   plannedContent: string;  // 计划做什么（整块内容模式使用）
   checklist?: ChecklistItem[]; // 清单模式使用的子任务列表（可选，向后兼容）
   actualExecution: string; // 实际执行情况
-  focusScore: number;      // 1-10 专注度
-  efficiencyScore: number; // 1-10 效率
+  focusScore: number;      // 0-10 专注度，0 = 未评分
+  efficiencyScore: number; // 0-10 效率，0 = 未评分
   completed: boolean;      // 是否完成
   notes: string;           // 备注
 }
@@ -128,6 +128,7 @@ export interface Course {
   weekType: 'all' | 'odd' | 'even'; // 每周 / 单周 / 双周
   startWeek: number;       // 起始周（1 起，相对开学时间）
   weekCount: number;       // 持续周数
+  semesterStartDate?: string; // 所属学期开学时间；缺省仅兼容旧课程，由存储层一次性补齐
   createdAt: number;
   updatedAt: number;
 }
@@ -257,9 +258,10 @@ export function appendTemplateItems(
   return [...current, ...added];
 }
 
-/** 获取今天的日期字符串 */
+/** 获取设备本地日历日期，避免 UTC 在凌晨返回前一天。 */
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 /** 重要的事：字段与 DDL 完全一致，只是单独一张表（页面同构、文字不同） */

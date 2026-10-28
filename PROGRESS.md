@@ -1211,3 +1211,30 @@ pm run build:apk` 成功（24.67 MB）。
 ```
 修改：src/types/index.ts、src/utils/taskTree.ts、src/db/index.ts、src/hooks/useTaskBoard.ts、src/components/TaskBall.tsx/.css、test/任务/taskTree.test.ts、structure.md
 ```
+## 2026-10-28 — 已知债务清理与回归
+
+### 修复
+
+- todayStr 改为设备本地日历日期，全屏日程同用它判断今天；修正专注/效率 0–10、0 为未评分的注释。
+- resetNextId 同时扫描回收站 originalId；同会话重建不降低已分配计数，避免重启后新记录占用待还原记录的 ID。
+- 全量 persist 补上 ideas.json；全量保存成功写完后只清理 days/YYYY-MM-DD 下不再对应内存数据的 plan/reflections/harvests/tasks.json，保留自定义文件与备份；队列异常转为 false 与错误记录。
+- Course 增加可选 semesterStartDate。旧课程和回收站首次加载补所属学期，未设学期的在第一次设置时补；旧备份按备份自身学期补齐。编辑不擦除归属，切换学期不重绑；日/周、DDL 有效课程与课程表过滤其他学期，管理列表保留历史。
+- 删除无引用 TimeBlockCard（含 CSS）、useTaskList、useTaskTemplates；保留旧任务、模板、作息的持久化/备份/还原兼容。删除已下线即时模式的状态、定时器与分支；历史清单仍可编辑勾选，完成取决于子项，不自动改时间。无历史作息时隐藏导入入口，删除不存在创建入口的引导。
+- 移除 recharts 及专属传递依赖，其他锁文件依赖版本保持；图标引用改已有 SVG。
+- 新增独立 vitest.config.mjs（native 配置加载、threads），npm test 不再加载 PWA 构建配置。CI 先跑测试，Ubuntu 直接执行 tsc/Vite/cap sync，不再调用 Windows PowerShell 脚本。APK 脚本移除硬编码工具链路径，使用环境变量/local.properties，并 --no-daemon。
+
+### 验证
+
+- npm test：30 文件 / 682 用例全部通过（原 654，新增 28）。新增覆盖本地日期、回收站 ID、孤儿文件安全清理、杂念全量写、课程跨期/导入/还原，以及真实组件保存事件与渲染。
+- 仓库现有 dailynote-data.json 经导入→全量保存→清快照→重载，逐表内容一致；源文件未修改。
+- 本地日期测试另在 America/Los_Angeles 时区进程运行，5/5 通过；避免在线程中动态切换 TZ 的不可靠测试方式。
+- tsc --noEmit 通过；本轮新增测试单独严格类型检查通过。
+- npm run build 成功（Web/PWA）；npm run build:apk 成功（外部设置 JAVA_HOME 与 ANDROID_SDK_ROOT，约 24.7 MB），随后恢复 Web/PWA 构建产物。未做 Android 真机安装验收。
+- 临时课程测试配置与锁文件中间文件已删除；结构文档与 README 同步。
+
+### 保留与边界
+
+- taskItems/taskTemplates/fixedRoutines 作为旧数据兼容保留，不为清债新增产品功能。
+- 老课程缺少真实历史归属，只能首次按当时学期补齐；后续不会随换期漂移。
+- 外部同名文件修改仍需重新扫描；原子写入、跨文件事务、历史永久删除 ID 高水位和全量历史测试类型检查另留后续。
+- NDK/端侧 VLM 是延期功能，本轮不安装工具链或接入新模型。

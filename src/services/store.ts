@@ -171,8 +171,31 @@ function resetNextId(): void {
     for (const rec of store[t] as { id?: number }[]) {
       if (typeof rec.id === 'number' && rec.id > max) max = rec.id;
     }
-    nextId[t] = max + 1;
+    // 回收站中的数字主键仍被占用，重启后不能分配给新记录。
+    for (const item of store.trashItems) {
+      if (item.originalTable === t && typeof item.originalId === 'number' && Number.isSafeInteger(item.originalId)) {
+        max = Math.max(max, item.originalId);
+      }
+    }
+    nextId[t] = Math.max(nextId[t], max + 1);
   }
+}
+
+/** 旧课程仅补一次归属；切换学期前调用可保留历史学期。 */
+export function bindLegacyCourses(startDate: string | null | undefined): boolean {
+  if (!startDate) return false;
+  let changed = false;
+  const bind = (course: Course) => {
+    if (course.semesterStartDate === undefined) {
+      course.semesterStartDate = startDate;
+      changed = true;
+    }
+  };
+  store.courses.forEach(bind);
+  for (const item of store.trashItems) {
+    if (item.originalTable === 'courses' && item.originalData) bind(item.originalData);
+  }
+  return changed;
 }
 
 function clearStore(): void {
@@ -442,6 +465,22 @@ async function listDayDates(dir: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+/** 枚举应用拥有的日期数据文件；日期目录以外的文件永不参与清理。 */
+async function listManagedDayFiles(dir: string): Promise<string[]> {
+  const managed = /^days\/\d{4}-\d{2}-\d{2}\/(plan|reflections|harvests|tasks)\.json$/;
+  if (!isCapacitor()) return (await idbKvKeys()).filter(key => managed.test(key));
+  const { Filesystem, Directory } = await import('@capacitor/filesystem');
+  const files: string[] = [];
+  for (const date of await listDayDates(dir)) {
+    const result = await Filesystem.readdir({ path: nativePath(dir, `${DAY_DIR}/${date}`), directory: Directory.Documents });
+    for (const entry of result.files) {
+      const rel = `${DAY_DIR}/${date}/${entry.name}`;
+      if (entry.type === 'file' && managed.test(rel)) files.push(rel);
+    }
+  }
+  return files;
 }
 
 // ============ 解析 ============
@@ -732,10 +771,17 @@ function snapshot(): StorageData {
  * 入队写任务：入队时刻同步捕获 { dir, 待写文件列表 } 快照，promise 链串行执行。
  * 写入失败记 lastPersistError，绝不 throw。
  */
-function enqueue(build: () => { writes: FileWrite[]; deletes: string[] }): Promise<boolean> {
+function enqueue(build: () => { writes: FileWrite[]; deletes: string[] }, cleanOrphans = false): Promise<boolean> {
   const dir = getStoragePath();
   const { writes, deletes } = build();
   const job = persistQueue.then(async () => {
+    // 只清理由应用管理的日期 JSON，不碰备份、自定义文件或其他目录。
+    if (cleanOrphans) {
+      const wanted = new Set(writes.map(w => w.relPath));
+      for (const rel of await listManagedDayFiles(dir)) {
+        if (!wanted.has(rel)) deletes.push(rel);
+      }
+    }
     for (const w of writes) {
       if (!(await writeFile(dir, w.relPath, w.json))) {
         lastPersistError = `写入失败: ${dir}/${w.relPath}`;
@@ -747,8 +793,12 @@ function enqueue(build: () => { writes: FileWrite[]; deletes: string[] }): Promi
     }
     return true;
   });
-  persistQueue = job.catch(() => {});
-  return job;
+  const settled = job.catch(error => {
+    lastPersistError = `存储失败: ${dir} (${String(error)})`;
+    return false;
+  });
+  persistQueue = settled;
+  return settled;
 }
 
 function groupByDate<T extends { date: string }>(items: T[]): Map<string, T[]> {
@@ -785,6 +835,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
   writes.push({ relPath: CATEGORY_FILES.ddls, json: JSON.stringify(store.ddls, null, 2), table: 'ddls' });
   writes.push({ relPath: CATEGORY_FILES.important, json: JSON.stringify(store.important, null, 2), table: 'important' });
   writes.push({ relPath: CATEGORY_FILES.backlog, json: JSON.stringify(store.backlog, null, 2), table: 'backlog' });
+  writes.push({ relPath: CATEGORY_FILES.ideas, json: JSON.stringify(store.ideas, null, 2), table: 'ideas' });
   writes.push({ relPath: CATEGORY_FILES.taskBoard, json: JSON.stringify(store.taskBoard, null, 2), table: 'taskBoard' });
   writes.push({ relPath: CATEGORY_FILES.linkGroups, json: JSON.stringify(store.linkGroups, null, 2), table: 'linkGroups' });
   writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
@@ -921,7 +972,7 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
 }
 
 export function persist(): Promise<boolean> {
-  return enqueue(() => buildWriteSetFromStore()).then(ok => {
+  return enqueue(() => buildWriteSetFromStore(), true).then(ok => {
     if (ok) scheduleSnapshot();
     return ok;
   });
@@ -1135,8 +1186,9 @@ export async function initStore(): Promise<number> {
   resetNextId();
 
   const healed = healTrashDuplicates();
+  const boundCourses = bindLegacyCourses(store.semester[0]?.startDate);
 
-  if (legacyHasData || oldFormat || healed) {
+  if (legacyHasData || oldFormat || healed || boundCourses) {
     const ok = await persist();
     if (ok) {
       if (oldFormat) {
@@ -1200,9 +1252,19 @@ export async function importJSONIntoStore(json: string): Promise<number> {
   }
   const data = parseStorageData(trimmed);
   if (!data) throw new Error('不是 DailyNote 数据文件（缺少 version/dailyPlans 字段）');
+  // 导入旧备份时，先按备份自己的学期补归属，避免误绑成本机学期。
+  const importedStart = data.semester[0]?.startDate;
+  if (importedStart) {
+    for (const course of data.courses) course.semesterStartDate ??= importedStart;
+    for (const item of data.trashItems) {
+      if (item.originalTable === 'courses' && item.originalData) item.originalData.semesterStartDate ??= importedStart;
+    }
+  }
   let count = 0;
   await mutate(() => {
+    bindLegacyCourses(store.semester[0]?.startDate);
     count = mergeIntoStore(data);
+    bindLegacyCourses(store.semester[0]?.startDate);
   });
   resetNextId();
   return count;
@@ -1324,8 +1386,11 @@ export async function rescanFromDisk(): Promise<number> {
 // ============ 测试专用重置 ============
 
 export async function _resetForTest(): Promise<void> {
+  await persistQueue;
+  if (snapTimer) clearTimeout(snapTimer);
+  snapTimer = null;
   clearStore();
-  resetNextId();
+  for (const table of Object.keys(nextId) as NumericTable[]) nextId[table] = 1;
   persistQueue = Promise.resolve();
   lastPersistError = null;
   await clearSnapshot();

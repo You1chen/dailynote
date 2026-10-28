@@ -11,6 +11,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'public/**'
+      - 'test/**'
       - 'android/**'
       - '.github/workflows/build-apk.yml'
 
@@ -50,10 +51,16 @@ jobs:
             echo "⚠️ 未配置签名密钥，使用默认 debug 签名（无法覆盖安装）"
           fi
 
+      - name: Run Tests
+        run: npm test
+
       - name: Build Web App & Sync
         env:
           CAPACITOR: 'true'
-        run: npm run build:android
+        run: |
+          npx tsc --noEmit
+          npx vite build
+          npx cap sync android
 
       - name: Generate App Icons
         run: npm run cap:assets

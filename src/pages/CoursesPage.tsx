@@ -6,6 +6,7 @@ import type { Course, SemesterRecord } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { blockRenderRect, foldedGrid } from '../utils/time';
+import { isCourseInSemester } from '../utils/courseSchedule';
 import CourseEditModal, { DAY_LABELS, WEEK_TYPE_LABELS } from '../components/CourseEditModal';
 // settings-section / settings-field / settings-chip 等通用表单样式复用设置页
 import './SettingsPage.css';
@@ -137,8 +138,8 @@ export default function CoursesPage() {
     list: courses.filter(c => c.dayOfWeek.includes(dw)),
   }));
 
-  // 课程表视图：模板语义，显示全部课程（不按周过滤），按开始时间排序
-  const gridCourses = [...courses].sort(
+  // 课表只展示当前学期的模板（不按周过滤）；列表保留历史课程供管理。
+  const gridCourses = courses.filter(c => isCourseInSemester(c, semester)).sort(
     (a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime),
   );
   const hourHeight = prefs.hourHeight;
@@ -177,7 +178,7 @@ export default function CoursesPage() {
             <div className="settings-field">
               <label className="label">🎒 开学时间</label>
               <p className="settings-field-hint" style={{ marginBottom: 8 }}>
-                开学时间所在周（周一对齐）为第 1 周
+                开学时间所在周（周一对齐）为第 1 周。切换学期不会把已有课程转入新学期。
               </p>
               <input
                 className="input"
@@ -278,12 +279,13 @@ export default function CoursesPage() {
         </div>
 
         {viewMode === 'grid' ? (
-          courses.length === 0 ? (
+          gridCourses.length === 0 ? (
             <div className="empty-state">
-              <p>还没有课程，点击「添加课程」开始创建</p>
+              <p>本学期还没有课程，点击「添加课程」开始创建</p>
+              {courses.length > 0 && <p>其他学期的课程可在列表中管理</p>}
             </div>
           ) : (
-            /* === 课程表视图：星期 × 时间的二维模板网格，显示全部课程 === */
+            /* === 课程表视图：星期 × 时间的二维模板网格，显示当前学期课程 === */
             <>
               <div className="ct-fold-toggle-row">
                 <button
@@ -396,6 +398,11 @@ export default function CoursesPage() {
                           <span className="courses-card-name">{c.name}</span>
                           <span className="courses-card-meta">
                             {c.location || '未填地点'} · {weekRangeText(c)} · {WEEK_TYPE_LABELS[c.weekType]}
+                          </span>
+                          <span className="courses-card-meta">
+                            {c.semesterStartDate
+                              ? `所属学期：${c.semesterStartDate} 开学${isCourseInSemester(c, semester) ? '（当前）' : '（非当前）'}`
+                              : '所属学期：待设置开学时间'}
                           </span>
                         </div>
                         <button

@@ -55,6 +55,33 @@ describe('effectiveCourses — 学期前提', () => {
   });
 });
 
+describe('effectiveCourses — 显式学期归属', () => {
+  it('周次重合仍排除其他学期，只保留当前学期和缺字段兼容课程', () => {
+    const previous = course('Previous', { semesterStartDate: '2026-02-23' });
+    const current = course('Current', { semesterStartDate: START });
+    const future = course('Future', { semesterStartDate: '2027-02-22' });
+    const legacy = course('Legacy');
+    const list = [previous, current, future, legacy];
+    const before = JSON.stringify(list);
+    expect(names(effectiveCourses(list, semester(), WEEK9))).toEqual(['Current', 'Legacy']);
+    expect(JSON.stringify(list)).toBe(before);
+  });
+
+  it('换学期不会把已归属的旧课程算入新学期，切回原学期仍有效', () => {
+    const c = course('高数', { semesterStartDate: START });
+    expect(effectiveCourses([c], semester('2027-02-22'), '2027-04-19')).toEqual([]);
+    expect(effectiveCourses([c], semester(), WEEK9)).toEqual([c]);
+    expect(c.semesterStartDate).toBe(START);
+  });
+
+  it('显式归属不跳过原有周次与单双周判断', () => {
+    const odd = course('Odd', { semesterStartDate: START, weekType: 'odd' });
+    const late = course('Late', { semesterStartDate: START, startWeek: 10 });
+    expect(names(effectiveCourses([odd, late], semester(), WEEK9))).toEqual(['Odd']);
+    expect(names(effectiveCourses([odd, late], semester(), WEEK10))).toEqual(['Late']);
+  });
+});
+
 describe('effectiveCourses — 课程周期', () => {
   it('本周还在周期内 → 有效', () => {
     expect(names(effectiveCourses([course('高数', { startWeek: 1, weekCount: 16 })], semester(), WEEK9)))
