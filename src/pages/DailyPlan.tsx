@@ -577,20 +577,14 @@ export default function DailyPlanPage() {
         </div>
       </div>
 
-      {(minds.wish.length > 0 || minds.chore.length > 0) && (
-        <div className="dp-minds">
-          {minds.wish.length > 0 && (
-            <button className="dp-mind dp-mind--wish" onClick={() => setMindKind('wish')}>
-              <span className="dp-mind-dot" /> 小愿望 {minds.wish.length}
-            </button>
-          )}
-          {minds.chore.length > 0 && (
-            <button className="dp-mind dp-mind--chore" onClick={() => setMindKind('chore')}>
-              <span className="dp-mind-dash" /> 琐事 {minds.chore.length}
-            </button>
-          )}
-        </div>
-      )}
+      <div className="dp-minds">
+        <button className="dp-mind dp-mind--wish" onClick={() => setMindKind('wish')}>
+          <span className="dp-mind-dot" /> 小愿望 {minds.wish.length}
+        </button>
+        <button className="dp-mind dp-mind--chore" onClick={() => setMindKind('chore')}>
+          <span className="dp-mind-dash" /> 琐事 {minds.chore.length}
+        </button>
+      </div>
       </div>
 
       {/* 时间网格 */}

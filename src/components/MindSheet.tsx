@@ -119,6 +119,8 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
           <div className="mind-tabs">
             {allowed.map(k => {
               const Icon = k.icon;
+              // 愿望/琐事始终累计；灵感只数当前这一天
+              const count = k.key === 'idea' ? todaysIdeas.length : byKind[k.key].length;
               return (
                 <button
                   key={k.key}
@@ -127,6 +129,7 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
                 >
                   <Icon size={15} />
                   {k.label}
+                  <span className="mind-tab-count">{count}</span>
                 </button>
               );
             })}

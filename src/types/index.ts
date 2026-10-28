@@ -39,13 +39,29 @@ export interface GoalTask {
   createdAt: number;
 }
 
-/** 长期目标 */
+/** 长期目标 / 大愿望共用一张表，用 kind 区分 */
+export type GoalKind = 'goal' | 'wish';
+
+/** 大愿望的状态 */
+export type WishStatus = 'active' | 'done' | 'paused';
+
+/**
+ * 长期目标（可拆任务）与大愿望（更正式：愿景、期望日期、状态）共用结构。
+ * kind 缺省视为 'goal'，旧的长期目标数据不需要迁移。
+ */
 export interface LongTermGoal {
   id?: number;
+  kind?: GoalKind;
   title: string;
   description: string;
   category: string;        // 分类（学科/技能/其他）
-  tasks: GoalTask[];
+  /** 大愿望：愿景——达成时的样子（一句话） */
+  vision?: string;
+  /** 大愿望：期望完成的日期 */
+  targetDate?: string;
+  /** 大愿望：进行中 / 已实现 / 暂缓 */
+  status?: WishStatus;
+  tasks: GoalTask[];       // 大愿望下即「里程碑」
   createdAt: number;
   updatedAt: number;
 }

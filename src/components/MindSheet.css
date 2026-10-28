@@ -547,3 +547,20 @@
 .idea-item-body {
   margin-top: 6px;
 }
+
+/* 分类上的计数：始终显示，0 也不隐藏 */
+.mind-tab-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(17, 17, 27, 0.07);
+  color: inherit;
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mind-tab.is-on .mind-tab-count {
+  background: rgba(255, 255, 255, 0.75);
+}

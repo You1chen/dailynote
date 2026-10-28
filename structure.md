@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 94 文件；`test/` 32 个测试文件 / 692 用例 |
+| 规模 | `src/` 94 文件；`test/` 33 个测试文件 / 698 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -126,7 +126,7 @@ utils/  →  types/
 | reflections | `days/<date>/reflections.json` | 数组 | `date, period, problem, cause, solution` |
 | harvests | `days/<date>/harvests.json` | 数组 | `date, period, subject, content` |
 | taskItems | `days/<date>/tasks.json` | 数组 | `id:string, title, done, date, sortOrder` |
-| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]` |
+| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]`；`kind: wish` = 大愿望（另带 `vision, targetDate, status`） |
 | fixedRoutines | `routines.json` | 数组 | `name, timeBlocks[], isActive` |
 | taskTemplates | `templates.json` | 数组 | `name, items[]` |
 | courses | `courses.json` | 数组 | `dayOfWeek:number[], weekType, startWeek, weekCount, semesterStartDate?` |
@@ -281,7 +281,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | WeekViewPage | 7 列周日程、课程按周过滤、点空白/点块跳日计划编辑、睡眠折叠 |
 | DdlPage / ImportantPage | 共用 DeadlineListPage：地点、Markdown 备注（编辑/预览）、图片查看（Lightbox）、图片识别（识别全部备注图片）、解除威胁；**关联内容只有 DDL 有**（`allowLinks`，重要的事关闭）；重要的事三天气泡 + 过期一天收起 |
 | BacklogPage | 阻塞中/可推进/已解决/已终止；起始三态（距今/日期/文字）；历时排序；一周宽限气泡 |
-| LongTermGoals | 新建目标、子任务、进度、分类标签（无编辑、无筛选） |
+| LongTermGoals | 上半「大愿望」（名称/愿景/为什么/期望日期/状态/里程碑），下半「长期目标」；两者共用一张表，靠 `kind` 区分 |
 | Reflection / Harvest | 三段式反思；收获 #标签；均支持 `?date=` |
 | Trash / BackupRestore / SettingsPage / SetupPage | 回收站；导入导出与路径；头像主题偏好；首次目录选择 |
 
@@ -323,7 +323,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npm test`：32 文件 / 692 用例。
+`npm test`：33 文件 / 698 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -350,6 +350,8 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | DDL清单/linkGroups | 8 | 关联分组 CRUD、回收站、落盘、导入导出、DDL 关联快照 |
 | 任务清单/taskTemplate | 13 | 模板 CRUD、软删除、持久化、套用 |
 | DDL清单/markdownAndLocation | 10 | Markdown 语法、XSS 转义、地点往返 |
+| 数据存储/readIsolation | 3 | db 返回深副本，调用方改对象不会绕过 mutate |
+| 数据存储/storeSchema | 2 | 注册表覆盖全部表、文件与写序唯一、数字主键齐全 |
 | 数据存储/storageAccess | 8 | 权限守卫、阻塞时零写入 |
 | 数据存储/nativeWriteEncoding | 3 | 原生写入 utf8 与往返 |
 | 数据存储/startupSnapshot | 7 | 快照命中、日期/分类文件名变化失效、外部内容重扫、换目录不复用 |
@@ -357,7 +359,8 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 偏好设置/localDate | 5 | 本地凌晨、跨年、晚间日期；另在洛杉矶时区进程验证 |
 | 课程表/courseEditSemester | 4 | 新建当前学期、编辑保留归属、无学期兼容、旧课兼容 |
 | 课程表/coursesPageSemester | 3 | 当前课表过滤、历史课空态、列表保留历史归属 |
-| **合计** | **692** | 32 个文件 |
+| 长期/wish | 6 | 大愿望字段往返、与目标共存、旧数据无 kind、里程碑、状态落盘、回收站还原 |
+| **合计** | **698** | 33 个文件 |
 
 环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
 

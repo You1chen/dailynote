@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { LongTermGoal, GoalTask } from '../types';
+import type { LongTermGoal, GoalTask, WishStatus } from '../types';
 import { genId } from '../types';
 import { getAllGoals, saveGoal, deleteGoal } from '../db';
 
@@ -77,5 +77,42 @@ export function useGoals() {
     if (g) await saveGoal(g);
   }, [goals]);
 
-  return { goals, loading, addGoal, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload: load };
+  /** 新增大愿望：名称 + 愿景必填，其余可选 */
+  const addWish = useCallback(async (input: {
+    title: string;
+    vision: string;
+    description?: string;
+    category?: string;
+    targetDate?: string;
+  }) => {
+    const wish: LongTermGoal = {
+      kind: 'wish',
+      title: input.title.trim(),
+      vision: input.vision.trim(),
+      description: (input.description ?? '').trim(),
+      category: input.category ?? '其他',
+      targetDate: input.targetDate || undefined,
+      status: 'active',
+      tasks: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const id = await saveGoal(wish);
+    setGoals(prev => [{ ...wish, id }, ...prev]);
+    return id;
+  }, []);
+
+  const setWishStatus = useCallback(async (id: number, status: WishStatus) => {
+    const updated = goals.map(g => (g.id === id ? { ...g, status, updatedAt: Date.now() } : g));
+    setGoals(updated);
+    const g = updated.find(x => x.id === id);
+    if (g) await saveGoal(g);
+  }, [goals]);
+
+  return {
+    goals, loading,
+    addGoal, addWish, setWishStatus,
+    updateGoal, removeGoal, addTask, toggleTask, removeTask,
+    reload: load,
+  };
 }

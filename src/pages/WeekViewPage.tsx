@@ -20,8 +20,8 @@ export default function WeekViewPage() {
   const navigate = useNavigate();
   const { prefs } = usePreferences();
 
-  // 显示周的周日（与日历 weekStartsOn:0 约定一致，周日→周六 7 列）
-  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
+  // 显示周：周一 → 周日（与国人习惯一致；日历内部仍以 0=周日 的 getDay 记星期）
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [courses, setCourses] = useState<Course[]>([]);
   const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
   const [plans, setPlans] = useState<(DailyPlan | undefined)[]>([]);
@@ -53,7 +53,7 @@ export default function WeekViewPage() {
 
   const goPrev = useCallback(() => setWeekStart(ws => addDays(ws, -7)), []);
   const goNext = useCallback(() => setWeekStart(ws => addDays(ws, 7)), []);
-  const goThisWeek = useCallback(() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 })), []);
+  const goThisWeek = useCallback(() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 })), []);
 
   const handleCourseSaved = useCallback(() => {
     setEditingCourse(undefined);
@@ -128,7 +128,7 @@ export default function WeekViewPage() {
                   className={`wv-head-cell${isSameDay(d, new Date()) ? ' wv-head-cell--today' : ''}`}
                   style={{ left: TIME_COL_W + i * COL_W, width: COL_W }}
                 >
-                  <span className="wv-head-day">{DAY_LABELS[i]}</span>
+                  <span className="wv-head-day">{DAY_LABELS[(i + 1) % 7]}</span>
                   <span className="wv-head-date">{format(d, 'M/d')}</span>
                   {wk >= 1 && <span className="wv-head-week">第{wk}周</span>}
                   {holiday && <span className="wv-head-holiday">放假</span>}

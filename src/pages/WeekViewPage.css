@@ -1,10 +1,12 @@
 /* ============ 周视图（去棱角版：无盒子感、无硬边框） ============ */
 
 .app-container--week {
-  padding-bottom: 16px;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 64px - var(--safe-top));
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
 }
 
 /* 周导航条 */

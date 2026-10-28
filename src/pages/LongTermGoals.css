@@ -146,3 +146,148 @@
   justify-content: flex-end;
   padding-top: 8px;
 }
+
+/* ============ 大愿望（比长期目标更正式） ============ */
+
+.goal-head-acts { display: flex; gap: 8px; }
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.04em;
+  margin: 4px 0 10px;
+}
+
+.section-count {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wish-section { margin-bottom: 22px; }
+
+.wish-empty-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.wish-card {
+  position: relative;
+  border-radius: 16px;
+  padding: 14px 14px 10px;
+  margin-bottom: 12px;
+  background: linear-gradient(150deg, rgba(255, 249, 235, 0.9), rgba(246, 240, 255, 0.9));
+  box-shadow: 0 6px 22px rgba(120, 100, 180, 0.09);
+}
+
+.wish-card--done { opacity: 0.72; }
+.wish-card--paused { opacity: 0.8; }
+
+.wish-top { cursor: pointer; }
+
+.wish-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.wish-spark { color: #b07dff; flex: 0 0 auto; align-self: center; }
+
+.wish-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.01em;
+}
+
+.wish-card--done .wish-title { text-decoration: line-through; }
+
+.wish-status {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.wish-status--active { background: rgba(108, 124, 255, 0.14); color: #5a68e0; }
+.wish-status--done { background: rgba(52, 199, 89, 0.14); color: #2f9e56; }
+.wish-status--paused { background: rgba(120, 120, 130, 0.14); color: #6b6b75; }
+
+.wish-vision {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #6a5f86;
+  font-style: italic;
+}
+
+.wish-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.wish-target { display: inline-flex; align-items: center; gap: 4px; }
+.wish-target b { color: var(--color-text-secondary); font-weight: 600; }
+.wish-target b.is-near { color: var(--color-warning); }
+.wish-target b.is-over { color: var(--color-danger); }
+
+.wish-progress { margin-top: 8px; }
+
+.wish-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wish-act {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  font-family: inherit;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.wish-act:active { background: rgba(255, 255, 255, 0.8); }
+.wish-act--danger { color: var(--color-text-muted); display: flex; align-items: center; }
+.wish-act--toggle { color: var(--color-text-muted); display: flex; align-items: center; }
+
+.wish-why {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.wish-why span {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-right: 6px;
+}
+
+.wish-empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: 0 0 8px;
+}

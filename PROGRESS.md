@@ -1274,3 +1274,36 @@ pm run build:apk` 成功（24.67 MB，需外部设置 JAVA_HOME/ANDROID_SDK_ROOT
 ```
 修改：src/utils/taskTree.ts、src/components/TaskBall.tsx、src/components/MindSheet.tsx/.css、test/任务/taskTree.test.ts、structure.md
 ```
+## 2026-10-28 — 杂念计数、常驻入口、周视图修正、新增「大愿望」
+
+### 需求与修复
+
+- **杂念数字不忠实**：分类标签上的数字改为始终显示（0 也显示）；**小愿望 / 琐事累计全部日期**，**灵感只数当前这一天**。
+  收获页的「灵感 N」也改成按所选日期统计（原来数的是全部）。
+- **入口常驻**：计划页不再"有内容才出现"——小愿望、琐事的药丸一直留着，否则只能从 TODO 窗口记录。
+- **周视图**：
+  - 一周改为**周一 → 周日**（`weekStartsOn: 1`，表头用 `(i+1) % 7` 映射星期名）。
+  - 下方空白且要下滑才看得见：根因是 `.app-container--week` 写死 `100dvh - 64px - safe-top`，没算页面内头部与 TabBar，
+    容器比可视区高。改为 `.app-main` 用 flex 列 + 周视图容器 `flex: 1; min-height: 0`，网格正好填满剩余空间。
+- **新增大愿望**（`/goals`）：
+  - 与长期目标**共用一张表**，用 `kind: 'wish'` 区分，旧数据无需迁移。
+  - 字段：名称、**愿景**（必填）、为什么想要、期望完成日期、状态（进行中 / 已实现 / 暂缓）；里程碑复用 `tasks`。
+  - 界面：上半「大愿望」用暖色渐变卡 + 星星 + 引号愿景 + 倒计时（<30 天提示、逾期标红）；下半「长期目标」保持原样。
+  - 页标题改为「目标与愿望」，头部两个入口：`大愿望` / `目标`。
+
+### 验证
+
+- 新增 `test/长期/wish.test.ts` 6 项（字段往返、与目标共存、旧数据无 kind、里程碑、状态落盘、回收站还原）。
+- 
+px tsc --noEmit` 通过；
+pm test` **698/698**（33 文件）；
+pm run build:apk` 成功（24.8 MB）。
+
+### 涉及文件
+
+```
+修改：src/types/index.ts（LongTermGoal 增加 kind/vision/targetDate/status）、src/hooks/useGoals.ts（addWish / setWishStatus）、
+      src/pages/LongTermGoals.tsx/.css（大愿望区）、src/pages/DailyPlan.tsx（入口常驻）、src/pages/Harvest.tsx（按日统计）、
+      src/components/MindSheet.tsx/.css（分类计数）、src/pages/WeekViewPage.tsx/.css + src/App.css（周一起始、填满高度）、structure.md
+新增：test/长期/wish.test.ts
+```

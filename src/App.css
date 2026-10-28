@@ -299,6 +299,8 @@ body {
 .app-main {
   margin-left: var(--nav-w);
   min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ============ 深色主题 ============ */

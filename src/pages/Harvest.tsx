@@ -97,7 +97,7 @@ export default function HarvestPage() {
           <Edit3 size={18} /> 记录今天的收获
         </button>
         <button className="btn btn-outline harvest-idea-btn" onClick={() => setIdeaOpen(true)}>
-          <Lightbulb size={18} /> 灵感{byKind.idea.length > 0 ? ` ${byKind.idea.length}` : ''}
+          <Lightbulb size={18} /> 灵感{byKind.idea.filter(i => i.date === date).length > 0 ? ` ${byKind.idea.filter(i => i.date === date).length}` : ''}
         </button>
       </div>
 
