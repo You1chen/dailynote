@@ -66,6 +66,7 @@ import {
   moveKey,
   normalizeOrder,
   parseTaskText,
+  pruneDoneLeaves,
   removeLeaf,
   toggleLeafDone,
   treeToText,
@@ -368,5 +369,33 @@ describe('搁置与完成时刻', () => {
     const map = prevLeafState(on);
     expect(map.get('学习/看书')!.shelved).toBe(true);
     expect(map.get('生活/买菜')!.shelved).toBeFalsy();
+  });
+});
+describe('进编辑前清理已完成', () => {
+  const base = (): TaskNode[] => linesToTree(parseTaskText('- 学习\n\t- 看书\n\t- 做题\n- 生活\n\t- 买菜'));
+
+  it('只删已完成的末级，未完成保留', () => {
+    const done = toggleLeafDone(base(), '学习/看书');
+    const pruned = pruneDoneLeaves(done);
+    const keys = leavesOf(pruned).map(l => l.key);
+    expect(keys).toEqual(['学习/做题', '生活/买菜']);
+  });
+
+  it('父节点不会留下空壳', () => {
+    let nodes = toggleLeafDone(base(), '学习/看书');
+    nodes = toggleLeafDone(nodes, '学习/做题');
+    const pruned = pruneDoneLeaves(nodes);
+    expect(pruned.map(n => n.title)).toEqual(['生活']);
+  });
+
+  it('全部完成 → 清空', () => {
+    let nodes = base();
+    for (const k of ['学习/看书', '学习/做题', '生活/买菜']) nodes = toggleLeafDone(nodes, k);
+    expect(pruneDoneLeaves(nodes)).toEqual([]);
+  });
+
+  it('没有完成项时结构不变', () => {
+    const nodes = base();
+    expect(treeToText(pruneDoneLeaves(nodes))).toBe(treeToText(nodes));
   });
 });

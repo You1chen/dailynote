@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTaskBoard } from '../hooks/useTaskBoard';
 import MindSheet from './MindSheet';
 import { usePreferences } from '../hooks/usePreferences';
@@ -13,6 +14,7 @@ import {
   linesToTree,
   parseTaskText,
   treeToLines,
+  pruneDoneLeaves,
   treeToText,
 } from '../utils/taskTree';
 import './TaskBall.css';
@@ -39,6 +41,7 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export default function TaskBall() {
+  const navigate = useNavigate();
   const { nodes, leaves, shelved, undone, saveTree, toggle, remove, shelve, reorder } = useTaskBoard();
   const { prefs } = usePreferences();
 
@@ -106,9 +109,14 @@ export default function TaskBall() {
 
   // ---- 填写窗 ----
   function openEditor() {
-    const ls = treeToLines(nodes);
+    // 进编辑前先清掉已完成的条目：全做完就整份清空，否则只留下没做的
+    const hasDone = leaves.some(l => l.done);
+    const cleanNodes = hasDone ? pruneDoneLeaves(nodes) : nodes;
+    if (hasDone) void saveTree(cleanNodes);
+
+    const ls = treeToLines(cleanNodes);
     setLines(ls);
-    setText(treeToText(nodes));
+    setText(treeToText(cleanNodes));
     setMode('lines');
     setPending('');
     setEditing(null);
@@ -208,7 +216,7 @@ export default function TaskBall() {
     if (finalLines.length === 0) { setPanel('list'); return; }
     setBusy(true);
     try {
-      await saveTree(linesToTree(finalLines, nodes));
+      await saveTree(pruneDoneLeaves(linesToTree(finalLines, nodes)));
       setPanel('list');
     } finally {
       setBusy(false);
@@ -478,7 +486,12 @@ export default function TaskBall() {
         </div>
       )}
 
-      {mindOpen && <MindSheet onClose={() => setMindOpen(false)} />}
+      {mindOpen && (
+        <MindSheet
+          onClose={() => setMindOpen(false)}
+          onBrowseDates={() => { setMindOpen(false); navigate('/harvest'); }}
+        />
+      )}
       {/* 全部完成：自动跳出庆祝 */}
       <CelebrationDialog
         open={celebration !== null}

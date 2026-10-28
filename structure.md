@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 94 文件；`test/` 32 个测试文件 / 688 用例 |
+| 规模 | `src/` 94 文件；`test/` 32 个测试文件 / 692 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -323,7 +323,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npm test`：32 文件 / 688 用例。
+`npm test`：32 文件 / 692 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -331,7 +331,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 数据存储/store | 53 | CRUD、persist、迁移、自愈、导出、课程/DDL 存储 |
 | 课程表/courseSchedule | 36 | 周次、单双周、节假日、当日课程 |
 | 数据导入导出/jsonImport | 23 | 解析、BOM、乱码拒绝、错误分级、往返 |
-| 任务/taskTree | 28 | 文本⇄层级、完整链、状态回填、删除、排序 |
+| 任务/taskTree | 32 | 文本⇄层级、完整链、状态回填、删除、排序 |
 | 遗留问题/backlog | 20 | CRUD、回收站、持久化、历时与宽限 |
 | 搜索/search | 19 | 内容命中、路由、不命中界面文案与日期、DDL 阈值 |
 | 任务清单/taskList | 18 | 创建、切换、排序、日期隔离 |
@@ -357,7 +357,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 偏好设置/localDate | 5 | 本地凌晨、跨年、晚间日期；另在洛杉矶时区进程验证 |
 | 课程表/courseEditSemester | 4 | 新建当前学期、编辑保留归属、无学期兼容、旧课兼容 |
 | 课程表/coursesPageSemester | 3 | 当前课表过滤、历史课空态、列表保留历史归属 |
-| **合计** | **688** | 32 个文件 |
+| **合计** | **692** | 32 个文件 |
 
 环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
 

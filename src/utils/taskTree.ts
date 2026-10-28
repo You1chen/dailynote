@@ -262,3 +262,16 @@ export function setLeafShelved(
     return children === node.children ? node : { ...node, children };
   });
 }
+/**
+ * 清掉已完成的末级；父节点因此变空壳的也一并清掉。
+ * 全部完成时返回空数组（调用方据此把清单清空）。
+ */
+export function pruneDoneLeaves(nodes: TaskNode[]): TaskNode[] {
+  return nodes
+    .map(node => {
+      if (node.children.length === 0) return node.done ? null : node;
+      const children = pruneDoneLeaves(node.children);
+      return children.length === 0 ? null : { ...node, children };
+    })
+    .filter((n): n is TaskNode => n !== null);
+}

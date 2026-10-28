@@ -421,3 +421,129 @@
 }
 
 .idea-item-tags .idea-tag { background: #fff; }
+
+/* ---- 就地编辑 / 实现动画 / 灵感紧凑列表 ---- */
+.mind-edit {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-bottom: 1px dashed rgba(209, 73, 138, 0.4);
+  background: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: inherit;
+  padding: 2px 0;
+  outline: none;
+}
+
+.mind-edit--chore {
+  border-bottom-color: rgba(17, 17, 27, 0.28);
+}
+
+.wish-star,
+.chore-done,
+.idea-done {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  padding: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.wish-star { color: #ffb020; }
+.chore-done { color: #7b8391; }
+.idea-done { color: #6c7cff; }
+
+.wish-star:active { transform: scale(0.82) rotate(14deg); }
+.chore-done:active,
+.idea-done:active { transform: scale(0.86); }
+
+/* 实现瞬间：闪一下 */
+.mind-flash {
+  animation: mind-flash 0.42s ease-out;
+}
+
+@keyframes mind-flash {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(1.04); filter: brightness(1.35); }
+  100% { transform: scale(0.96); filter: brightness(1.1); opacity: 0.2; }
+}
+
+/* 划过的一颗星星 */
+.wish-fly {
+  position: fixed;
+  top: 38%;
+  left: -40px;
+  font-size: 22px;
+  color: #ffb020;
+  pointer-events: none;
+  z-index: 400;
+  animation: wish-fly 1.15s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
+@keyframes wish-fly {
+  0% { transform: translate3d(0, 0, 0) rotate(-12deg); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate3d(115vw, -18vh, 0) rotate(18deg); opacity: 0; }
+}
+
+/* 灵感的日期行 + 紧凑条目 */
+.idea-day {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0 6px;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.idea-day-link {
+  border: none;
+  background: transparent;
+  color: #6c7cff;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.idea-item {
+  padding: 8px 10px;
+}
+
+.idea-item-head {
+  gap: 6px;
+}
+
+.idea-item-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.idea-more {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.idea-more.is-on { color: #6c7cff; }
+
+.idea-item-body {
+  margin-top: 6px;
+}
