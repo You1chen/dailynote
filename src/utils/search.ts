@@ -5,7 +5,7 @@
  * 任务树没有独立页面，用 onOpen='tasks' 让悬浮球面板打开。
  */
 
-import type { StoreShape } from '../services/store';
+import type { StoreShape } from '../types/storage';
 
 export interface SearchHit {
   key: string;

@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 93 文件；`test/` 30 个测试文件 / 682 用例 |
+| 规模 | `src/` 94 文件；`test/` 32 个测试文件 / 688 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -56,7 +56,8 @@ src/
 ├── App.tsx             外壳：主题 + SideNav + Routes + TabBar + TaskBall
 ├── App.css             CSS 变量、重置、通用类
 │
-├── types/index.ts      全部数据模型 + genId / todayStr / appendTemplateItems / PERIODS
+├── types/index.ts      领域数据模型 + genId / todayStr / appendTemplateItems / PERIODS
+│   └── storage.ts      跨存储/查询复用的 StoreShape、StorageData、AnyStoreTable
 │
 ├── utils/              纯函数，不 import React、不做 IO
 │   ├── time.ts         时间换算、睡眠折叠映射（minutesToTop / topToMinutes / blockRenderRect / foldedGrid / futureWindow）
@@ -163,7 +164,7 @@ Documents/<dir>/
 └── dailynote-backup-<时间戳>.json     （导出存档，不参与读取）
 ```
 
-Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。
+Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。跨模块共享的 `StoreShape` / `StorageData` / `AnyStoreTable` 定义在 `types/storage.ts`，纯类型不反向依赖存储实现。
 
 ### 6.2 写入
 
@@ -185,9 +186,9 @@ Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。
 | --- | --- |
 | 1 | 旧单文件 dailynote-data.json 存在 → 走迁移路径（必须读它） |
 | 2 | 列一次 days/ 目录名 + 根目录文件名（只有名称，不读内容） |
-| 3 | 日期集合与快照一致 → **直接用快照数据**，零文件读取 |
-| 4 | 日期集合变化（新增/删除某天）→ 全量读取并刷新快照 |
-| 5 | 每次写盘后 400ms 防抖刷新快照；lush() 时立即落盘 |
+| 3 | 日期和根分类文件名集合与快照一致 → **直接用快照数据**，零文件读取 |
+| 4 | 日期或根分类文件名集合变化（新增/删除）→ 全量读取并刷新快照 |
+| 5 | 运行期每次写盘后 400ms 防抖刷新快照；`flush()` 会等待快照写完成 |
 | 6 | 「备份与恢复 → 重新扫描存储目录」丢弃快照，按磁盘现状重读 |
 
 局限：外部直接改动某天的文件内容（文件名不变）不会被自动发现，需点「重新扫描存储目录」。
@@ -204,7 +205,7 @@ Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。
 ### 6.5 回收站
 
 - 软删除：`deepClone` 入 `trashItems` 再移出原表；30 天过期（删除入口与打开回收站时清理）。
-- `originalTable` 12 种：longTermGoals、reflections、harvests、fixedRoutines、taskItems、taskTemplates、courses、ddls、important、backlog、linkGroups、timeBlocks。
+- `originalTable` 13 种：longTermGoals、reflections、harvests、fixedRoutines、taskItems、taskTemplates、courses、ddls、important、backlog、ideas、linkGroups、timeBlocks。
 - `timeBlocks`：原数据存 `{date, ...block}`，还原时 push 回当天计划。
 
 ### 6.6 导入导出
@@ -322,7 +323,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npx vitest run`：30 文件 / 682 用例。
+`npm test`：32 文件 / 688 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -351,12 +352,12 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | DDL清单/markdownAndLocation | 10 | Markdown 语法、XSS 转义、地点往返 |
 | 数据存储/storageAccess | 8 | 权限守卫、阻塞时零写入 |
 | 数据存储/nativeWriteEncoding | 3 | 原生写入 utf8 与往返 |
-| 数据存储/startupSnapshot | 6 | 快照命中、目录变化失效、rescan 读入外部改动、换目录不复用 |
+| 数据存储/startupSnapshot | 7 | 快照命中、日期/分类文件名变化失效、外部内容重扫、换目录不复用 |
 | 数据存储/knownDebt | 9 | 回收站 ID、杂念全量写、孤儿文件安全清理、课程归属迁移/导入/还原、仓库备份往返 |
 | 偏好设置/localDate | 5 | 本地凌晨、跨年、晚间日期；另在洛杉矶时区进程验证 |
 | 课程表/courseEditSemester | 4 | 新建当前学期、编辑保留归属、无学期兼容、旧课兼容 |
 | 课程表/coursesPageSemester | 3 | 当前课表过滤、历史课空态、列表保留历史归属 |
-| **合计** | **682** | 30 个文件 |
+| **合计** | **688** | 32 个文件 |
 
 环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
 
@@ -382,10 +383,10 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 ## 14. 约束
 
 1. 磁盘只由 `store.ts` 触碰；UI 与 CRUD 只读写内存 store。
-2. 每次变更立即落盘，无防抖窗口。
+2. 数据文件变更立即进入串行写队列；运行期快照刷新采用 400ms 防抖，`flush()` 会等待快照写入完成。
 3. 权限阻塞时禁止任何写操作。
 4. 删除一律软删除；`originalTable` 与 `restoreFromTrash` 分支必须同步。
-5. 新增表必须同时改：`StorageData`/`StoreShape`、`CATEGORY_FILES`、`NumericTable`、`nextId`/`resetNextId`、`clearStore`、`countData`、`applyData`、`snapshot`、`fingerprint`/`Fp`、`buildWriteSetFromStore`、`buildWriteSetDirty`、`DEFAULT_WRITE_ORDER`、`mergeIntoStore`、`mergeLegacy`、`liveArr`、`parseStorageData`、`readNewStructure`、`hasAny`、搜索、回收站标签。
+5. 持久化分类表的文件名、写入顺序、数字主键和空 store 由 `services/storeSchema.ts` 统一注册；新增表仍需同步更新领域类型、解析/合并、搜索和回收站语义。
 
 ---
 

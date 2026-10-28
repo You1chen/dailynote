@@ -7,7 +7,7 @@
 
 import Dexie, { type Table } from 'dexie';
 import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TrashItem, TaskItem } from '../types';
-import type { StoreShape } from '../services/store';
+import type { StoreShape } from '../types/storage';
 
 /** 旧版数据库结构（v1–v4 原样保留） */
 class LegacyDailyNoteDB extends Dexie {

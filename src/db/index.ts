@@ -17,35 +17,37 @@ import { DDL_DEFAULT_TIME } from '../utils/ddl';
 
 export async function getPlanByDate(date: string): Promise<DailyPlan | undefined> {
   const found = store.dailyPlans.find(p => p.date === date);
-  return found ? { ...found, timeBlocks: [...found.timeBlocks] } : undefined;
+  return found ? deepClone(found) : undefined;
 }
 
 export async function savePlan(plan: DailyPlan): Promise<number> {
+  const clean = deepClone(plan);
   let resultId = 0;
   await mutate(() => {
-    const idx = store.dailyPlans.findIndex(p => p.date === plan.date);
+    const idx = store.dailyPlans.findIndex(p => p.date === clean.date);
     if (idx >= 0) {
       resultId = store.dailyPlans[idx].id!;
-      store.dailyPlans[idx] = { ...plan, id: resultId, updatedAt: Date.now() };
+      store.dailyPlans[idx] = { ...clean, id: resultId, updatedAt: Date.now() };
     } else {
       resultId = allocId('dailyPlans');
-      store.dailyPlans.push({ ...plan, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+      store.dailyPlans.push({ ...clean, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
     }
   });
   return resultId;
 }
 
 export async function getAllPlans(): Promise<DailyPlan[]> {
-  return [...store.dailyPlans].sort((a, b) => b.date.localeCompare(a.date));
+  return deepClone([...store.dailyPlans].sort((a, b) => b.date.localeCompare(a.date)));
 }
 
 // ============ 长期目标 CRUD ============
 
 export async function getAllGoals(): Promise<LongTermGoal[]> {
-  return [...store.longTermGoals].sort((a, b) => b.createdAt - a.createdAt);
+  return deepClone([...store.longTermGoals].sort((a, b) => b.createdAt - a.createdAt));
 }
 
 export async function saveGoal(goal: LongTermGoal): Promise<number> {
+  goal = deepClone(goal);
   let resultId = 0;
   await mutate(() => {
     if (goal.id != null) {
@@ -81,10 +83,11 @@ export async function deleteGoal(id: number): Promise<void> {
 // ============ 反思 CRUD ============
 
 export async function getReflectionsByDate(date: string): Promise<Reflection[]> {
-  return store.reflections.filter(r => r.date === date);
+  return deepClone(store.reflections.filter(r => r.date === date));
 }
 
 export async function saveReflection(r: Reflection): Promise<number> {
+  r = deepClone(r);
   let resultId = 0;
   await mutate(() => {
     if (r.id != null) {
@@ -118,16 +121,17 @@ export async function deleteReflection(id: number): Promise<void> {
 }
 
 export async function getAllReflections(): Promise<Reflection[]> {
-  return [...store.reflections].sort((a, b) => b.date.localeCompare(a.date));
+  return deepClone([...store.reflections].sort((a, b) => b.date.localeCompare(a.date)));
 }
 
 // ============ 收获 CRUD ============
 
 export async function getHarvestsByDate(date: string): Promise<Harvest[]> {
-  return store.harvests.filter(h => h.date === date);
+  return deepClone(store.harvests.filter(h => h.date === date));
 }
 
 export async function saveHarvest(h: Harvest): Promise<number> {
+  h = deepClone(h);
   let resultId = 0;
   await mutate(() => {
     if (h.id != null) {
@@ -161,20 +165,21 @@ export async function deleteHarvest(id: number): Promise<void> {
 }
 
 export async function getAllHarvests(): Promise<Harvest[]> {
-  return [...store.harvests].sort((a, b) => b.date.localeCompare(a.date));
+  return deepClone([...store.harvests].sort((a, b) => b.date.localeCompare(a.date)));
 }
 
 // ============ 固定作息 CRUD ============
 
 export async function getAllRoutines(): Promise<FixedRoutine[]> {
-  return [...store.fixedRoutines];
+  return deepClone([...store.fixedRoutines]);
 }
 
 export async function getActiveRoutine(): Promise<FixedRoutine | undefined> {
-  return store.fixedRoutines.find(r => r.isActive);
+  return deepClone(store.fixedRoutines.find(r => r.isActive));
 }
 
 export async function saveRoutine(r: FixedRoutine): Promise<number> {
+  r = deepClone(r);
   let resultId = 0;
   await mutate(() => {
     if (r.id != null) {
@@ -218,10 +223,11 @@ export async function deleteRoutine(id: number): Promise<void> {
 export async function getAllCourses(): Promise<Course[]> {
   // 多星期课程按最早的一天排序（同门课在多个分组重复出现，卡片顺序仍稳定）
   const minDay = (c: Course) => (c.dayOfWeek.length > 0 ? Math.min(...c.dayOfWeek) : 0);
-  return [...store.courses].sort((a, b) => minDay(a) - minDay(b) || a.startTime.localeCompare(b.startTime));
+  return deepClone([...store.courses].sort((a, b) => minDay(a) - minDay(b) || a.startTime.localeCompare(b.startTime)));
 }
 
 export async function saveCourse(course: Course): Promise<number> {
+  course = deepClone(course);
   const clean = normalizeCourseDayOfWeek(course);
   let resultId = 0;
   await mutate(() => {
@@ -262,10 +268,11 @@ export async function deleteCourse(id: number): Promise<void> {
 /** 学期设置（单记录，id 恒为 1；从未设置过则返回 undefined） */
 export async function getSemester(): Promise<SemesterRecord | undefined> {
   const rec = store.semester.find(s => s.id === 1) ?? store.semester[0];
-  return rec ? { ...rec, specialDates: rec.specialDates.map(d => ({ ...d })) } : undefined;
+  return deepClone(rec ? { ...rec, specialDates: rec.specialDates.map(d => ({ ...d })) } : undefined);
 }
 
 export async function saveSemester(record: SemesterRecord): Promise<number> {
+  record = deepClone(record);
   await mutate(() => {
     bindLegacyCourses(store.semester[0]?.startDate ?? record.startDate);
     // 恒单记录：强制 id = 1，不调用 allocId（避免计数器膨胀）
@@ -282,13 +289,14 @@ export async function saveSemester(record: SemesterRecord): Promise<number> {
 export async function getAllDdls(): Promise<DdlItem[]> {
   // 按截止时间升序（日期 → 时间 → id），已过期的自然排在最前；时间未填按 23:59
   const tm = (x: { deadlineTime: string }) => x.deadlineTime?.trim() || DDL_DEFAULT_TIME;
-  return [...store.ddls].sort((a, b) =>
+  return deepClone([...store.ddls].sort((a, b) =>
     a.deadlineDate.localeCompare(b.deadlineDate)
     || tm(a).localeCompare(tm(b))
-    || (a.id ?? 0) - (b.id ?? 0));
+    || (a.id ?? 0) - (b.id ?? 0)));
 }
 
 export async function saveDdl(ddl: DdlItem): Promise<number> {
+  ddl = deepClone(ddl);
   let resultId = 0;
   await mutate(() => {
     if (ddl.id != null) {
@@ -327,10 +335,11 @@ export async function deleteDdl(id: number): Promise<void> {
 
 export async function getAllLinkGroups(): Promise<LinkGroup[]> {
   // 按创建顺序，用户自己排的组不会每次打开都跳位置
-  return [...store.linkGroups].sort((a, b) => a.createdAt - b.createdAt || (a.id ?? 0) - (b.id ?? 0));
+  return deepClone([...store.linkGroups].sort((a, b) => a.createdAt - b.createdAt || (a.id ?? 0) - (b.id ?? 0)));
 }
 
 export async function saveLinkGroup(group: LinkGroup): Promise<number> {
+  group = deepClone(group);
   let resultId = 0;
   await mutate(() => {
     if (group.id != null) {
@@ -366,7 +375,7 @@ export async function deleteLinkGroup(id: number): Promise<void> {
 // ============ 回收站 CRUD ============
 
 export async function getTrashItems(): Promise<TrashItem[]> {
-  return [...store.trashItems].sort((a, b) => b.deletedAt - a.deletedAt);
+  return deepClone([...store.trashItems].sort((a, b) => b.deletedAt - a.deletedAt));
 }
 
 /** 回收站条目对应的原表（timeBlocks 还原到当天计划） */
@@ -381,6 +390,7 @@ const TRASH_TARGET: Record<string, AnyStoreTable> = {
   ddls: 'ddls',
   important: 'important',
   backlog: 'backlog',
+  ideas: 'ideas',
   linkGroups: 'linkGroups',
   timeBlocks: 'dailyPlans',
 };
@@ -549,9 +559,9 @@ export async function moveTimeBlockToTrash(date: string, block: any, title: stri
 // ============ 任务清单 CRUD ============
 
 export async function getTaskItemsByDate(date: string): Promise<TaskItem[]> {
-  return store.taskItems
+  return deepClone(store.taskItems
     .filter(t => t.date === date)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+    .sort((a, b) => a.sortOrder - b.sortOrder));
 }
 
 export async function saveTaskItem(item: TaskItem): Promise<void> {
@@ -596,10 +606,11 @@ export async function deleteTaskItem(id: string): Promise<void> {
 // ============ 任务清单模板 CRUD ============
 
 export async function getAllTaskTemplates(): Promise<TaskTemplate[]> {
-  return [...store.taskTemplates];
+  return deepClone([...store.taskTemplates]);
 }
 
 export async function saveTaskTemplate(t: TaskTemplate): Promise<number> {
+  t = deepClone(t);
   let resultId = 0;
   await mutate(() => {
     if (t.id != null) {
@@ -636,13 +647,14 @@ export async function deleteTaskTemplate(id: number): Promise<void> {
 
 /** 按日期倒序、同日按创建时间倒序 */
 export async function getAllIdeas(): Promise<Idea[]> {
-  return [...store.ideas].sort((a, b) => {
+  return deepClone([...store.ideas].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     return b.createdAt - a.createdAt;
-  });
+  }));
 }
 
 export async function saveIdea(item: Idea): Promise<number> {
+  item = deepClone(item);
   let resultId = 0;
   await mutate(() => {
     if (item.id != null) {
@@ -677,10 +689,11 @@ export async function deleteIdea(id: number): Promise<void> {
 // ============ 遗留问题 CRUD ============
 
 export async function getAllBacklog(): Promise<BacklogItem[]> {
-  return [...store.backlog];
+  return deepClone([...store.backlog]);
 }
 
 export async function saveBacklog(item: BacklogItem): Promise<number> {
+  item = deepClone(item);
   let resultId = 0;
   await mutate(() => {
     if (item.id != null) {
@@ -725,7 +738,7 @@ export async function deleteBacklog(id: number): Promise<void> {
 // ============ 任务树 CRUD（单记录数组表，id 恒 1） ============
 
 export async function getTaskBoard(): Promise<TaskBoard> {
-  return store.taskBoard.find(b => b.id === 1) ?? { id: 1, nodes: [], order: [], updatedAt: 0 };
+  return deepClone(store.taskBoard.find(b => b.id === 1) ?? { id: 1, nodes: [], order: [], updatedAt: 0 });
 }
 
 export async function saveTaskBoard(next: { nodes: TaskNode[]; order: string[] }): Promise<void> {
@@ -776,13 +789,14 @@ function importantTime(x: { deadlineTime: string }): string {
 }
 
 export async function getAllImportant(): Promise<ImportantItem[]> {
-  return [...store.important].sort((a, b) =>
+  return deepClone([...store.important].sort((a, b) =>
     a.deadlineDate.localeCompare(b.deadlineDate)
     || importantTime(a).localeCompare(importantTime(b))
-    || (a.id ?? 0) - (b.id ?? 0));
+    || (a.id ?? 0) - (b.id ?? 0)));
 }
 
 export async function saveImportant(item: ImportantItem): Promise<number> {
+  item = deepClone(item);
   let resultId = 0;
   await mutate(() => {
     if (item.id != null) {

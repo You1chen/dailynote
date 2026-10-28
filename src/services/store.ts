@@ -30,53 +30,12 @@
 
 import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, TaskBoard, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
+import type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
+import { CATEGORY_FILES, CATEGORY_NAMES, CATEGORY_TABLES, DEFAULT_WRITE_ORDER, NUMERIC_TABLES, emptyStore } from './storeSchema';
+export type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
 import { readSnapshot, writeSnapshot, clearSnapshot, sameNames } from './snapshot';
-
-// ============ 数据结构 ============
-
-export interface StorageData {
-  version: 1;
-  savedAt: number;
-  dailyPlans: DailyPlan[];
-  longTermGoals: LongTermGoal[];
-  reflections: Reflection[];
-  harvests: Harvest[];
-  fixedRoutines: FixedRoutine[];
-  taskItems: TaskItem[];
-  taskTemplates: TaskTemplate[];
-  trashItems: TrashItem[];
-  courses: Course[];
-  semester: SemesterRecord[];
-  ddls: DdlItem[];
-  important: ImportantItem[];
-  backlog: BacklogItem[];
-  ideas: Idea[];
-  taskBoard: TaskBoard[];
-  linkGroups: LinkGroup[];
-}
-
-export interface StoreShape {
-  dailyPlans: DailyPlan[];
-  longTermGoals: LongTermGoal[];
-  reflections: Reflection[];
-  harvests: Harvest[];
-  fixedRoutines: FixedRoutine[];
-  taskItems: TaskItem[];
-  taskTemplates: TaskTemplate[];
-  trashItems: TrashItem[];
-  courses: Course[];
-  semester: SemesterRecord[];
-  ddls: DdlItem[];
-  important: ImportantItem[];
-  backlog: BacklogItem[];
-  ideas: Idea[];
-  taskBoard: TaskBoard[];
-  linkGroups: LinkGroup[];
-}
-
-export type AnyStoreTable = keyof StoreShape;
 
 // ============ 布局常量 ============
 
@@ -90,21 +49,6 @@ function oldSingleRel(): string {
 }
 const DAY_DIR = 'days';
 const DAY_TYPES = ['reflections', 'harvests', 'tasks'] as const;
-const CATEGORY_FILES: Record<'longTermGoals' | 'fixedRoutines' | 'trashItems' | 'taskTemplates' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'ideas' | 'taskBoard' | 'linkGroups', string> = {
-  longTermGoals: 'goals.json',
-  fixedRoutines: 'routines.json',
-  trashItems: 'trash.json',
-  taskTemplates: 'templates.json',
-  courses: 'courses.json',
-  semester: 'semester.json',
-  ddls: 'ddls.json',
-  important: 'important.json',
-  backlog: 'backlog.json',
-   ideas: 'ideas.json',
-  taskBoard: 'taskboard.json',
-  linkGroups: 'linkGroups.json',
-};
-
 function dayPlan(date: string): string {
   return `${DAY_DIR}/${date}/plan.json`;
 }
@@ -115,57 +59,24 @@ function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks'): 
 const KV_DB = 'dailynote_kv';
 const KV_STORE = 'kv';
 
-type NumericTable = 'dailyPlans' | 'longTermGoals' | 'reflections' | 'harvests' | 'fixedRoutines' | 'taskTemplates' | 'trashItems' | 'courses' | 'semester' | 'ddls' | 'important' | 'backlog' | 'ideas' | 'taskBoard' | 'linkGroups';
+type NumericTable = import('./storeSchema').NumericTable;
 
 // ============ 内存 store ============
 
-const store: StoreShape = {
-  dailyPlans: [],
-  longTermGoals: [],
-  reflections: [],
-  harvests: [],
-  fixedRoutines: [],
-  taskItems: [],
-  taskTemplates: [],
-  trashItems: [],
-  courses: [],
-  semester: [],
-  ddls: [],
-  important: [],
-  backlog: [],
-   ideas: [],
-  taskBoard: [],
-  linkGroups: [],
-};
+const store: StoreShape = emptyStore();
 
 /**
  * 每表单调递增 id 计数器（不复用，杜绝与回收站还原撞 id）。
  * initStore / 导入 / 迁移后需调用 resetNextId() 重建。
  */
-const nextId: Record<NumericTable, number> = {
-  dailyPlans: 1,
-  longTermGoals: 1,
-  reflections: 1,
-  harvests: 1,
-  fixedRoutines: 1,
-  taskTemplates: 1,
-  trashItems: 1,
-  courses: 1,
-  semester: 1,
-  ddls: 1,
-  important: 1,
-  backlog: 1,
-   ideas: 1,
-  taskBoard: 1,
-  linkGroups: 1,
-};
+const nextId = Object.fromEntries(NUMERIC_TABLES.map(table => [table, 1])) as Record<NumericTable, number>;
 
 export function allocId(table: NumericTable): number {
   return nextId[table]++;
 }
 
 function resetNextId(): void {
-  const tables: NumericTable[] = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines', 'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls', 'important', 'backlog', 'ideas', 'taskBoard', 'linkGroups'];
+  const tables: NumericTable[] = NUMERIC_TABLES;
   for (const t of tables) {
     let max = 0;
     for (const rec of store[t] as { id?: number }[]) {
@@ -199,29 +110,11 @@ export function bindLegacyCourses(startDate: string | null | undefined): boolean
 }
 
 function clearStore(): void {
-  store.dailyPlans = [];
-  store.longTermGoals = [];
-  store.reflections = [];
-  store.harvests = [];
-  store.fixedRoutines = [];
-  store.taskItems = [];
-  store.taskTemplates = [];
-  store.trashItems = [];
-  store.courses = [];
-  store.semester = [];
-  store.ddls = [];
-  store.important = [];
-  store.backlog = [];
-   store.ideas = [];
-  store.taskBoard = [];
-  store.linkGroups = [];
+  Object.assign(store, emptyStore());
 }
 
 function countData(): number {
-  return store.dailyPlans.length + store.longTermGoals.length + store.reflections.length
-    + store.harvests.length + store.fixedRoutines.length + store.taskItems.length + store.taskTemplates.length + store.trashItems.length
-    + store.courses.length + store.semester.length + store.ddls.length + store.important.length + store.backlog.length + store.ideas.length + store.taskBoard.length
-    + store.linkGroups.length;
+  return Object.values(store).reduce((total, rows) => total + rows.length, 0);
 }
 
 // ============ 路径管理 ============
@@ -515,10 +408,7 @@ function parseStorageData(text: string): StorageData | null {
 }
 
 function hasAny(d: StorageData): boolean {
-  return d.dailyPlans.length > 0 || d.longTermGoals.length > 0 || d.reflections.length > 0
-    || d.harvests.length > 0 || d.fixedRoutines.length > 0 || d.taskItems.length > 0 || d.taskTemplates.length > 0 || d.trashItems.length > 0
-    || d.courses.length > 0 || d.semester.length > 0 || d.ddls.length > 0 || d.important.length > 0 || d.backlog.length > 0 || d.ideas.length > 0 || d.taskBoard.length > 0
-    || d.linkGroups.length > 0;
+  return DEFAULT_WRITE_ORDER.some(table => d[table].length > 0);
 }
 
 async function readDayArray<T>(dir: string, rel: string): Promise<T[]> {
@@ -642,7 +532,6 @@ async function listBackendNames(dir: string): Promise<{ dates: string[]; files: 
   return { dates: [...dates], files: [...files] };
 }
 
-const CATEGORY_NAMES = ['goals.json', 'routines.json', 'trash.json', 'templates.json', 'courses.json', 'semester.json', 'ddls.json', 'important.json', 'backlog.json', 'ideas.json', 'taskboard.json', 'linkGroups.json'];
 
 /** 由内存数据推算目录结构（写快照用，不访问磁盘） */
 function currentNames(): { dates: string[]; files: string[] } {
@@ -665,9 +554,9 @@ function namesFromData(data: StorageData): { dates: string[]; files: string[] } 
 }
 
 /** 落一份快照（失败不影响主流程） */
-function saveSnapshot(): void {
+function saveSnapshot(): Promise<void> {
   const { dates, files } = currentNames();
-  void writeSnapshot({ root: getStoragePath(), dates, files, savedAt: Date.now(), data: snapshot() });
+  return writeSnapshot({ root: getStoragePath(), dates, files, savedAt: Date.now(), data: snapshot() });
 }
 
 /** 快照防抖：连续写操作只落一次 */
@@ -681,12 +570,13 @@ function scheduleSnapshot(): void {
 }
 
 /** 立即落快照（flush / 切后台时用） */
-function flushSnapshot(): void {
+async function flushSnapshot(): Promise<void> {
   if (snapTimer) {
     clearTimeout(snapTimer);
     snapTimer = null;
   }
-  saveSnapshot();
+  const { dates, files } = currentNames();
+  await writeSnapshot({ root: getStoragePath(), dates, files, savedAt: Date.now(), data: snapshot() });
 }
 
 /** 读取当前路径的后端数据（新布局优先；旧单文件存在则视为迁移未完成，优先取它） */
@@ -703,7 +593,7 @@ async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boo
   if (!old) {
     const names = await listBackendNames(dir);
     const snap = await readSnapshot(dir);
-    if (snap && sameNames(snap.dates, names.dates)) {
+    if (snap && sameNames(snap.dates, names.dates) && sameNames(snap.files, names.files)) {
       return { data: snap.data, oldFormat: false };
     }
   }
@@ -712,7 +602,7 @@ async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boo
   if (data) {
     const names = await listBackendNames(dir);
     const { dates, files } = namesFromData(data);
-    void writeSnapshot({
+    await writeSnapshot({
       root: dir,
       dates: names.dates.length ? names.dates : dates,
       files: names.files.length ? names.files : files,
@@ -742,29 +632,9 @@ interface FileWrite {
   table: AnyStoreTable;
 }
 
-const DEFAULT_WRITE_ORDER: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems', 'longTermGoals', 'fixedRoutines', 'taskTemplates', 'courses', 'semester', 'ddls', 'important', 'backlog', 'ideas', 'taskBoard', 'linkGroups', 'trashItems'];
 
 function snapshot(): StorageData {
-  return {
-    version: 1,
-    savedAt: Date.now(),
-    dailyPlans: store.dailyPlans,
-    longTermGoals: store.longTermGoals,
-    reflections: store.reflections,
-    harvests: store.harvests,
-    fixedRoutines: store.fixedRoutines,
-    taskItems: store.taskItems,
-    taskTemplates: store.taskTemplates,
-    trashItems: store.trashItems,
-    courses: store.courses,
-    semester: store.semester,
-    ddls: store.ddls,
-    important: store.important,
-    backlog: store.backlog,
-     ideas: store.ideas,
-    taskBoard: store.taskBoard,
-    linkGroups: store.linkGroups,
-  };
+  return deepClone({ ...store, version: 1, savedAt: Date.now() });
 }
 
 /**
@@ -827,18 +697,9 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
       writes.push({ relPath: dayTypeFile(date, type), json: JSON.stringify(items, null, 2), table });
     }
   }
-  writes.push({ relPath: CATEGORY_FILES.longTermGoals, json: JSON.stringify(store.longTermGoals, null, 2), table: 'longTermGoals' });
-  writes.push({ relPath: CATEGORY_FILES.fixedRoutines, json: JSON.stringify(store.fixedRoutines, null, 2), table: 'fixedRoutines' });
-  writes.push({ relPath: CATEGORY_FILES.taskTemplates, json: JSON.stringify(store.taskTemplates, null, 2), table: 'taskTemplates' });
-  writes.push({ relPath: CATEGORY_FILES.courses, json: JSON.stringify(store.courses, null, 2), table: 'courses' });
-  writes.push({ relPath: CATEGORY_FILES.semester, json: JSON.stringify(store.semester, null, 2), table: 'semester' });
-  writes.push({ relPath: CATEGORY_FILES.ddls, json: JSON.stringify(store.ddls, null, 2), table: 'ddls' });
-  writes.push({ relPath: CATEGORY_FILES.important, json: JSON.stringify(store.important, null, 2), table: 'important' });
-  writes.push({ relPath: CATEGORY_FILES.backlog, json: JSON.stringify(store.backlog, null, 2), table: 'backlog' });
-  writes.push({ relPath: CATEGORY_FILES.ideas, json: JSON.stringify(store.ideas, null, 2), table: 'ideas' });
-  writes.push({ relPath: CATEGORY_FILES.taskBoard, json: JSON.stringify(store.taskBoard, null, 2), table: 'taskBoard' });
-  writes.push({ relPath: CATEGORY_FILES.linkGroups, json: JSON.stringify(store.linkGroups, null, 2), table: 'linkGroups' });
-  writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
+  for (const { table, file } of CATEGORY_TABLES) {
+    writes.push({ relPath: file, json: JSON.stringify(store[table], null, 2), table });
+  }
   return { writes, deletes: [] };
 }
 
@@ -926,41 +787,10 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
     }
   }
 
-  if (a.longTermGoals !== b.longTermGoals) {
-    writes.push({ relPath: CATEGORY_FILES.longTermGoals, json: JSON.stringify(store.longTermGoals, null, 2), table: 'longTermGoals' });
-  }
-  if (a.fixedRoutines !== b.fixedRoutines) {
-    writes.push({ relPath: CATEGORY_FILES.fixedRoutines, json: JSON.stringify(store.fixedRoutines, null, 2), table: 'fixedRoutines' });
-  }
-  if (a.taskTemplates !== b.taskTemplates) {
-    writes.push({ relPath: CATEGORY_FILES.taskTemplates, json: JSON.stringify(store.taskTemplates, null, 2), table: 'taskTemplates' });
-  }
-  if (a.courses !== b.courses) {
-    writes.push({ relPath: CATEGORY_FILES.courses, json: JSON.stringify(store.courses, null, 2), table: 'courses' });
-  }
-  if (a.semester !== b.semester) {
-    writes.push({ relPath: CATEGORY_FILES.semester, json: JSON.stringify(store.semester, null, 2), table: 'semester' });
-  }
-  if (a.ddls !== b.ddls) {
-    writes.push({ relPath: CATEGORY_FILES.ddls, json: JSON.stringify(store.ddls, null, 2), table: 'ddls' });
-  }
-  if (a.important !== b.important) {
-    writes.push({ relPath: CATEGORY_FILES.important, json: JSON.stringify(store.important, null, 2), table: 'important' });
-  }
-  if (a.backlog !== b.backlog) {
-    writes.push({ relPath: CATEGORY_FILES.backlog, json: JSON.stringify(store.backlog, null, 2), table: 'backlog' });
-  }
-  if (a.ideas !== b.ideas) {
-    writes.push({ relPath: CATEGORY_FILES.ideas, json: JSON.stringify(store.ideas, null, 2), table: 'ideas' });
-  }
-  if (a.taskBoard !== b.taskBoard) {
-    writes.push({ relPath: CATEGORY_FILES.taskBoard, json: JSON.stringify(store.taskBoard, null, 2), table: 'taskBoard' });
-  }
-  if (a.linkGroups !== b.linkGroups) {
-    writes.push({ relPath: CATEGORY_FILES.linkGroups, json: JSON.stringify(store.linkGroups, null, 2), table: 'linkGroups' });
-  }
-  if (a.trashItems !== b.trashItems) {
-    writes.push({ relPath: CATEGORY_FILES.trashItems, json: JSON.stringify(store.trashItems, null, 2), table: 'trashItems' });
+  for (const { table, file } of CATEGORY_TABLES) {
+    if (a[table] !== b[table]) {
+      writes.push({ relPath: file, json: JSON.stringify(store[table], null, 2), table });
+    }
   }
 
   // writeOrder：跨文件操作控制写序（先写"新增"侧，再写"移除"侧）
@@ -980,7 +810,7 @@ export function persist(): Promise<boolean> {
 
 export async function flush(): Promise<void> {
   await persistQueue;
-  flushSnapshot();
+  await flushSnapshot();
 }
 
 export function getLastPersistError(): string | null {
@@ -1210,22 +1040,9 @@ export async function initStore(): Promise<number> {
 }
 
 function applyData(data: StorageData): void {
-  store.dailyPlans = data.dailyPlans;
-  store.longTermGoals = data.longTermGoals;
-  store.reflections = data.reflections;
-  store.harvests = data.harvests;
-  store.fixedRoutines = data.fixedRoutines;
-  store.taskItems = data.taskItems;
-  store.taskTemplates = data.taskTemplates;
-  store.trashItems = data.trashItems;
-  store.courses = data.courses;
-  store.semester = data.semester;
-  store.ddls = data.ddls;
-  store.important = data.important;
-  store.backlog = data.backlog;
-   store.ideas = data.ideas;
-  store.taskBoard = data.taskBoard;
-  store.linkGroups = data.linkGroups;
+  for (const table of DEFAULT_WRITE_ORDER) {
+    Object.assign(store, { [table]: data[table] });
+  }
 }
 
 async function readLegacyTablesSafe(): Promise<Partial<StoreShape> | null> {

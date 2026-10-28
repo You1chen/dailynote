@@ -45,7 +45,7 @@ beforeEach(async () => {
 });
 
 describe('启动快照', () => {
-  it('首次启动写快照，第二次命中快照（不重读文件）', async () => {
+  it('首次启动写快照，目录结构不变时复用快照', async () => {
     await db.savePlan({ date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0 } as any);
     await flush();
     await initStore();
@@ -54,12 +54,24 @@ describe('启动快照', () => {
     expect(snap).not.toBeNull();
     expect(snap!.dates).toContain('2026-03-01');
 
-    // 外部改同一文件的内容（文件名不变）→ 快照命中，返回快照里的旧数据
+    // 目录结构不变时仍复用快照。
+    await initStore();
+    expect((getStore().dailyPlans[0] as any).injected).toBeUndefined();
+  });
+
+  it('同路径内容外改时复用快照，显式重扫才读取新内容', async () => {
+    await db.savePlan({ date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0 } as any);
+    const { persist } = await import('../../src/services/store');
+    await persist();
+    await flush();
+    await initStore();
     await kvPut('days/2026-03-01/plan.json', JSON.stringify({
       date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0, injected: true,
     }));
     await initStore();
     expect((getStore().dailyPlans[0] as any).injected).toBeUndefined();
+    await rescanFromDisk();
+    expect((getStore().dailyPlans[0] as any).injected).toBe(true);
   });
 
   it('新增日期目录 → 快照失效 → 全量读能看到新数据', async () => {

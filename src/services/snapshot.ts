@@ -6,7 +6,7 @@
  * 快照只是缓存：目录结构一变、或用户点「重新扫描」，就回到全量读取。
  */
 
-import type { StorageData } from './store';
+import type { StorageData } from '../types/storage';
 
 const DB_NAME = 'dailynote_snapshot';
 const STORE = 'snap';
