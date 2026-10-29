@@ -1441,3 +1441,25 @@ APK 里的新样式其实在，但用户截图里 `大愿望 0` 只是空状态�
 修改：src/components/TabBar.css、src/pages/LongTermGoals.tsx、src/pages/LongTermGoals.css
 产物：android/app/build/outputs/apk/debug/app-debug.apk（24.8 MB）
 ```
+
+## 2026-10-29 — 删除两份临时说明文档
+
+### 需求
+
+大愿望 UI、底部导航的问题已确认解决，要求删掉仓库根目录下的两份说明文档。
+
+### 实现
+
+- 删除 `大愿望UI美化方案.md`、`大愿望与底部导航排查改进说明.md`。
+- 这两份是排查/交接用的说明，不属于应用运行时代码；相关结论已落在 `PROGRESS.md` 与 `structure.md` 中，删除不影响功能。
+
+### 验证
+
+- `git status` 确认仅这两个文件被移除，无源码改动。
+- 根目录 Markdown 只剩 `README.md`、`structure.md`、`PROGRESS.md`。
+
+### 涉及文件
+
+```
+删除：大愿望UI美化方案.md、大愿望与底部导航排查改进说明.md
+```
