@@ -7,6 +7,49 @@ export type { ActivityEvent, SettlementProgress, SettlementSummary } from '../ty
 export function localActivityDate(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
+const recoveredPrefix = 'recovered:';
+const activityKey = (e: Pick<ActivityEvent, 'category' | 'action' | 'entityId' | 'date'>) => JSON.stringify([e.category, e.action, e.entityId, e.date]);
+
+/** Recover only operations supported by an actual timestamp, preserving live events. */
+export function recoverTimestampedActivity(data: StoreShape): boolean {
+  const live = new Set(data.activityEvents.filter(e => !e.id.startsWith(recoveredPrefix) && (e.action === 'create' || (e.action === 'complete' && e.from === 0 && e.to === 1))).map(activityKey));
+  const retained = data.activityEvents.filter(e => !e.id.startsWith(recoveredPrefix) || !live.has(activityKey(e)));
+  let changed = retained.length !== data.activityEvents.length;
+  if (changed) data.activityEvents = retained;
+  const existing = new Set(data.activityEvents.filter(e => e.action === 'create' || (e.action === 'complete' && e.from === 0 && e.to === 1)).map(activityKey));
+  const add = (category: ActivityCategory, action: 'create' | 'complete', entityId: string, title: string, timestamp: unknown) => {
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0) return;
+    const date = new Date(timestamp);
+    if (!Number.isFinite(date.getTime())) return;
+    const event: ActivityEvent = { id: '', date: localActivityDate(date), occurredAt: timestamp, category, action, entityId, title, from: action === 'complete' ? 0 : null, to: action === 'complete' ? 1 : null };
+    const key = activityKey(event);
+    if (existing.has(key)) return;
+    event.id = recoveredPrefix + JSON.stringify([category, action, entityId, timestamp]);
+    data.activityEvents.push(event);
+    existing.add(key);
+    changed = true;
+  };
+  const walk = (nodes: StoreShape['taskBoard'][number]['nodes'], chain: string[] = []) => {
+    for (const node of nodes) {
+      const path = [...chain, node.title];
+      if (node.children.length) walk(node.children, path);
+      else if (node.done) add('todo', 'complete', `tree:${JSON.stringify(path)}`, path.join(' / '), node.doneAt);
+    }
+  };
+  data.taskBoard.forEach(board => walk(board.nodes));
+  data.ddls.forEach(d => add('ddl', 'complete', String(d.id), d.name, d.dismissedAt));
+  const idea = (i: StoreShape['ideas'][number], id: string) => {
+    if (!i.kind || i.kind === 'idea') add('idea', 'create', id, i.title?.trim() || i.text, i.createdAt);
+  };
+  data.ideas.forEach(i => idea(i, String(i.id)));
+  data.trashItems.forEach(t => {
+    if (!t.originalData) return;
+    if (t.originalTable === 'ideas') idea(t.originalData, String(t.originalId));
+    if (t.originalTable === 'ddls') add('ddl', 'complete', String(t.originalId), t.originalData.name, t.originalData.dismissedAt);
+  });
+  return changed;
+}
+
 type Entry = { title: string; progress: number; shelved?: boolean; structure?: string; parentId?: string; parentTitle?: string };
 type Entries = Map<string, Entry>;
 function collect(data: StoreShape): Record<ActivityCategory, Entries> {

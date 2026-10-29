@@ -1,4 +1,4 @@
-/** Actual interactions only: never reconstructed from historical entity timestamps. */
+/** Actual interactions, including those recoverable from reliable timestamps. */
 export type ActivityCategory = 'todo' | 'ddl' | 'plan' | 'goal' | 'wish-milestone' | 'small-wish' | 'chore' | 'idea';
 export type ActivityAction = 'create' | 'complete' | 'delete' | 'shelve' | 'progress';
 export interface ActivityEvent {

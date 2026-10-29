@@ -37,7 +37,7 @@ import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
 import { readSnapshot, writeSnapshot, clearSnapshot, sameNames } from './snapshot';
 import type { ActivityEvent, ActivityOptions } from '../types/settlement';
-import { detectActivity } from '../utils/settlement';
+import { detectActivity, recoverTimestampedActivity } from '../utils/settlement';
 
 // ============ 布局常量 ============
 
@@ -1047,8 +1047,9 @@ export async function initStore(): Promise<number> {
 
   const healed = healTrashDuplicates();
   const boundCourses = bindLegacyCourses(store.semester[0]?.startDate);
+  const recoveredActivity = recoverTimestampedActivity(store);
 
-  if (legacyHasData || oldFormat || healed || boundCourses) {
+  if (legacyHasData || oldFormat || healed || boundCourses || recoveredActivity) {
     const ok = await persist();
     if (ok) {
       if (oldFormat) {
@@ -1112,6 +1113,7 @@ export async function importJSONIntoStore(json: string): Promise<number> {
     bindLegacyCourses(store.semester[0]?.startDate);
     count = mergeIntoStore(data);
     bindLegacyCourses(store.semester[0]?.startDate);
+    recoverTimestampedActivity(store);
   }, { skipActivity: true });
   resetNextId();
   return count;

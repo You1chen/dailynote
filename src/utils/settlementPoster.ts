@@ -1,6 +1,9 @@
 /** Standalone, synchronous Canvas2D poster renderer; importing it never touches the DOM. */
 export interface PosterData {
   date: string;
+  title?: string;
+  /** Empty-state headline; defaults to 「今日尚无记录」. */
+  empty?: string;
   /** 一行「今日盛况」概括，例如「今天留下 12 次行动」；null/空串不绘制 */
   headline?: string;
   sections: { title: string; items: { label: string; value: string; detail?: string }[] }[];
@@ -99,7 +102,7 @@ export function layoutSettlementPoster(data: PosterData, width = 900): Settlemen
     page = { width, height: 0, lines: [], rows: [] };
     pages.push(page);
     addLine('DAILYNOTE  /  日有所记', 54, 42, 792, 18, 'brand', 600, MUTED);
-    addLine('今日结算', 54, 94, 792, 58, 'title', 700);
+    addLine(data.title ?? '今日结算', 54, 94, 792, 58, 'title', 700);
     addLine(wrap(data.date, 792, 23, 1)[0], 56, 184, 788, 23, 'date', 400, MUTED);
     const headline = (data.headline ?? '').trim();
     if (headline) {
@@ -146,7 +149,7 @@ export function layoutSettlementPoster(data: PosterData, width = 900): Settlemen
     y += 26;
   });
   if (!count) {
-    addLine('今日尚无记录', 72, y + 28, 756, 34, 'empty', 600);
+    addLine(data.empty ?? '今日尚无记录', 72, y + 28, 756, 34, 'empty', 600);
     addLine('慢慢来，每一天都值得被记下。', 72, y + 90, 756, 23, 'detail', 400, MUTED);
     y += 180;
   }

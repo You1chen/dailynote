@@ -152,7 +152,8 @@ utils/  →  types/
 - `TaskItem.id` 为字符串；其余表主键 `number`；`TrashItem.originalId` 为 `number|string`。
 - `TaskNode` 只有末级节点的 `done` 有意义；末级用完整链 `a/b/c` 标识。
 - `DdlLink` 存的是**快照**（`kind, id, label, groupName`）：课程/分组被删后 DDL 仍显示当时的名字。
-- `ActivityEvent` 只记录真实发生过的交互，日期取设备本地日历；`from/to` 为 0–1 的进度或布尔转换，新建/删除为 `null`。撤销重做按实体累加净变化，跨日先撤后做不会重复计数；同父节点下的成对增删视为改名，不计新建/删除。历史数据没有时间戳可回溯，因此结算从功能上线后开始积累，不伪造旧活动。
+- `ActivityEvent` 有两类来源：操作时由 `mutate` 检测产生（`id` 为随机 UUID），以及启动/导入时按真实时间戳扫描产生（`id` 以 `recovered:` 开头）。日期取设备本地日历；`from/to` 为 0–1 的进度或布尔转换，新建/删除为 `null`。撤销重做按实体累加净变化，跨日先撤后做不会重复计数；同父节点下的成对增删视为改名，不计新建/删除。
+- 扫描只采信能证明「什么时候发生」的字段：TODO 叶子的 `doneAt`、DDL 的 `dismissedAt`、灵感的 `createdAt`（含回收站中可解析的记录）。计划块完成、目标节点推进、大愿望里程碑、TODO 新建都没有完成/创建时间，不推算，也不用 `updatedAt` 冒充。扫描按「类别+动作+实体+日期」与实时事件对齐：同一件事两边都有时保留实时事件，重复启动与重复导入都幂等。
 - `todayStr()` 为设备本地日历日期；全屏日程同用它判断今天，凌晨不再偏到前一天。
 - `Course.semesterStartDate?` 保存所属学期开学日期。旧课程（含回收站）首次加载时补当前学期，未设置学期的在首次设置时补；切换学期不重绑；导入旧备份按备份自身学期补齐。
 
@@ -298,7 +299,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | BacklogPage | 阻塞中/可推进/已解决/已终止；起始三态（距今/日期/文字）；历时排序；一周宽限气泡 |
 | LongTermGoals | 上半「大愿望」（默认收起，只有摘要；展开见愿景/动机/里程碑；新建与编辑共用表单，里程碑可增删改勾）；下半「长期目标」（摘要点击进入全屏目标地图；新建/编辑为三行页面：名称、全屏 TODO/Markdown 树内容、附件线索；地图从目标根进入一级节点并逐层钻取，每个节点显示等权递归完成度）；两者共用一张表，靠 `kind` 区分 |
 | Reflection / Harvest | 三段式反思；收获 #标签；均支持 `?date=` |
-| Settlement | 全屏今日结算：按 TODO / DDL / 每日计划 / 长期目标 / 大愿望里程碑 / 杂念分门别类，只渲染非零项；数据来自 `activity.json`，`buildSettlement` 按实体累加当日净变化；Canvas 海报优先长图、超长自动分页（每页 ≤4096px / 400 万像素）、文字测量裁剪、可滚动查看并附文字明细；Android 返回键回到计划页 |
+| Settlement | 全屏结算：按 TODO / DDL / 每日计划 / 长期目标 / 大愿望里程碑 / 杂念分门别类，只渲染非零项；数据来自 `activity.json`，`buildSettlement` 按实体累加当日净变化；支持 `?date=` 指定日期（计划页把当前选中日期带过来），顶部日期可改选，非今天显示「当日结算」；Canvas 海报优先长图、超长自动分页（每页 ≤4096px / 400 万像素）、文字测量裁剪、可滚动查看并附文字明细；Android 返回键回到对应日期的计划页 |
 | Trash / BackupRestore / SettingsPage / SetupPage | 回收站；导入导出与路径；头像主题偏好；首次目录选择 |
 
 识别结果核对（`planExtraction`，`utils/extract.ts`）：

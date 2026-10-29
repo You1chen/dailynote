@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { _resetForTest, exportJSON, flush, getStore, importJSONIntoStore, mutate, rescanFromDisk } from '../../src/services/store';
 import { emptyStore } from '../../src/services/storeSchema';
-import { buildSettlement, detectActivity, localActivityDate, posterFromSettlement } from '../../src/utils/settlement';
+import { buildSettlement, detectActivity, localActivityDate, posterFromSettlement, recoverTimestampedActivity } from '../../src/utils/settlement';
 import type { LongTermGoal, TaskNode, TimeBlock } from '../../src/types';
 import * as db from '../../src/db';
 
@@ -97,13 +97,44 @@ describe('结算实际活动与净推进', () => {
     const oldBackup = JSON.parse(backup);
     delete oldBackup.activityEvents;
     await importJSONIntoStore(JSON.stringify(oldBackup));
-    expect(getStore().activityEvents).toEqual([]);
+    expect(getStore().activityEvents).toHaveLength(1);
+    expect(getStore().activityEvents[0].id).toMatch(/^recovered:/);
     await importJSONIntoStore(backup);
     expect(getStore().activityEvents).toEqual(events);
     const summary = buildSettlement([...events, ...events], date());
     expect(summary.ideasCreated).toBe(1);
     expect(summary.recordedSince).toBe(date());
     expect(buildSettlement(events, '2000-01-01').events).toEqual([]);
+  });
+  it('可靠时间戳恢复活动，重复扫描及后到的实时事件不重复', () => {
+    const data = emptyStore();
+    const at = new Date(2026, 0, 2, 12).getTime();
+    data.taskBoard.push({ id: 1, nodes: [{ ...leaf('a', '完成', true), doneAt: at }, { ...leaf('b', '未完成'), doneAt: at }], order: [], updatedAt: at });
+    data.ddls.push({ id: 1, name: 'DDL', deadlineDate: '', deadlineTime: '', location: '', notes: '', images: [], createdAt: 0, updatedAt: at, dismissedAt: at });
+    data.ideas.push({ id: 2, text: '灵感', kind: 'idea', date: '2000-01-01', createdAt: at, updatedAt: at }, { id: 3, text: '愿望', kind: 'wish', date: '', createdAt: at, updatedAt: at });
+    data.trashItems.push({ originalTable: 'ideas', originalId: 4, originalData: { text: '已删除', createdAt: at }, title: '', deletedAt: at });
+    expect(recoverTimestampedActivity(data)).toBe(true);
+    expect(data.activityEvents).toHaveLength(4);
+    expect(recoverTimestampedActivity(data)).toBe(false);
+    const summary = buildSettlement(data.activityEvents, localActivityDate(new Date(at)));
+    expect(summary.todo.completed).toBe(1);
+    expect(summary.ddlCompleted).toBe(1);
+    expect(summary.ideasCreated).toBe(2);
+    const recovered = data.activityEvents.find(e => e.category === 'ddl')!;
+    data.activityEvents.push({ ...recovered, id: 'live', occurredAt: at + 1 });
+    expect(recoverTimestampedActivity(data)).toBe(true);
+    expect(data.activityEvents.filter(e => e.category === 'ddl').map(e => e.id)).toEqual(['live']);
+  });
+  it('旧备份导入及磁盘重扫恢复可靠时间戳且幂等', async () => {
+    const at = new Date(2025, 1, 3, 12).getTime();
+    const backup = { ...emptyStore(), version: 1, savedAt: 0, ideas: [{ id: 1, text: '旧灵感', createdAt: at, updatedAt: at, date: '2000-01-01' }] };
+    await importJSONIntoStore(JSON.stringify(backup));
+    expect(getStore().activityEvents).toHaveLength(1);
+    await importJSONIntoStore(JSON.stringify(backup));
+    await flush();
+    await rescanFromDisk();
+    expect(getStore().activityEvents).toHaveLength(1);
+    expect(getStore().activityEvents[0].date).toBe(localActivityDate(new Date(at)));
   });
   it('海报只保留非零项，进度按净变化显示，空的一天不编造数字', () => {
     const summary = buildSettlement([
