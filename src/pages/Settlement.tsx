@@ -61,7 +61,7 @@ export default function SettlementPage() {
       <div className="settlement-posters">
         {layout.pages.map((page, index) => <PosterCanvas key={index} data={data} index={index} ratio={page.width / page.height} />)}
       </div>
-      <p className="settlement-note">按今天实际发生的交互记录；进度为当天净变化。历史操作不补算。</p>
+      <p className="settlement-note">结算从本版开始记录每一次实际操作，进度按当天净变化；更早的操作没有时间戳可查，不补算。</p>
       <details className="settlement-accessible">
         <summary>查看文字明细</summary>
         {data.sections.length ? data.sections.map(section => <section key={section.title}>
