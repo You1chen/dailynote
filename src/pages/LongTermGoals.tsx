@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Plus, Target, ChevronDown, ChevronUp, Trash2, CheckCircle2, Circle,
-  Star, CalendarDays, Sparkles,
+  Star, CalendarDays, Sparkles, Heart, Feather,
 } from 'lucide-react';
 import { useGoals } from '../hooks/useGoals';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
@@ -16,6 +16,13 @@ const STATUS_LABEL: Record<WishStatus, string> = {
   paused: '暂缓',
 };
 
+/** 卡片上写给未来的那句轻声提示，跟状态走，不落库 */
+const MEMORY_LINE: Record<WishStatus, string> = {
+  active: '写给未来的自己',
+  done: '这份愿望，已经成为你的故事',
+  paused: '先把它放在心里，等准备好再出发',
+};
+
 function daysLeft(targetDate?: string): number | null {
   if (!targetDate) return null;
   const target = new Date(targetDate + 'T00:00:00');
@@ -23,6 +30,13 @@ function daysLeft(targetDate?: string): number | null {
   today.setHours(0, 0, 0, 0);
   if (Number.isNaN(target.getTime())) return null;
   return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+/** 2027-06-30 → 2027.06.30，让日期更像一个被记住的日子而不是表单值 */
+function formatTarget(targetDate: string): string {
+  const [y, m, d] = targetDate.split('-');
+  if (!y || !m || !d) return targetDate;
+  return `${y}.${m}.${d}`;
 }
 
 export default function LongTermGoalsPage() {
@@ -164,34 +178,55 @@ export default function LongTermGoalsPage() {
 
           return (
             <div key={gid} className={`wish-card wish-card--${status}`}>
+              <span className="wish-card-glow" aria-hidden="true" />
               <div className="wish-top" onClick={() => setExpandedId(isExpanded ? null : gid)}>
                 <div className="wish-title-row">
-                  <Sparkles size={15} className="wish-spark" />
+                  <span className="wish-mark" aria-hidden="true">
+                    {status === 'done' ? <CheckCircle2 size={16} /> : <Sparkles size={15} />}
+                  </span>
                   <span className="wish-title">{wish.title}</span>
                   <span className={`wish-status wish-status--${status}`}>{STATUS_LABEL[status]}</span>
                 </div>
 
-                {wish.vision && <p className="wish-vision">「{wish.vision}」</p>}
+                {wish.vision && (
+                  <p className="wish-vision">
+                    <span className="wish-quote" aria-hidden="true">“</span>
+                    {wish.vision}
+                    <span className="wish-quote wish-quote--close" aria-hidden="true">”</span>
+                  </p>
+                )}
+
+                <div className="wish-memory">
+                  {status === 'done' ? <Heart size={11} fill="currentColor" /> : <Feather size={11} />}
+                  <span>{MEMORY_LINE[status]}</span>
+                </div>
 
                 <div className="wish-meta">
                   {wish.targetDate && (
                     <span className="wish-target">
-                      <CalendarDays size={11} /> {wish.targetDate}
+                      <CalendarDays size={11} /> {formatTarget(wish.targetDate)}
                       {left !== null && status === 'active' && (
-                        <b className={left < 0 ? 'is-over' : left <= 30 ? 'is-near' : ''}>
-                          {left < 0 ? `已过 ${-left} 天` : `还有 ${left} 天`}
-                        </b>
+                        <>
+                          <i className="wish-dot" aria-hidden="true" />
+                          <b className={left < 0 ? 'is-over' : left <= 30 ? 'is-near' : ''}>
+                            {left < 0 ? `已过 ${-left} 天` : `还有 ${left} 天`}
+                          </b>
+                        </>
                       )}
                     </span>
                   )}
                   {wish.tasks.length > 0 && (
-                    <span className="wish-progress-text">{done}/{wish.tasks.length} 里程碑</span>
+                    <span className="wish-progress-text">{done}/{wish.tasks.length} 个里程碑</span>
                   )}
                 </div>
 
                 {wish.tasks.length > 0 && (
-                  <div className="goal-progress-bar wish-progress">
-                    <div className="goal-progress-fill" style={{ width: `${progress * 100}%` }} />
+                  <div className="wish-journey">
+                    <span className="wish-journey-from" aria-hidden="true" />
+                    <div className="goal-progress-bar wish-progress">
+                      <div className="goal-progress-fill" style={{ width: `${progress * 100}%` }} />
+                    </div>
+                    <span className={`wish-journey-to ${progress >= 1 ? 'is-reached' : ''}`} aria-hidden="true" />
                   </div>
                 )}
               </div>

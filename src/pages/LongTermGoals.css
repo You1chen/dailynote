@@ -172,118 +172,287 @@
   font-variant-numeric: tabular-nums;
 }
 
-.wish-section { margin-bottom: 22px; }
+.wish-section { margin-bottom: 26px; }
 
 .wish-empty-hint {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--color-text-muted);
-  line-height: 1.6;
+  line-height: 1.7;
   margin: 0 0 12px;
 }
 
+/* ============ 大愿望卡片：一张写给未来的纸 ============ */
+
 .wish-card {
   position: relative;
-  border-radius: 16px;
-  padding: 14px 14px 10px;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 16px 16px 8px;
   margin-bottom: 12px;
-  background: linear-gradient(150deg, rgba(255, 249, 235, 0.9), rgba(246, 240, 255, 0.9));
-  box-shadow: 0 6px 22px rgba(120, 100, 180, 0.09);
+  background:
+    radial-gradient(130% 100% at 90% -12%, rgba(255, 198, 138, 0.46) 0%, rgba(255, 198, 138, 0) 58%),
+    linear-gradient(140deg, #fff8ec 0%, #fdf4fa 52%, #f7f1ff 100%);
+  border: 1px solid rgba(196, 162, 132, 0.24);
+  box-shadow:
+    0 10px 26px -10px rgba(126, 93, 73, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
-.wish-card--done { opacity: 0.72; }
-.wish-card--paused { opacity: 0.8; }
+.wish-card-glow {
+  position: absolute;
+  top: -66px;
+  right: -56px;
+  width: 158px;
+  height: 158px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 170, 0.55), rgba(255, 214, 170, 0) 70%);
+  pointer-events: none;
+}
+
+.wish-card--done {
+  background: linear-gradient(140deg, #fbfaf7 0%, #f7f5fa 100%);
+  border-color: rgba(150, 150, 168, 0.18);
+  box-shadow: 0 6px 18px -12px rgba(90, 90, 110, 0.30);
+}
+
+.wish-card--done .wish-card-glow { opacity: 0.3; }
+.wish-card--paused { opacity: 0.9; }
+.wish-card--paused .wish-card-glow { opacity: 0.55; }
 
 .wish-top { cursor: pointer; }
 
 .wish-title-row {
   display: flex;
-  align-items: baseline;
-  gap: 7px;
+  align-items: center;
+  gap: 8px;
 }
 
-.wish-spark { color: #b07dff; flex: 0 0 auto; align-self: center; }
+.wish-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: #b98cf0;
+}
+
+.wish-card--done .wish-mark { color: #6fae8b; }
+.wish-card--paused .wish-mark { color: #b99a7c; }
 
 .wish-title {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 700;
-  color: var(--color-text);
+  line-height: 1.45;
+  color: #40364f;
   letter-spacing: 0.01em;
 }
 
-.wish-card--done .wish-title { text-decoration: line-through; }
+.wish-card--done .wish-title {
+  color: #7c7789;
+  text-decoration: line-through;
+  text-decoration-color: rgba(124, 119, 137, 0.5);
+}
 
 .wish-status {
   flex: 0 0 auto;
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
 }
 
-.wish-status--active { background: rgba(108, 124, 255, 0.14); color: #5a68e0; }
-.wish-status--done { background: rgba(52, 199, 89, 0.14); color: #2f9e56; }
-.wish-status--paused { background: rgba(120, 120, 130, 0.14); color: #6b6b75; }
+.wish-status--active { background: rgba(124, 92, 210, 0.12); color: #7a54c9; }
+.wish-status--done { background: rgba(60, 160, 120, 0.14); color: #3f8f6d; }
+.wish-status--paused { background: rgba(140, 130, 120, 0.14); color: #7d746b; }
 
+/* 愿景：整张卡的句子，用引号收住 */
 .wish-vision {
-  margin: 8px 0 0;
-  font-size: 12.5px;
-  line-height: 1.65;
-  color: #6a5f86;
-  font-style: italic;
+  position: relative;
+  margin: 12px 0 9px;
+  padding: 0 6px 0 20px;
+  font-size: 14.5px;
+  line-height: 1.8;
+  color: #6d5f7d;
+  letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
+
+.wish-quote {
+  position: absolute;
+  left: 0;
+  top: -3px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  line-height: 1;
+  color: rgba(176, 137, 224, 0.45);
+  pointer-events: none;
+}
+
+.wish-quote--close {
+  position: static;
+  margin-left: 2px;
+  font-size: 15px;
+  vertical-align: -1px;
+  color: rgba(176, 137, 224, 0.55);
+}
+
+.wish-memory {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: #a8825f;
+}
+
+.wish-card--done .wish-memory { color: #8fa596; }
+.wish-card--paused .wish-memory { color: #a8988a; }
 
 .wish-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 12px;
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: #9a8f9f;
 }
 
-.wish-target { display: inline-flex; align-items: center; gap: 4px; }
-.wish-target b { color: var(--color-text-secondary); font-weight: 600; }
-.wish-target b.is-near { color: var(--color-warning); }
-.wish-target b.is-over { color: var(--color-danger); }
+.wish-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
 
-.wish-progress { margin-top: 8px; }
+.wish-target b { color: #8a7d93; font-weight: 600; }
+.wish-target b.is-near { color: #c98a2e; }
+.wish-target b.is-over { color: #cf5f5f; }
+
+.wish-dot {
+  width: 3px;
+  height: 3px;
+  margin: 0 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.wish-progress-text {
+  font-size: 11px;
+  color: #9a8f9f;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 里程碑：从脚下走到那颗星 */
+.wish-journey {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.wish-progress {
+  height: 5px;
+  margin: 0;
+  background: rgba(160, 145, 175, 0.16);
+  border-radius: 999px;
+}
+
+.wish-progress .goal-progress-fill {
+  background: linear-gradient(90deg, #f0b884 0%, #d9a3e0 55%, #b48ce8 100%);
+  border-radius: 999px;
+}
+
+.wish-journey-from {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(180, 140, 232, 0.55);
+}
+
+.wish-journey-to {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.2px solid rgba(180, 140, 232, 0.55);
+  box-sizing: border-box;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.wish-journey-to.is-reached {
+  background: #b48ce8;
+  border-color: #b48ce8;
+  box-shadow: 0 0 0 3px rgba(180, 140, 232, 0.14);
+}
 
 .wish-acts {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 4px;
+  margin-top: 10px;
 }
 
 .wish-act {
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: #8f8497;
   font-size: 11.5px;
   font-family: inherit;
-  padding: 4px 9px;
+  padding: 5px 10px;
   border-radius: 999px;
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
 
-.wish-act:active { background: rgba(255, 255, 255, 0.8); }
-.wish-act--danger { color: var(--color-text-muted); display: flex; align-items: center; }
-.wish-act--toggle { color: var(--color-text-muted); display: flex; align-items: center; }
+.wish-act:hover { background: rgba(255, 255, 255, 0.7); color: #6d5f7d; }
+.wish-act:active { background: rgba(255, 255, 255, 0.9); transform: none; }
+.wish-act--danger,
+.wish-act--toggle { display: flex; align-items: center; color: #a99fae; }
+.wish-act--danger:hover { color: var(--color-danger); }
 
+.wish-card .goal-detail {
+  border-top: 1px solid rgba(186, 160, 145, 0.22);
+  margin-top: 10px;
+}
+
+.wish-card .task-item {
+  border-bottom-color: rgba(186, 160, 145, 0.16);
+}
+
+.wish-card .add-task-row .input {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+/* 卡片内沿用暖色系，避免主色按钮在这里显得突兀 */
+.wish-card .add-task-row .btn-primary {
+  background: linear-gradient(135deg, #e8a86f 0%, #c99ae8 100%);
+  color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(180, 120, 160, 0.5);
+}
+
+/* 展开后才出现的动机，像便签上的批注 */
 .wish-why {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(214, 170, 210, 0.5);
   font-size: 12.5px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--color-text-secondary);
+  white-space: pre-wrap;
 }
 
 .wish-why span {
-  display: inline-block;
+  display: block;
   font-size: 10px;
-  color: var(--color-text-muted);
-  margin-right: 6px;
+  letter-spacing: 0.05em;
+  color: #b39aa8;
+  margin: 0 0 3px;
 }
 
 .wish-empty {
@@ -291,3 +460,46 @@
   color: var(--color-text-muted);
   margin: 0 0 8px;
 }
+
+/* ============ 大愿望：深色主题 ============ */
+
+[data-theme="dark"] .wish-card {
+  background:
+    radial-gradient(120% 90% at 88% -10%, rgba(214, 150, 96, 0.20) 0%, rgba(214, 150, 96, 0) 56%),
+    linear-gradient(140deg, #1f1a2a 0%, #221b2e 52%, #241d33 100%);
+  border-color: rgba(190, 160, 140, 0.16);
+  box-shadow:
+    0 10px 26px -12px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .wish-card--done {
+  background: linear-gradient(140deg, #1c1b22 0%, #201d26 100%);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="dark"] .wish-title { color: #ece6f5; }
+[data-theme="dark"] .wish-card--done .wish-title { color: #9b94a8; }
+[data-theme="dark"] .wish-mark { color: #c4a0f0; }
+[data-theme="dark"] .wish-card--done .wish-mark { color: #6fbf95; }
+[data-theme="dark"] .wish-vision { color: #cdbfe0; }
+[data-theme="dark"] .wish-quote { color: rgba(196, 160, 240, 0.42); }
+[data-theme="dark"] .wish-memory { color: #c2a184; }
+[data-theme="dark"] .wish-card--done .wish-memory { color: #86a894; }
+[data-theme="dark"] .wish-meta,
+[data-theme="dark"] .wish-progress-text { color: #8d8499; }
+[data-theme="dark"] .wish-target b { color: #a99fb5; }
+[data-theme="dark"] .wish-progress { background: rgba(255, 255, 255, 0.08); }
+[data-theme="dark"] .wish-act { color: #a79cb4; }
+[data-theme="dark"] .wish-act:hover { background: rgba(255, 255, 255, 0.06); color: #ded5ea; }
+[data-theme="dark"] .wish-act--danger,
+[data-theme="dark"] .wish-act--toggle { color: #8d8499; }
+[data-theme="dark"] .wish-card .goal-detail { border-top-color: rgba(255, 255, 255, 0.07); }
+[data-theme="dark"] .wish-card .task-item { border-bottom-color: rgba(255, 255, 255, 0.06); }
+[data-theme="dark"] .wish-card .add-task-row .input { background: rgba(255, 255, 255, 0.04); }
+[data-theme="dark"] .wish-why { color: var(--color-text-secondary); }
+[data-theme="dark"] .wish-why span { color: #a3899a; }
+[data-theme="dark"] .wish-status--active { background: rgba(160, 130, 240, 0.18); color: #b9a4f2; }
+[data-theme="dark"] .wish-status--done { background: rgba(60, 180, 130, 0.18); color: #6fd6a4; }
+[data-theme="dark"] .wish-status--paused { background: rgba(180, 170, 160, 0.16); color: #b3a99f; }
+
