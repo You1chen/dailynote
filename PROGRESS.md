@@ -1407,3 +1407,37 @@ pm run build:apk` 成功（24.8 MB）。
 ```
 新增：大愿望与底部导航排查改进说明.md
 ```
+
+## 2026-10-29 — 底部导航三等分、大愿望空状态暖化、APK 重新打包
+
+### 需求
+
+上轮打包后用户反馈两点仍未解决：底部「计划 / 反思 / 收获」视觉松散；大愿望区域看不出改造。排查后发现：
+APK 里的新样式其实在，但用户截图里 `大愿望 0` 只是空状态，而空状态仍是灰字提示，所以整块看起来像没做过设计；
+底部仍是 `space-around` 自由分配，三个点击区宽度不一致。
+
+### 实现
+
+- `src/components/TabBar.css`：`display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))`，
+  `tab-item` 改 `width: 100%; padding: 5px 0; justify-content: center`，去掉 `space-around` 与左右 12px 内边距。
+  360dp 实测 `bar=76..360`、三个 tab 均为 95px、中心 123 / 218 / 313，`scrollWidth` 等于视口宽度，无溢出。
+- `src/pages/LongTermGoals.tsx/.css`：空状态从一行灰字换成暖色虚线邀请卡（`.wish-empty-card`）：星标 + 「还没有写下一件真正想做到的事」+
+  「先把它好好记住，不必急着完成。」+「写下第一个大愿望」按钮（直接打开新建弹窗）；深色主题同步覆盖。
+  这样即使一条愿望都没有，大愿望区域也能看出是哪一套视觉语言。
+- APK 重新执行 `npm run build:apk`，并用 zip 检查确认 APK 内 `assets/public/assets/index-BMCqjjUe.css` 含
+  `wish-card-glow`、`wish-empty-card`、`grid-template-columns:repeat(3,minmax(0,1fr))`，`index.html` 指向该 CSS。
+
+### 验证
+
+- `npx tsc --noEmit` 通过；`npm test` **698/698** 通过。
+- 360dp iframe 渲染真实 `App.css` / `TabBar.css` / `LongTermGoals.css`：截图为三等分导航 + 暖色空状态卡；
+  测量输出 `vw=360 bar=76..360 scroll=360 tabs=95@123 95@218 95@313`。
+- APK：24.8 MB，2026-10-29 14:56，产物 `android/app/build/outputs/apk/debug/app-debug.apk`。
+- 提示用户：覆盖安装前先卸载旧版或清除应用数据，避免 WebView 缓存继续加载旧的 `index.html` 与旧 CSS 哈希。
+
+### 涉及文件
+
+```
+修改：src/components/TabBar.css、src/pages/LongTermGoals.tsx、src/pages/LongTermGoals.css
+产物：android/app/build/outputs/apk/debug/app-debug.apk（24.8 MB）
+```

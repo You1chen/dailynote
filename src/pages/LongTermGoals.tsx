@@ -167,7 +167,15 @@ export default function LongTermGoalsPage() {
         </div>
 
         {wishes.length === 0 ? (
-          <p className="wish-empty-hint">写下一件真正想做到的事，它值得比待办更认真。</p>
+          <div className="wish-empty-card">
+            <span className="wish-empty-glow" aria-hidden="true" />
+            <Sparkles size={18} className="wish-empty-spark" />
+            <p className="wish-empty-title">还没有写下一件真正想做到的事</p>
+            <p className="wish-empty-sub">先把它好好记住，不必急着完成。</p>
+            <button className="wish-empty-btn" onClick={() => setShowWishForm(true)}>
+              <Star size={13} /> 写下第一个大愿望
+            </button>
+          </div>
         ) : wishes.map(wish => {
           const gid = wish.id!;
           const isExpanded = expandedId === gid;
