@@ -6,6 +6,7 @@
  */
 
 import type { StoreShape } from '../types/storage';
+import { effectiveNodes } from './goalTree';
 
 export interface SearchHit {
   key: string;
@@ -107,14 +108,29 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     ));
   }
 
-  // ---- 长期目标 ----
+  // ---- 大愿望 / 长期目标 ----
   for (const g of data.longTermGoals) {
+    const isWish = g.kind === 'wish';
+    const nodeTitles: string[] = [];
+    if (isWish) {
+      nodeTitles.push(...(g.tasks ?? []).map(t => t.title));
+    } else {
+      // 树可能有多层；旧目标由 effectiveNodes 惰性投影，搜索不需要区分新旧
+      const walkNodes = (nodes: ReturnType<typeof effectiveNodes>) => {
+        for (const node of nodes) {
+          nodeTitles.push(node.title);
+          if (node.children.length > 0) walkNodes(node.children);
+        }
+      };
+      walkNodes(effectiveNodes(g));
+    }
+
     push(makeHit(
       q,
       `goal:${g.id}`,
-      g.title || '(目标)',
-      [g.title, g.description, ...g.tasks.map(t => t.title)],
-      `长期目标${g.category ? ` · ${g.category}` : ''}`,
+      g.title || (isWish ? '(大愿望)' : '(目标)'),
+      [g.title, g.description, g.vision ?? '', ...nodeTitles],
+      `${isWish ? '大愿望' : '长期目标'}${g.category ? ` · ${g.category}` : ''}`,
       '/goals',
     ));
   }

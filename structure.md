@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 94 文件；`test/` 33 个测试文件 / 698 用例 |
+| 规模 | `src/` 96 文件；`test/` 35 个测试文件 / 731 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -67,6 +67,7 @@ src/
 │   ├── ddlLinks.ts     关联项生成/切换/去重、展示文案
 │   ├── backlog.ts      距今折算、历时文案、一周宽限、排序
 │   ├── taskTree.ts     标准文本 ⇄ 层级 ⇄ 末级并列、完成状态回填
+│   ├── goalTree.ts     长期目标树：递归加权进度、树编辑、旧扁平任务投影
 │   ├── markdown.ts     Markdown → HTML（先转义后套标签）
 │   ├── extract.ts      识别文本 → 时间/地点/要求/邮箱
 │   ├── search.ts       全局内容搜索
@@ -126,7 +127,7 @@ utils/  →  types/
 | reflections | `days/<date>/reflections.json` | 数组 | `date, period, problem, cause, solution` |
 | harvests | `days/<date>/harvests.json` | 数组 | `date, period, subject, content` |
 | taskItems | `days/<date>/tasks.json` | 数组 | `id:string, title, done, date, sortOrder` |
-| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]`；`kind: wish` = 大愿望（另带 `vision, targetDate, status`） |
+| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]`；`kind: wish` = 大愿望（另带 `vision, targetDate, status`）；`nodes?` = 长期目标树（递归加权进度） |
 | fixedRoutines | `routines.json` | 数组 | `name, timeBlocks[], isActive` |
 | taskTemplates | `templates.json` | 数组 | `name, items[]` |
 | courses | `courses.json` | 数组 | `dayOfWeek:number[], weekType, startWeek, weekCount, semesterStartDate?` |
@@ -141,6 +142,8 @@ utils/  →  types/
 
 约定：
 - `TimeBlock.focusScore / efficiencyScore`：0–10，0 = 未评分。
+- `LongTermGoal.nodes` 存在（含空数组）即长期目标的唯一权威；只有旧数据 `nodes === undefined` 时才把 `tasks` 逐项投影为一级节点，不双写、不回填。大愿望仍只用 `tasks` 保存里程碑。
+- `GoalNode.completed` 只有叶节点生效；有子节点时进度由 `utils/goalTree.ts` 按同级 `weight`（默认 1）递归加权。
 - `TaskItem.id` 为字符串；其余表主键 `number`；`TrashItem.originalId` 为 `number|string`。
 - `TaskNode` 只有末级节点的 `done` 有意义；末级用完整链 `a/b/c` 标识。
 - `DdlLink` 存的是**快照**（`kind, id, label, groupName`）：课程/分组被删后 DDL 仍显示当时的名字。
@@ -237,7 +240,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | useDailyPlan(date) | plan, loading, addBlock, addFullBlock, updateBlock, removeBlock, importFromRoutine, reload |
 | useTaskBoard() | nodes, leaves, undone, loading, saveTree, toggle, remove, reorder, reload |
 | useTaskBadge() | count |
-| useGoals() | goals, loading, addGoal, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload |
+| useGoals() | goals, loading, addGoal, addWish, setWishStatus, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload；更新返回是否落盘成功 |
 | useReflections(date) | reflections, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllReflections） |
 | useHarvests(date) | harvests, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllHarvests） |
 | useBacklog() | items, loading, addItem, updateItem, changeStatus, removeItem, reload |
@@ -281,7 +284,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | WeekViewPage | 7 列周日程、课程按周过滤、点空白/点块跳日计划编辑、睡眠折叠 |
 | DdlPage / ImportantPage | 共用 DeadlineListPage：地点、Markdown 备注（编辑/预览）、图片查看（Lightbox）、图片识别（识别全部备注图片）、解除威胁；**关联内容只有 DDL 有**（`allowLinks`，重要的事关闭）；重要的事三天气泡 + 过期一天收起 |
 | BacklogPage | 阻塞中/可推进/已解决/已终止；起始三态（距今/日期/文字）；历时排序；一周宽限气泡 |
-| LongTermGoals | 上半「大愿望」（名称/愿景/为什么/期望日期/状态/里程碑），下半「长期目标」；两者共用一张表，靠 `kind` 区分 |
+| LongTermGoals | 上半「大愿望」（默认收起，只有摘要；展开见愿景/动机/里程碑；新建与编辑共用表单，里程碑可增删改勾）；下半「长期目标」（默认收起，树状拆解，同级权重默认 1、递归加权百分比；权重入口在节点 `⋯` 内）；两者共用一张表，靠 `kind` 区分 |
 | Reflection / Harvest | 三段式反思；收获 #标签；均支持 `?date=` |
 | Trash / BackupRestore / SettingsPage / SetupPage | 回收站；导入导出与路径；头像主题偏好；首次目录选择 |
 
@@ -323,7 +326,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npm test`：33 文件 / 698 用例。
+`npm test`：35 文件 / 731 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -333,7 +336,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 数据导入导出/jsonImport | 23 | 解析、BOM、乱码拒绝、错误分级、往返 |
 | 任务/taskTree | 32 | 文本⇄层级、完整链、状态回填、删除、排序 |
 | 遗留问题/backlog | 20 | CRUD、回收站、持久化、历时与宽限 |
-| 搜索/search | 19 | 内容命中、路由、不命中界面文案与日期、DDL 阈值 |
+| 搜索/search | 22 | 内容命中、路由、不命中界面文案与日期、DDL 阈值、目标树深层节点与大愿望文案 |
 | 任务清单/taskList | 18 | 创建、切换、排序、日期隔离 |
 | 时间网格点击映射/foldedGrid | 18 | 多段折叠几何与块渲染 |
 | 时间网格点击映射/futureWindow | 19 | 只看未来：折叠起点、映射与反算、跨起点块、边界与密度 |
@@ -359,8 +362,10 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 偏好设置/localDate | 5 | 本地凌晨、跨年、晚间日期；另在洛杉矶时区进程验证 |
 | 课程表/courseEditSemester | 4 | 新建当前学期、编辑保留归属、无学期兼容、旧课兼容 |
 | 课程表/coursesPageSemester | 3 | 当前课表过滤、历史课空态、列表保留历史归属 |
-| 长期/wish | 6 | 大愿望字段往返、与目标共存、旧数据无 kind、里程碑、状态落盘、回收站还原 |
-| **合计** | **698** | 33 个文件 |
+| 长期/wish | 10 | 大愿望字段往返、与目标共存、旧数据无 kind、里程碑、状态落盘、回收站还原、编辑保留原 ID |
+| 长期/goalTree | 20 | 递归加权进度、不对称树、空树、非法权重、旧任务投影、`nodes: []` 权威、树编辑保留 ID |
+| 长期/goalsPage | 6 | 愿望默认收起、展开后才见愿景/里程碑、空愿望不显示 0/0、目标树摘要与深层节点、空目标不显示 0% |
+| **合计** | **731** | 35 个文件 |
 
 环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
 

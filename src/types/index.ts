@@ -31,12 +31,28 @@ export interface DailyPlan {
   updatedAt: number;
 }
 
-/** 子任务 */
+/** 子任务（大愿望的里程碑） */
 export interface GoalTask {
   id: string;
   title: string;
   completed: boolean;
   createdAt: number;
+}
+
+/**
+ * 长期目标树节点：目标拆解的任意层级。
+ * - 叶节点用 `completed` 表示完成；有子节点时完成度由子树递归计算，自身 `completed` 不参与。
+ * - `weight` 是同级节点的相对权重，默认 1；只在临时调整时填写。
+ */
+export interface GoalNode {
+  id: string;
+  title: string;
+  children: GoalNode[];
+  completed: boolean;
+  /** 同级相对权重；缺省 = 1 */
+  weight?: number;
+  /** 旧扁平任务迁移时保留的创建时间 */
+  createdAt?: number;
 }
 
 /** 长期目标 / 大愿望共用一张表，用 kind 区分 */
@@ -62,6 +78,11 @@ export interface LongTermGoal {
   /** 大愿望：进行中 / 已实现 / 暂缓 */
   status?: WishStatus;
   tasks: GoalTask[];       // 大愿望下即「里程碑」
+  /**
+   * 长期目标：树状拆解。
+   * 缺省（undefined）= 旧数据，用 `tasks` 惰性投影；空数组表示用户已明确清空。
+   */
+  nodes?: GoalNode[];
   createdAt: number;
   updatedAt: number;
 }

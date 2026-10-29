@@ -15,6 +15,7 @@ const mem: Record<string, string> = {};
 
 import { _resetForTest, initStore, getStore } from '../../src/services/store';
 import * as db from '../../src/db';
+import { effectiveNodes } from '../../src/utils/goalTree';
 import type { LongTermGoal } from '../../src/types';
 
 beforeEach(async () => {
@@ -93,5 +94,99 @@ describe('大愿望', () => {
     const restored = (await db.getAllGoals()).find(g => g.id === id)!;
     expect(restored.kind).toBe('wish');
     expect(restored.vision).toBe('坐在礁石上听一整晚的浪');
+  });
+});
+
+describe('愿望编辑闭环', () => {
+  it('编辑愿望主体与里程碑时保留原 ID', async () => {
+    const id = await db.saveGoal(wish({
+      tasks: [{ id: 'm1', title: '攒钱', completed: true, createdAt: 0 }],
+    }));
+    const saved = (await db.getAllGoals()).find(g => g.id === id)!;
+
+    await db.saveGoal({
+      ...saved,
+      title: '去海边看日出',
+      vision: '在礁石上等到天亮',
+      description: '想记住安静',
+      tasks: [
+        ...saved.tasks,
+        { id: 'm2', title: '订票', completed: false, createdAt: 1 },
+      ],
+    });
+
+    const all = await db.getAllGoals();
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe(id);
+    expect(all[0].title).toBe('去海边看日出');
+    expect(all[0].vision).toBe('在礁石上等到天亮');
+    expect(all[0].tasks.map(t => t.title)).toEqual(['攒钱', '订票']);
+    expect(all[0].tasks[0].completed).toBe(true);
+  });
+});
+
+describe('长期目标树', () => {
+  const treeGoal = (over: Partial<LongTermGoal> = {}): LongTermGoal => ({
+    title: '英语考试',
+    description: '',
+    category: '学业',
+    tasks: [],
+    nodes: [{
+      id: 'n1',
+      title: '听力',
+      completed: false,
+      children: [
+        { id: 'n2', title: '精听', completed: true, children: [] },
+        { id: 'n3', title: '泛听', completed: false, children: [] },
+      ],
+    }],
+    createdAt: 0,
+    updatedAt: 0,
+    ...over,
+  });
+
+  it('树落盘并在重启后保留层级与完成状态', async () => {
+    const id = await db.saveGoal(treeGoal());
+    await initStore();
+
+    const saved = getStore().longTermGoals.find(g => g.id === id)!;
+    expect(saved.nodes).toHaveLength(1);
+    expect(saved.nodes![0].children.map(n => n.id)).toEqual(['n2', 'n3']);
+    expect(saved.nodes![0].children[0].completed).toBe(true);
+  });
+
+  it('旧扁平 tasks 仍可读；保存 nodes: [] 后不会被 tasks 复活', async () => {
+    const id = await db.saveGoal({
+      title: '旧目标',
+      description: '',
+      category: '学业',
+      tasks: [{ id: 't1', title: '旧任务', completed: true, createdAt: 0 }],
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    const legacy = (await db.getAllGoals()).find(g => g.id === id)!;
+    expect(effectiveNodes(legacy).map(n => n.title)).toEqual(['旧任务']);
+    expect(effectiveNodes(legacy)[0].completed).toBe(true);
+
+    await db.saveGoal({ ...legacy, nodes: [] });
+    await initStore();
+
+    const cleared = getStore().longTermGoals.find(g => g.id === id)!;
+    expect(cleared.nodes).toEqual([]);
+    expect(effectiveNodes(cleared)).toEqual([]);
+    // 旧字段原样保留，只作为兼容副本，不再参与读取
+    expect(cleared.tasks).toHaveLength(1);
+  });
+
+  it('删除进回收站，还原后树仍在', async () => {
+    const id = await db.saveGoal(treeGoal());
+    await db.deleteGoal(id);
+
+    const item = (await db.getTrashItems()).find(t => t.originalTable === 'longTermGoals')!;
+    await db.restoreFromTrash(item.id!);
+
+    const restored = (await db.getAllGoals()).find(g => g.id === id)!;
+    expect(restored.nodes![0].children.map(n => n.title)).toEqual(['精听', '泛听']);
   });
 });

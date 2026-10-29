@@ -152,6 +152,46 @@ describe('全局内容搜索', () => {
   });
 });
 
+describe('目标树搜索', () => {
+  const withTree = {
+    ...store,
+    longTermGoals: [
+      {
+        id: 2, title: '英语考试', description: '', category: '学业', tasks: [],
+        nodes: [{
+          id: 'g1', title: '听力', completed: false,
+          children: [{ id: 'g2', title: '精听训练', completed: false, children: [] }],
+        }],
+        createdAt: 0, updatedAt: 0,
+      },
+      {
+        id: 3, kind: 'wish', title: '去海边', vision: '坐在礁石上听浪', description: '想记住安静',
+        category: '其他', tasks: [{ id: 'm1', title: '攒路费', completed: false, createdAt: 0 }],
+        createdAt: 0, updatedAt: 0,
+      },
+    ],
+  } as unknown as StoreShape;
+
+  it('递归命中树的深层节点', () => {
+    const hits = searchStore(withTree, '精听训练');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].title).toBe('英语考试');
+    expect(hits[0].where).toBe('长期目标 · 学业');
+    expect(hits[0].route).toBe('/goals');
+  });
+
+  it('命中的是大愿望时位置文案是「大愿望」', () => {
+    const hits = searchStore(withTree, '攒路费');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].where).toBe('大愿望 · 其他');
+  });
+
+  it('大愿望的愿景与动机可被搜索', () => {
+    expect(searchStore(withTree, '礁石上听浪')).toHaveLength(1);
+    expect(searchStore(withTree, '想记住安静')).toHaveLength(1);
+  });
+});
+
 describe('DDL 剩余不足一周计数', () => {
   const now = new Date('2026-08-13T12:00:00');
   const mk = (deadlineDate: string, deadlineTime = '18:00') => ({ deadlineDate, deadlineTime });

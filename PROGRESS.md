@@ -2,6 +2,50 @@
 
 > 每次功能/修复完成后记录（只能追加，不删旧内容），并打上日期。
 
+## 2026-10-29 — 目标页重写：愿望默认收起、编辑闭环、长期目标树
+
+### 需求
+
+- 大愿望默认全部展开，占满目标页；查看以前规划的路径不直接。
+- 新建愿望时能写里程碑，但创建后在编辑页反而不能编辑里程碑，编辑不闭环。
+- 长期目标编辑呆板。改成类似 TODO 的树状拆解，同级节点默认权重 1、递归加权计算百分比；权重按钮要隐蔽；这一块整体重写。
+- 顺手修复：查看/编辑/删除入口混在一起、删除无确认、编辑草稿会静默丢失、空目标没有下一步、完成后像被废弃。
+
+### 实现
+
+- **数据模型** `src/types/index.ts`：新增 `GoalNode { id, title, children, completed, weight?, createdAt? }`；`LongTermGoal` 增加可选 `nodes`。大愿望继续用扁平 `tasks` 保存里程碑。
+- **纯函数** 新增 `src/utils/goalTree.ts`：
+  - `nodeProgress` / `treeProgress`：先递归算子节点，再按同级权重汇总；空树返回 `null`。
+  - `normalizeWeight`：非有限正数按 1；`percentLabel` 四舍五入且未完成不显示 100%。
+  - `effectiveNodes`：`nodes` 存在（含空数组）即唯一权威；只有旧目标 `nodes === undefined` 时才把 `tasks` 逐项投影成一级节点（保留 id/标题/完成状态/创建时间），避免删掉的节点被旧数据复活。
+  - `addNode / updateNodeTitle / setNodeWeight / toggleNode / removeNode / indentNode / outdentNode`：不可变树编辑，保留节点 ID 与状态；给已完成叶节点加子项会回到未完成，删掉最后一个子项后父节点回到未完成叶节点。
+- **存储** `src/db/index.ts`：`saveGoalDetailed` 返回 `{ id, ok }`，`saveGoal` 保持原签名；`deleteGoal` 返回是否成功。目标整条保存，`nodes` 随回收站原样保留。
+- **Hook** `src/hooks/useGoals.ts`：改用 `goalsRef` 读取最新数组，连续操作不会用旧闭包覆盖新结果；写盘失败回滚内存并返回 `boolean`；`addGoal` 支持附带初始 `nodes`；`addWish` 支持创建时带里程碑。
+- **页面** `src/pages/LongTermGoals.tsx/.css` 重写：
+  - 大愿望默认收起，只显示标题、状态、里程碑进度和日期；展开后才显示愿景、动机、里程碑和操作。
+  - 新建/编辑共用同一表单，里程碑在表单内可新增、改名、删除、勾选，保存一次完成；编辑保留原 ID。
+  - 长期目标默认收起，摘要显示叶节点完成数与递归百分比；展开后是树，可加子项、改名、缩进/缩退、勾选叶节点。
+  - 权重入口藏在节点的 `⋯` 操作条里；校验必须大于 0，恢复默认权重不落库。
+  - 删除整目标/里程碑/整棵子树都有 `ConfirmDialog`；编辑草稿有改动时，遮罩、关闭和 Android 返回键都会先确认放弃。
+  - 空目标显示「尚未拆解 / 还没有拆解」并提供第一步输入；完成后目标仍留在列表可读。
+- **搜索** `src/utils/search.ts`：长期目标递归搜索树中所有节点；大愿望搜索标题、愿景、动机和里程碑；位置文案区分「大愿望 / 长期目标」。
+
+### 验证
+
+- 新增 `test/长期/goalTree.test.ts` 20 个用例：递归进度、不对称树、权重、空树、非法权重、旧任务投影、`nodes: []` 权威、改名/缩进/缩退/勾选保留 ID、已完成叶节点加子项、删除子树。
+- 新增 `test/长期/goalsPage.test.tsx` 6 个用例：愿望默认收起、展开后才见愿景与里程碑、空愿望不显示 0/0、目标树摘要百分比、深层节点、空目标不显示 0%。
+- 扩展 `test/长期/wish.test.ts` 4 个用例：编辑保留原 ID、树落盘重启、旧 tasks 与 `nodes: []`、回收站还原树。
+- 扩展 `test/搜索/search.test.ts` 3 个用例：深层节点、大愿望文案、愿景/动机搜索。
+- `npm test` **731/731 通过**（35 个文件）；`npm run build`（tsc --noEmit + vite build）通过。
+
+### 涉及文件
+
+```
+修改：src/types/index.ts、src/db/index.ts、src/hooks/useGoals.ts、src/utils/search.ts、
+      src/pages/LongTermGoals.tsx、src/pages/LongTermGoals.css、PROGRESS.md、structure.md
+新增：src/utils/goalTree.ts、test/长期/goalTree.test.ts、test/长期/goalsPage.test.tsx
+```
+
 ## 2026-08-12 — 新增「任务清单模板」
 
 ### 需求

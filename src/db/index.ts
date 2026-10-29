@@ -47,23 +47,32 @@ export async function getAllGoals(): Promise<LongTermGoal[]> {
 }
 
 export async function saveGoal(goal: LongTermGoal): Promise<number> {
-  goal = deepClone(goal);
+  return (await saveGoalDetailed(goal)).id;
+}
+
+/**
+ * 保存目标并返回是否落盘成功。
+ * 页面编辑目标时需要知道写盘失败（否则关了弹窗却什么都没保存），
+ * 又不想破坏 `saveGoal` 原有的 number 返回值。
+ */
+export async function saveGoalDetailed(goal: LongTermGoal): Promise<{ id: number; ok: boolean }> {
+  const clean = deepClone(goal);
   let resultId = 0;
-  await mutate(() => {
-    if (goal.id != null) {
-      const idx = store.longTermGoals.findIndex(g => g.id === goal.id);
-      if (idx >= 0) store.longTermGoals[idx] = { ...goal, updatedAt: Date.now() };
-      resultId = goal.id;
+  const ok = await mutate(() => {
+    if (clean.id != null) {
+      const idx = store.longTermGoals.findIndex(g => g.id === clean.id);
+      if (idx >= 0) store.longTermGoals[idx] = { ...clean, updatedAt: Date.now() };
+      resultId = clean.id;
       return;
     }
     resultId = allocId('longTermGoals');
-    store.longTermGoals.push({ ...goal, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+    store.longTermGoals.push({ ...clean, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
   });
-  return resultId;
+  return { id: resultId, ok };
 }
 
-export async function deleteGoal(id: number): Promise<void> {
-  await mutate(() => {
+export async function deleteGoal(id: number): Promise<boolean> {
+  return mutate(() => {
     const goal = store.longTermGoals.find(g => g.id === id);
     if (goal) {
       store.trashItems.push({
