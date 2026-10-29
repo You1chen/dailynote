@@ -1384,3 +1384,26 @@ pm run build:apk` 成功（24.8 MB）。
 修改：src/components/TabBar.css、src/App.css
 产物：android/app/build/outputs/apk/debug/app-debug.apk（24.7 MB）
 ```
+
+## 2026-10-29 — 大愿望与底部导航问题排查说明
+
+### 需求
+
+用户反馈：APK 安装后看不到预期的大愿望 UI；主页底部「计划 / 反思 / 收获」仍显得松散、偏右。需要把容易被小模型漏掉的打包链路、真实数据验收、TabBar 几何根因和大愿望 DOM/CSS 对照写成说明文档，供后续模型执行。
+
+### 实现
+
+- 新增 `大愿望与底部导航排查改进说明.md`：明确区分空状态截图与真实大愿望卡片验收；列出 APK 资源链路 `src → dist → Capacitor assets → APK`；给出 APK 内 CSS class 核对方法、重新安装要求、真实数据验收步骤。
+- 文档重点指出底部导航不能只改 `left`：旧写法的 `calc + width:100% + translateX(-50%)` 混用了定位点和整屏宽度；下一步应采用内容区几何 + 三等分 Grid，避免 `space-around` 与 tab 自身 padding 共同制造松散间距。
+- 文档同时标出窄屏页头的隐藏问题：标题断字、按钮竖排，以及不能用通用 `:last-child` 规则破坏带返回按钮和占位元素的三项页头。
+
+### 验证
+
+- 已重新阅读当前 `LongTermGoals.tsx/.css`、`TabBar.css`、`App.css`、`structure.md` 与截图对应问题。
+- 当前未再次修改业务代码，避免在未完成真实 APK/UI 验收前重复打补丁。
+
+### 涉及文件
+
+```
+新增：大愿望与底部导航排查改进说明.md
+```
