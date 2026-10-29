@@ -3,17 +3,18 @@
  *
  * 约定：
  *   - 只有叶节点的 `completed` 直接生效；有子节点的父节点完成度由子树递归计算。
- *   - 同级节点权重默认 1，非法权重（非有限、≤0）在计算时按 1 处理。
+ *   - 每层节点严格等权；旧数据的 weight 字段保留，但不影响进度。
  *   - 旧数据的扁平 `tasks` 惰性投影成一级节点；只要 `nodes` 存在（哪怕是空数组），
  *     就以 `nodes` 为唯一权威，绝不再用 `tasks` 补齐，避免删掉的节点复活。
  */
 
 import type { GoalNode, GoalTask, LongTermGoal } from '../types';
 import { genId } from '../types';
+import { linesToText, parseTaskText, type TaskLine } from './taskTree';
 
 export const DEFAULT_WEIGHT = 1;
 
-/** 权重归一化：只用于计算；非有限正数一律按默认权重 */
+/** 遗留权重归一化，供旧数据兼容；进度不使用权重。 */
 export function normalizeWeight(weight?: number): number {
   return typeof weight === 'number' && Number.isFinite(weight) && weight > 0 ? weight : DEFAULT_WEIGHT;
 }
@@ -22,39 +23,25 @@ export function normalizeWeight(weight?: number): number {
 export function nodeProgress(node: GoalNode): number {
   if (node.children.length === 0) return node.completed ? 100 : 0;
 
-  let sum = 0;
-  let total = 0;
-  for (const child of node.children) {
-    const weight = normalizeWeight(child.weight);
-    sum += nodeProgress(child) * weight;
-    total += weight;
-  }
-  return total > 0 ? sum / total : 0;
+  return node.children.reduce((sum, child) => sum + nodeProgress(child), 0) / node.children.length;
 }
 
 /** 整棵树的进度；空树返回 null（UI 显示「尚未拆解」，不是 0%） */
 export function treeProgress(nodes: GoalNode[]): number | null {
   if (nodes.length === 0) return null;
 
-  let sum = 0;
-  let total = 0;
-  for (const node of nodes) {
-    const weight = normalizeWeight(node.weight);
-    sum += nodeProgress(node) * weight;
-    total += weight;
-  }
-  return total > 0 ? sum / total : 0;
+  return nodes.reduce((sum, node) => sum + nodeProgress(node), 0) / nodes.length;
 }
 
 /**
- * 进度 → 显示整数：四舍五入，但未完成的进度不能显示成 100%。
- * 例如 99.6% → 99%，避免看起来已经完成。
+ * 进度 → 显示数值：保留最多三位小数，且未完成不能显示成 100%。
+ * 例如 1/24 → 4.167%，99.9999% → 99.999%。
  */
 export function percentLabel(progress: number | null): number | null {
   if (progress === null) return null;
   const clamped = Math.max(0, Math.min(100, progress));
-  const rounded = Math.round(clamped);
-  if (rounded >= 100 && clamped < 100) return 99;
+  const rounded = Math.round(clamped * 1000) / 1000;
+  if (rounded >= 100 && clamped < 100) return 99.999;
   return rounded;
 }
 
@@ -97,6 +84,147 @@ export function effectiveNodes(goal: LongTermGoal): GoalNode[] {
   if (goal.kind === 'wish') return [];
   if (goal.nodes !== undefined) return goal.nodes;
   return tasksToNodes(goal.tasks);
+}
+
+// ============ 标准文本与目标树 ============
+
+/** 树的先序行；标题和缩进与 taskTree 的 TaskLine 一致。 */
+export function goalNodesToLines(nodes: GoalNode[]): TaskLine[] {
+  const lines: TaskLine[] = [];
+  const walk = (siblings: GoalNode[], level: number) => {
+    for (const node of siblings) {
+      lines.push({ title: node.title, level });
+      walk(node.children, level + 1);
+    }
+  };
+  walk(nodes, 0);
+  return lines;
+}
+
+export function goalNodesToText(nodes: GoalNode[]): string {
+  return linesToText(goalNodesToLines(nodes));
+}
+
+/** 校验 Tab 或一致的两/四空格 Markdown 缩进，再复用 taskTree 的解析语义。 */
+export function parseGoalText(text: string): { lines: TaskLine[]; error?: string } {
+  let previousLevel = -1;
+  let spaceWidth: 2 | 4 | undefined;
+  let usedTabs = false;
+  const normalized: string[] = [];
+  const rows = (text ?? '').split(/\r?\n/);
+  for (let index = 0; index < rows.length; index += 1) {
+    const raw = rows[index];
+    if (!raw.trim()) continue;
+    const match = /^([\t ]*)- (.+)$/.exec(raw);
+    if (!match || !match[2].trim()) {
+      return { lines: [], error: `第 ${index + 1} 行格式无效：请使用 Tab 或一致的空格缩进和「- 标题」` };
+    }
+    const indent = match[1];
+    if (indent.includes('\t') && indent.includes(' ')) {
+      return { lines: [], error: `第 ${index + 1} 行缩进无效：不能混用 Tab 和空格` };
+    }
+    let level = indent.length;
+    if (indent.includes(' ')) {
+      if (usedTabs) {
+        return { lines: [], error: `第 ${index + 1} 行缩进无效：不能混用 Tab 和空格` };
+      }
+      if (spaceWidth === undefined) {
+        if (indent.length !== 2 && indent.length !== 4) {
+          return { lines: [], error: `第 ${index + 1} 行缩进无效：首次空格缩进须为两或四空格` };
+        }
+        spaceWidth = indent.length;
+      }
+      if (indent.length % spaceWidth !== 0) {
+        return { lines: [], error: `第 ${index + 1} 行缩进无效：请保持每层 ${spaceWidth} 个空格` };
+      }
+      level = indent.length / spaceWidth;
+    } else if (indent.includes('\t')) {
+      if (spaceWidth !== undefined) {
+        return { lines: [], error: `第 ${index + 1} 行缩进无效：不能混用 Tab 和空格` };
+      }
+      usedTabs = true;
+    }
+    if (level > previousLevel + 1) {
+      return { lines: [], error: `第 ${index + 1} 行层级跳跃：最多只能比上一行多缩进一层` };
+    }
+    previousLevel = level;
+    normalized.push(`${'\t'.repeat(level)}- ${match[2]}`);
+  }
+  return { lines: parseTaskText(normalized.join('\n')) };
+}
+
+/** 完整路径优先；仅在同父节点下将剩余同位置节点视为改名。 */
+export function goalLinesToNodes(lines: TaskLine[], prev: GoalNode[] = []): GoalNode[] {
+  interface Draft { title: string; children: Draft[]; previous?: GoalNode }
+  const root: Draft[] = [];
+  const stack: Draft[] = [];
+  for (const [index, line] of lines.entries()) {
+    if (!Number.isInteger(line.level) || line.level < 0 || line.level > stack.length || !line.title.trim()) {
+      throw new Error(`第 ${index + 1} 行层级或标题无效`);
+    }
+    stack.length = line.level;
+    const draft: Draft = { title: line.title.trim(), children: [] };
+    if (line.level === 0) root.push(draft);
+    else stack[line.level - 1].children.push(draft);
+    stack.push(draft);
+  }
+
+  const oldByPath = new Map<string, GoalNode[]>();
+  const newTitles = new Set<string>();
+  const collectOld = (siblings: GoalNode[], chain: string[]) => {
+    for (const node of siblings) {
+      const path = [...chain, node.title];
+      const key = JSON.stringify(path);
+      const matches = oldByPath.get(key) ?? [];
+      matches.push(node);
+      oldByPath.set(key, matches);
+      collectOld(node.children, path);
+    }
+  };
+  collectOld(prev, []);
+  const collectTitles = (siblings: Draft[]) => {
+    for (const draft of siblings) {
+      newTitles.add(draft.title);
+      collectTitles(draft.children);
+    }
+  };
+  collectTitles(root);
+
+  const used = new Set<GoalNode>();
+  // Reserve every exact path before falling back, so an early rename cannot steal a later exact match.
+  const reserveExact = (siblings: Draft[], chain: string[]) => {
+    for (const draft of siblings) {
+      const path = [...chain, draft.title];
+      const match = oldByPath.get(JSON.stringify(path))?.find(node => !used.has(node));
+      if (match) { draft.previous = match; used.add(match); }
+      reserveExact(draft.children, path);
+    }
+  };
+  reserveExact(root, []);
+
+  const reconcile = (siblings: Draft[], oldSiblings: GoalNode[]): GoalNode[] => {
+    // Under a renamed parent, original child titles remain reliable even though full paths changed.
+    for (const draft of siblings) {
+      if (draft.previous) continue;
+      const match = oldSiblings.find(node => !used.has(node) && node.title === draft.title);
+      if (match) { draft.previous = match; used.add(match); }
+    }
+    return siblings.map((draft, index) => {
+      if (!draft.previous) {
+        const candidate = oldSiblings[index];
+        if (candidate && !used.has(candidate) && !newTitles.has(candidate.title)) {
+          draft.previous = candidate;
+          used.add(candidate);
+        }
+      }
+      const previous = draft.previous;
+      const children = reconcile(draft.children, previous?.children ?? []);
+      return previous
+        ? { ...previous, title: draft.title, children }
+        : { id: genId(), title: draft.title, completed: false, children, createdAt: Date.now() };
+    });
+  };
+  return reconcile(root, prev);
 }
 
 // ============ 树内定位与不可变修改 ============

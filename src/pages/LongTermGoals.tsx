@@ -1,21 +1,17 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Plus, Target, ChevronDown, ChevronUp, Trash2, CheckCircle2, Circle,
-  Star, CalendarDays, Sparkles, Heart, Feather, Pencil, MoreHorizontal, X, Scale,
+  Star, CalendarDays, Sparkles, Heart, Feather, Pencil, X,
 } from 'lucide-react';
 import { useGoals } from '../hooks/useGoals';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import ConfirmDialog from '../components/ConfirmDialog';
+import GoalPlanEditor from '../components/GoalPlanEditor';
+import GoalMap from '../components/GoalMap';
 import type { GoalNode, GoalTask, LongTermGoal, WishStatus } from '../types';
 import { genId } from '../types';
-import {
-  addNode, canIndent, canOutdent, effectiveNodes, findNode, indentNode, nodeProgress,
-  normalizeWeight, outdentNode, percentLabel, removeNode, setNodeWeight, toggleNode,
-  treeProgress, treeStats, updateNodeTitle,
-} from '../utils/goalTree';
+import { effectiveNodes, percentLabel, toggleNode, treeProgress, treeStats } from '../utils/goalTree';
 import './LongTermGoals.css';
-
-const CATEGORIES = ['学业', '技能', '健康', '习惯', '其他'];
 
 const STATUS_LABEL: Record<WishStatus, string> = {
   active: '进行中',
@@ -57,15 +53,6 @@ interface WishDraft {
   dirty: boolean;
 }
 
-interface GoalDraft {
-  id?: number;
-  title: string;
-  category: string;
-  description: string;
-  firstStep: string;
-  dirty: boolean;
-}
-
 interface ConfirmState {
   message: string;
   confirmText?: string;
@@ -78,10 +65,6 @@ const EMPTY_WISH: WishDraft = {
   title: '', vision: '', why: '', targetDate: '', status: 'active', tasks: [], dirty: false,
 };
 
-const EMPTY_GOAL: GoalDraft = {
-  title: '', category: '学业', description: '', firstStep: '', dirty: false,
-};
-
 export default function LongTermGoalsPage() {
   const {
     goals, loading, addGoal, addWish, setWishStatus, updateGoal, removeGoal,
@@ -92,8 +75,9 @@ export default function LongTermGoalsPage() {
   const [wishDraft, setWishDraft] = useState<WishDraft | null>(null);
   const [wishMilestone, setWishMilestone] = useState('');
 
-  // ---- 长期目标编辑器 ----
-  const [goalDraft, setGoalDraft] = useState<GoalDraft | null>(null);
+  // Goal editor uses null for create, and the goal id for edit.
+  const [goalEditor, setGoalEditor] = useState<{ id: number | null } | null>(null);
+  const [goalMapId, setGoalMapId] = useState<number | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -101,27 +85,14 @@ export default function LongTermGoalsPage() {
 
   // ---- 展开状态：默认全部收起，点开才看路径 ----
   const [expandedWishId, setExpandedWishId] = useState<number | null>(null);
-  const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
-
-  // ---- 树编辑状态 ----
-  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(() => new Set());
-  const [nodeMenuId, setNodeMenuId] = useState<string | null>(null);
-  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [nodeDraft, setNodeDraft] = useState('');
-  const [adding, setAdding] = useState<{ goalId: number; parentId: string | null } | null>(null);
-  const [newNodeTitle, setNewNodeTitle] = useState('');
-  const [weightNodeId, setWeightNodeId] = useState<string | null>(null);
-  const [weightDraft, setWeightDraft] = useState('');
-  const [weightError, setWeightError] = useState('');
-
-  /** 按 Esc 取消改名时，阻止随后可能触发的 blur 把内容提交 */
-  const cancelNodeEditRef = useRef(false);
 
   // ---- 卡片里的里程碑快捷输入 ----
   const [milestoneDraft, setMilestoneDraft] = useState('');
 
   const wishes = useMemo(() => goals.filter(g => g.kind === 'wish'), [goals]);
   const plainGoals = useMemo(() => goals.filter(g => g.kind !== 'wish'), [goals]);
+  const mappedGoal = plainGoals.find(goal => goal.id === goalMapId);
+  const editingGoal = plainGoals.find(goal => goal.id === goalEditor?.id);
 
   // ============ 打开/关闭编辑器 ============
 
@@ -160,43 +131,17 @@ export default function LongTermGoalsPage() {
   }
 
   function openGoalCreate() {
-    setSaveError('');
-    setGoalDraft({ ...EMPTY_GOAL });
+    setGoalEditor({ id: null });
   }
 
   function openGoalEdit(goal: LongTermGoal) {
-    setSaveError('');
-    setGoalDraft({
-      id: goal.id,
-      title: goal.title,
-      category: goal.category || '其他',
-      description: goal.description ?? '',
-      firstStep: '',
-      dirty: false,
-    });
-  }
-
-  function requestCloseGoal() {
-    if (!goalDraft) return;
-    if (goalDraft.dirty) {
-      setConfirm({
-        message: '放弃未保存的修改？',
-        confirmText: '放弃',
-        onConfirm: () => setGoalDraft(null),
-      });
-      return;
-    }
-    setGoalDraft(null);
+    setGoalEditor({ id: goal.id! });
   }
 
   // ---- 草稿更新（统一标记 dirty） ----
 
   function patchWish(changes: Partial<WishDraft>) {
     setWishDraft(d => (d ? { ...d, ...changes, dirty: true } : d));
-  }
-
-  function patchGoal(changes: Partial<GoalDraft>) {
-    setGoalDraft(d => (d ? { ...d, ...changes, dirty: true } : d));
   }
 
   function addWishMilestone() {
@@ -262,163 +207,19 @@ export default function LongTermGoalsPage() {
     }
   }
 
-  async function saveGoalDraft() {
-    if (!goalDraft || saving) return;
-    const title = goalDraft.title.trim();
-    if (!title) return;
-
-    const firstStep = goalDraft.firstStep.trim();
-    setSaving(true);
-    setSaveError('');
-    try {
-      let ok = false;
-      if (goalDraft.id != null) {
-        ok = await updateGoal(goalDraft.id, {
-          title,
-          category: goalDraft.category,
-          description: goalDraft.description.trim(),
-        });
-      } else {
-        const id = await addGoal(title, goalDraft.description.trim(), goalDraft.category, firstStep
-          ? { nodes: addNode([], null, firstStep) }
-          : undefined);
-        ok = id !== null;
-      }
-      if (ok) setGoalDraft(null);
-      else setSaveError('保存失败，内容没有写进存储。请检查存储目录后重试。');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // ============ 树的落盘 ============
-
-  async function saveGoalNodes(goal: LongTermGoal, nodes: GoalNode[]): Promise<boolean> {
-    if (goal.id == null) return false;
-    const ok = await updateGoal(goal.id, { nodes });
-    if (!ok) setConfirm({ message: '保存失败，这次改动没有落盘。请检查存储后重试。', info: true });
+  async function saveGoalPlan(input: { title: string; description: string; nodes: GoalNode[] }): Promise<boolean> {
+    if (!goalEditor) return false;
+    const { id } = goalEditor;
+    const ok = id === null
+      ? await addGoal(input.title, input.description, '其他', { nodes: input.nodes }) !== null
+      : await updateGoal(id, input);
+    if (ok) setGoalEditor(null);
     return ok;
   }
 
-  async function handleToggleNode(goal: LongTermGoal, id: string) {
-    await saveGoalNodes(goal, toggleNode(effectiveNodes(goal), id));
-  }
-
-  async function handleIndent(goal: LongTermGoal, id: string) {
-    const nodes = effectiveNodes(goal);
-    if (!canIndent(nodes, id)) return;
-    setNodeMenuId(null);
-    await saveGoalNodes(goal, indentNode(nodes, id));
-  }
-
-  async function handleOutdent(goal: LongTermGoal, id: string) {
-    const nodes = effectiveNodes(goal);
-    if (!canOutdent(nodes, id)) return;
-    setNodeMenuId(null);
-    await saveGoalNodes(goal, outdentNode(nodes, id));
-  }
-
-  function startEditNode(node: GoalNode) {
-    cancelNodeEditRef.current = false;
-    setEditingNodeId(node.id);
-    setNodeDraft(node.title);
-    setNodeMenuId(null);
-  }
-
-  async function commitNodeTitle(goal: LongTermGoal) {
-    if (cancelNodeEditRef.current) {
-      cancelNodeEditRef.current = false;
-      setEditingNodeId(null);
-      return;
-    }
-    const id = editingNodeId;
-    const text = nodeDraft.trim();
-    setEditingNodeId(null);
-    if (!id || !text) return;
-    const nodes = effectiveNodes(goal);
-    const node = findNode(nodes, id);
-    if (!node || node.title === text) return;
-    await saveGoalNodes(goal, updateNodeTitle(nodes, id, text));
-  }
-
-  function startAdd(goal: LongTermGoal, parentId: string | null) {
-    setAdding({ goalId: goal.id!, parentId });
-    setNewNodeTitle('');
-    setNodeMenuId(null);
-    if (parentId) {
-      setCollapsedNodes(prev => {
-        if (!prev.has(parentId)) return prev;
-        const next = new Set(prev);
-        next.delete(parentId);
-        return next;
-      });
-    }
-  }
-
-  async function submitAddNode(goal: LongTermGoal, parentId: string | null) {
-    const text = newNodeTitle.trim();
-    if (!text) return;
-    const ok = await saveGoalNodes(goal, addNode(effectiveNodes(goal), parentId, text));
-    if (ok) setNewNodeTitle('');
-  }
-
-  function askRemoveNode(goal: LongTermGoal, node: GoalNode) {
-    setNodeMenuId(null);
-    setConfirm({
-      message: node.children.length > 0
-        ? `删除「${node.title}」以及它下面的全部子项？`
-        : `删除「${node.title}」？`,
-      confirmText: '删除',
-      onConfirm: () => {
-        setCollapsedNodes(prev => {
-          if (!prev.has(node.id)) return prev;
-          const next = new Set(prev);
-          next.delete(node.id);
-          return next;
-        });
-        void saveGoalNodes(goal, removeNode(effectiveNodes(goal), node.id));
-      },
-    });
-  }
-
-  function startWeightEdit(node: GoalNode) {
-    setWeightNodeId(node.id);
-    setWeightDraft(String(normalizeWeight(node.weight)));
-    setWeightError('');
-  }
-
-  async function commitWeight(goal: LongTermGoal, node: GoalNode) {
-    const raw = weightDraft.trim();
-    const value = Number(raw);
-    if (!raw || !Number.isFinite(value) || value <= 0) {
-      setWeightError('请输入大于 0 的数字');
-      return;
-    }
-    const ok = await saveGoalNodes(
-      goal,
-      setNodeWeight(effectiveNodes(goal), node.id, value === 1 ? undefined : value),
-    );
-    if (ok) {
-      setWeightNodeId(null);
-      setWeightError('');
-    }
-  }
-
-  async function resetWeight(goal: LongTermGoal, node: GoalNode) {
-    const ok = await saveGoalNodes(goal, setNodeWeight(effectiveNodes(goal), node.id, undefined));
-    if (ok) {
-      setWeightNodeId(null);
-      setWeightError('');
-    }
-  }
-
-  function toggleCollapsed(id: string) {
-    setCollapsedNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  async function toggleGoalLeaf(goal: LongTermGoal, leafId: string): Promise<boolean> {
+    if (goal.id == null) return false;
+    return updateGoal(goal.id, { nodes: toggleNode(effectiveNodes(goal), leafId) });
   }
 
   // ============ 删除 / 状态 ============
@@ -430,6 +231,7 @@ export default function LongTermGoalsPage() {
       onConfirm: async () => {
         const ok = await removeGoal(goal.id!);
         if (!ok) setConfirm({ message: '删除失败，目标还在。请检查存储后重试。', info: true });
+        else if (!isWish) setGoalMapId(current => current === goal.id ? null : current);
       },
     });
   }
@@ -468,138 +270,9 @@ export default function LongTermGoalsPage() {
   useRegisterBackHandler(() => {
     if (confirm) { setConfirm(null); return true; }
     if (wishDraft) { requestCloseWish(); return true; }
-    if (goalDraft) { requestCloseGoal(); return true; }
-    if (editingNodeId) { setEditingNodeId(null); return true; }
-    if (weightNodeId) { setWeightNodeId(null); return true; }
-    if (nodeMenuId) { setNodeMenuId(null); return true; }
-    if (adding) { setAdding(null); return true; }
+    if (goalMapId !== null && goalEditor === null) { setGoalMapId(null); return true; }
     return false;
-  }, [confirm, wishDraft, goalDraft, editingNodeId, weightNodeId, nodeMenuId, adding]);
-
-  // ============ 渲染：树 ============
-
-  function renderTree(goal: LongTermGoal, nodes: GoalNode[], depth: number) {
-    return nodes.map(node => {
-      const hasChildren = node.children.length > 0;
-      const collapsed = collapsedNodes.has(node.id);
-      const menuOpen = nodeMenuId === node.id;
-      const percent = percentLabel(nodeProgress(node));
-      const addHere = adding !== null && adding.goalId === goal.id && adding.parentId === node.id;
-
-      return (
-        <div key={node.id} className="gt-node">
-          <div className="gt-row" style={{ paddingLeft: 2 + depth * 16 }}>
-            {hasChildren ? (
-              <button
-                className="gt-caret"
-                onClick={() => toggleCollapsed(node.id)}
-                aria-label={collapsed ? '展开' : '收起'}
-              >
-                {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-              </button>
-            ) : (
-              <span className="gt-caret gt-caret--empty" aria-hidden="true" />
-            )}
-
-            {hasChildren ? (
-              <span className="gt-pct">{percent}%</span>
-            ) : (
-              <button
-                className={`gt-check ${node.completed ? 'is-on' : ''}`}
-                onClick={() => void handleToggleNode(goal, node.id)}
-                aria-label={node.completed ? '取消完成' : '标记完成'}
-              >
-                {node.completed ? <CheckCircle2 size={17} /> : <Circle size={17} />}
-              </button>
-            )}
-
-            {editingNodeId === node.id ? (
-              <input
-                className="gt-title-input"
-                autoFocus
-                value={nodeDraft}
-                onChange={e => setNodeDraft(e.target.value)}
-                onBlur={() => void commitNodeTitle(goal)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    cancelNodeEditRef.current = true;
-                    setEditingNodeId(null);
-                  }
-                }}
-              />
-            ) : (
-              <button
-                className={`gt-title ${node.completed && !hasChildren ? 'is-done' : ''}`}
-                onClick={() => startEditNode(node)}
-              >
-                {node.title}
-              </button>
-            )}
-
-            <button
-              className={`gt-more ${menuOpen ? 'is-on' : ''}`}
-              onClick={() => setNodeMenuId(menuOpen ? null : node.id)}
-              aria-label="更多"
-            >
-              <MoreHorizontal size={15} />
-            </button>
-          </div>
-
-          {menuOpen && (
-            <div className="gt-acts" style={{ marginLeft: 2 + depth * 16 }}>
-              <button onClick={() => startAdd(goal, node.id)}><Plus size={12} /> 子项</button>
-              <button onClick={() => void handleIndent(goal, node.id)} disabled={!canIndent(nodes, node.id)}>缩进</button>
-              <button onClick={() => void handleOutdent(goal, node.id)} disabled={!canOutdent(nodes, node.id)}>缩退</button>
-              <button onClick={() => startWeightEdit(node)}><Scale size={12} /> 权重 {normalizeWeight(node.weight)}</button>
-              <button className="gt-act--danger" onClick={() => askRemoveNode(goal, node)}><Trash2 size={12} /> 删除</button>
-            </div>
-          )}
-
-          {weightNodeId === node.id && (
-            <div className="gt-weight" style={{ marginLeft: 2 + depth * 16 }}>
-              <input
-                className="input input-sm"
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={weightDraft}
-                autoFocus
-                onChange={e => { setWeightDraft(e.target.value); setWeightError(''); }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); void commitWeight(goal, node); }
-                  if (e.key === 'Escape') { e.preventDefault(); setWeightNodeId(null); }
-                }}
-              />
-              <button className="btn btn-primary btn-sm" onClick={() => void commitWeight(goal, node)}>确定</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => void resetWeight(goal, node)}>默认</button>
-              {weightError && <span className="gt-err">{weightError}</span>}
-            </div>
-          )}
-
-          {addHere && (
-            <div className="gt-add" style={{ marginLeft: 2 + (depth + 1) * 16 }}>
-              <input
-                className="input input-sm"
-                autoFocus
-                value={newNodeTitle}
-                onChange={e => setNewNodeTitle(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); void submitAddNode(goal, node.id); }
-                  if (e.key === 'Escape') { e.preventDefault(); setAdding(null); }
-                }}
-                placeholder="子项名称"
-              />
-              <button className="btn btn-primary btn-sm" onClick={() => void submitAddNode(goal, node.id)}>添加</button>
-            </div>
-          )}
-
-          {hasChildren && !collapsed && renderTree(goal, node.children, depth + 1)}
-        </div>
-      );
-    });
-  }
+  }, [confirm, wishDraft, goalMapId, goalEditor]);
 
   // ============ 渲染：页面 ============
 
@@ -801,85 +474,28 @@ export default function LongTermGoalsPage() {
         {plainGoals.length === 0 ? (
           <p className="wish-empty-hint">把想做到的事拆成能推进的目标。</p>
         ) : plainGoals.map(goal => {
-          const gid = goal.id!;
-          const isExpanded = expandedGoalId === gid;
           const nodes = effectiveNodes(goal);
-          const progress = treeProgress(nodes);
-          const percent = percentLabel(progress);
+          const percent = percentLabel(treeProgress(nodes));
           const stats = treeStats(nodes);
-          const addRoot = adding !== null && adding.goalId === gid && adding.parentId === null;
 
           return (
-            <div key={gid} className={`card goal-card ${isExpanded ? 'is-open' : ''}`}>
-              <div className="goal-head" onClick={() => setExpandedGoalId(isExpanded ? null : gid)}>
-                <div className="goal-info">
-                  <div className="goal-title-row">
-                    <span className="goal-category-tag">{goal.category}</span>
-                    <span className="goal-title">{goal.title}</span>
-                  </div>
-                  <div className="goal-sub">
+            <div key={goal.id} className="card goal-card">
+              <button className="goal-head" type="button" onClick={() => setGoalMapId(goal.id!)} style={{ width: '100%', padding: 0, border: 0, background: 'none', color: 'inherit', font: 'inherit', textAlign: 'left' }}>
+                <span className="goal-info">
+                  <span className="goal-title-row"><span className="goal-title">{goal.title}</span></span>
+                  <span className="goal-sub">
                     {percent === null ? '尚未拆解' : `${stats.done}/${stats.total} 项 · ${percent}%`}
-                  </div>
-                  {percent !== null && (
-                    <div className="goal-progress-row">
-                      <div className="goal-progress-bar">
-                        <div className="goal-progress-fill" style={{ width: `${percent}%` }} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="goal-expand">
-                  <button
-                    className="btn btn-ghost btn-icon btn-sm"
-                    onClick={e => { e.stopPropagation(); openGoalEdit(goal); }}
-                    aria-label="编辑长期目标"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <span className="goal-caret" aria-hidden="true">
-                    {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </span>
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="goal-tree">
-                  {goal.description && <p className="goal-desc">{goal.description}</p>}
-
-                  {nodes.length === 0 ? (
-                    <p className="wish-empty">还没有拆解。先写第一步，之后可以继续加子项。</p>
-                  ) : (
-                    <div className="gt-list">{renderTree(goal, nodes, 0)}</div>
+                  {percent !== null && (
+                    <span className="goal-progress-row">
+                      <span className="goal-progress-bar">
+                        <span className="goal-progress-fill" style={{ width: `${percent}%` }} />
+                      </span>
+                    </span>
                   )}
-
-                  {addRoot ? (
-                    <div className="gt-add gt-add--root">
-                      <input
-                        className="input input-sm"
-                        autoFocus
-                        value={newNodeTitle}
-                        onChange={e => setNewNodeTitle(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') { e.preventDefault(); void submitAddNode(goal, null); }
-                          if (e.key === 'Escape') { e.preventDefault(); setAdding(null); }
-                        }}
-                        placeholder="第一步，或下一个节点"
-                      />
-                      <button className="btn btn-primary btn-sm" onClick={() => void submitAddNode(goal, null)}>添加</button>
-                    </div>
-                  ) : (
-                    <button className="gt-root-add" onClick={() => startAdd(goal, null)}>
-                      <Plus size={14} /> 添加一步
-                    </button>
-                  )}
-
-                  <div className="goal-acts">
-                    <button className="wish-act wish-act--danger" onClick={() => askRemoveGoal(goal, false)}>
-                      <Trash2 size={13} /> 删除目标
-                    </button>
-                  </div>
-                </div>
-              )}
+                </span>
+                <span className="goal-caret" aria-hidden="true"><ChevronDown size={18} /></span>
+              </button>
             </div>
           );
         })}
@@ -996,75 +612,22 @@ export default function LongTermGoalsPage() {
         </div>
       )}
 
-      {/* ============ 长期目标编辑器 ============ */}
-      {goalDraft && (
-        <div className="modal-overlay" onClick={requestCloseGoal}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-head">
-              <h3 className="modal-title">{goalDraft.id != null ? '编辑长期目标' : '新建长期目标'}</h3>
-              <button className="modal-x" onClick={requestCloseGoal} aria-label="关闭">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="form-group">
-              <label className="label">目标名称</label>
-              <input
-                className="input"
-                value={goalDraft.title}
-                onChange={e => patchGoal({ title: e.target.value })}
-                placeholder="目标名称"
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="label">分类</label>
-              <select
-                className="input select"
-                value={goalDraft.category}
-                onChange={e => patchGoal({ category: e.target.value })}
-              >
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="label">描述（可选）</label>
-              <textarea
-                className="input textarea"
-                value={goalDraft.description}
-                onChange={e => patchGoal({ description: e.target.value })}
-                placeholder="这个目标为什么要做，做到什么程度算完成"
-                rows={2}
-              />
-            </div>
-
-            {goalDraft.id == null && (
-              <div className="form-group">
-                <label className="label">第一步（可选）</label>
-                <input
-                  className="input"
-                  value={goalDraft.firstStep}
-                  onChange={e => patchGoal({ firstStep: e.target.value })}
-                  placeholder="先写一个现在就能开始的动作"
-                />
-              </div>
-            )}
-
-            {saveError && <p className="form-error">{saveError}</p>}
-
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={requestCloseGoal}>取消</button>
-              <button
-                className="btn btn-primary"
-                onClick={() => void saveGoalDraft()}
-                disabled={saving || !goalDraft.title.trim()}
-              >
-                {saving ? '保存中...' : '保存'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {mappedGoal && goalEditor === null && (
+        <GoalMap
+          goal={mappedGoal}
+          onToggleLeaf={id => toggleGoalLeaf(mappedGoal, id)}
+          onEdit={() => setGoalEditor({ id: mappedGoal.id! })}
+          onDelete={() => askRemoveGoal(mappedGoal, false)}
+          onClose={() => setGoalMapId(null)}
+        />
+      )}
+      {goalEditor !== null && (goalEditor.id === null || editingGoal) && (
+        <GoalPlanEditor
+          key={goalEditor.id ?? 'new'}
+          goal={goalEditor.id === null ? null : editingGoal!}
+          onSave={saveGoalPlan}
+          onClose={() => setGoalEditor(null)}
+        />
       )}
 
       <ConfirmDialog

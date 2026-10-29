@@ -42,14 +42,14 @@ export interface GoalTask {
 /**
  * 长期目标树节点：目标拆解的任意层级。
  * - 叶节点用 `completed` 表示完成；有子节点时完成度由子树递归计算，自身 `completed` 不参与。
- * - `weight` 是同级节点的相对权重，默认 1；只在临时调整时填写。
+ * - 每层直接子节点等权递归平均；遗留 `weight` 仅保留数据兼容，不参与进度。
  */
 export interface GoalNode {
   id: string;
   title: string;
   children: GoalNode[];
   completed: boolean;
-  /** 同级相对权重；缺省 = 1 */
+  /** 遗留相对权重，仅保留兼容；进度始终按同级等权计算 */
   weight?: number;
   /** 旧扁平任务迁移时保留的创建时间 */
   createdAt?: number;

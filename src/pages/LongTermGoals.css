@@ -441,6 +441,11 @@
 .goal-card { padding: 12px 14px; }
 
 .goal-head {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -449,7 +454,8 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.goal-info { flex: 1; min-width: 0; }
+.goal-info { display: block; flex: 1; min-width: 0; }
+.goal-sub, .goal-progress-bar, .goal-progress-fill { display: block; }
 
 .goal-title-row {
   display: flex;

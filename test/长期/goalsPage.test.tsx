@@ -1,11 +1,6 @@
 /**
- * 目标页渲染：默认收起、编辑入口、树进度与深层节点
- *
- * 用和服务端渲染测试相同的 useState 队列方式，只验证首屏结构：
- *   - 大愿望默认不展示愿景和里程碑
- *   - 长期目标收起时只显示摘要百分比
- *   - 展开后才出现树和深层节点
- *   - 空目标显示「尚未拆解」，不是 0%
+ * 目标页首屏 SSR：大愿望保留折叠行为；长期目标以摘要作为进入地图的入口。
+ * 编辑器与地图的交互详见 goalEditor.test.tsx。
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -72,22 +67,15 @@ const emptyGoal: LongTermGoal = {
   updatedAt: 0,
 };
 
-interface Opts {
-  expandedWishId?: number | null;
-  expandedGoalId?: number | null;
-}
+interface Opts { expandedWishId?: number | null }
 
 function render(goals: LongTermGoal[], opts: Opts = {}): string {
   state.values = [
-    goals, false,                       // useGoals: goals, loading
-    null, '',                           // wishDraft, wishMilestone
-    null, false, '', null,              // goalDraft, saving, saveError, confirm
-    opts.expandedWishId ?? null,
-    opts.expandedGoalId ?? null,
-    new Set<string>(),                  // collapsedNodes
-    null, null, '',                     // nodeMenuId, editingNodeId, nodeDraft
-    null, '',                           // adding, newNodeTitle
-    null, '', '',                       // weightNodeId, weightDraft, weightError
+    goals, false,                        // useGoals: goals, loading
+    null, '',                            // wishDraft, wishMilestone
+    null, null,                          // goalEditor, goalMapId
+    false, '', null,                     // saving, saveError, confirm
+    opts.expandedWishId ?? null,        // expandedWishId
     '',                                 // milestoneDraft
   ];
   return renderToStaticMarkup(<LongTermGoalsPage />);
@@ -121,30 +109,19 @@ describe('目标页 — 大愿望默认收起', () => {
   });
 });
 
-describe('目标页 — 长期目标树', () => {
-  it('收起时只显示摘要和递归百分比', () => {
+describe('目标页 — 长期目标卡片入口', () => {
+  it('首屏只显示摘要和递归百分比，不渲染旧展开树', () => {
     const html = render([goalWithTree]);
     expect(html).toContain('英语考试');
     expect(html).toContain('2/3 项 · 75%');
+    expect(html).toContain('goal-head');
     expect(html).not.toContain('精听训练');
+    expect(html).not.toContain('gt-list');
   });
 
-  it('展开后显示深层节点和父节点百分比', () => {
-    const html = render([goalWithTree], { expandedGoalId: 2 });
-    expect(html).toContain('听力');
-    expect(html).toContain('50%');
-    expect(html).toContain('精听训练');
-    expect(html).toContain('泛听');
-    expect(html).toContain('词汇');
-  });
-
-  it('空目标收起与展开都不显示误导性的 0%', () => {
-    const collapsed = render([emptyGoal]);
-    expect(collapsed).toContain('尚未拆解');
-    expect(collapsed).not.toContain('0%');
-
-    const expanded = render([emptyGoal], { expandedGoalId: 3 });
-    expect(expanded).toContain('还没有拆解');
-    expect(expanded).not.toContain('0%');
+  it('空目标只显示「尚未拆解」，不显示误导性的 0%', () => {
+    const html = render([emptyGoal]);
+    expect(html).toContain('尚未拆解');
+    expect(html).not.toMatch(/>0%<|>0\/0</);
   });
 });
