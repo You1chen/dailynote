@@ -1,9 +1,9 @@
 import type { AnyStoreTable, StoreShape } from '../types/storage';
 
-export type NumericTable = Exclude<AnyStoreTable, 'taskItems'>;
+export type NumericTable = Exclude<AnyStoreTable, 'taskItems' | 'activityEvents'>;
 
 export interface CategoryTableMeta {
-  table: Exclude<AnyStoreTable, 'dailyPlans' | 'reflections' | 'harvests' | 'taskItems'>;
+  table: Exclude<AnyStoreTable, 'dailyPlans' | 'reflections' | 'harvests' | 'taskItems' | 'activityEvents'>;
   file: string;
   numericId: true;
   writeOrder: number;
@@ -31,7 +31,7 @@ export const CATEGORY_FILES = Object.fromEntries(
 export const CATEGORY_NAMES = CATEGORY_TABLES.map(meta => meta.file);
 
 export const DEFAULT_WRITE_ORDER: AnyStoreTable[] = [
-  'dailyPlans', 'reflections', 'harvests', 'taskItems',
+  'dailyPlans', 'reflections', 'harvests', 'taskItems', 'activityEvents',
   ...[...CATEGORY_TABLES].sort((a, b) => a.writeOrder - b.writeOrder).map(meta => meta.table),
 ];
 
@@ -44,7 +44,7 @@ export const NUMERIC_TABLES: NumericTable[] = [
 export const EMPTY_STORE: StoreShape = {
   dailyPlans: [], longTermGoals: [], reflections: [], harvests: [], fixedRoutines: [],
   taskItems: [], taskTemplates: [], trashItems: [], courses: [], semester: [],
-  ddls: [], important: [], backlog: [], ideas: [], taskBoard: [], linkGroups: [],
+  ddls: [], important: [], backlog: [], ideas: [], taskBoard: [], linkGroups: [], activityEvents: [],
 };
 
 export function emptyStore(): StoreShape {

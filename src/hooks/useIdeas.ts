@@ -61,8 +61,8 @@ export function useIdeas() {
     await reload();
   }, [reload]);
 
-  const removeIdea = useCallback(async (id: number) => {
-    await deleteIdea(id);
+  const removeIdea = useCallback(async (id: number, intent?: 'complete') => {
+    await deleteIdea(id, intent);
     await reload();
   }, [reload]);
 

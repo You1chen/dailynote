@@ -507,6 +507,7 @@ export default function DailyPlanPage() {
           <span className="dp-date-sub">{WEEKDAY_LABELS[dateObj(date).getDay()]}</span>
         </button>
         <div className="dp-top-actions">
+          <button className="dp-today" onClick={() => navigate('/settlement')}>结算</button>
           <button className="dp-arrow" onClick={() => setDate(shiftDate(date, -1))} aria-label="前一天">‹</button>
           <button className="dp-arrow" onClick={() => setDate(shiftDate(date, 1))} aria-label="后一天">›</button>
           {date !== todayStr() && (

@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 99 文件；`test/` 36 个测试文件 / 743 用例 |
+| 规模 | `src/` 104 文件；`test/` 38 个测试文件 / 766 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -31,7 +31,7 @@
 
 | 路由 | 页面 | 内容 |
 | --- | --- | --- |
-| `/` | DailyPlan | 时间网格、时间块 CRUD、验收、课程块只读 |
+| `/` | DailyPlan | 时间网格、时间块 CRUD、验收、课程块只读；顶部可打开今日结算 |
 | `/goals` | LongTermGoals | 大愿望 + 长期目标摘要；目标地图逐层查看；三行编辑与全屏 TODO/Markdown 树编辑 |
 | `/backlog` | BacklogPage | 遗留问题（状态、历时、气泡） |
 | `/reflection` | Reflection | 三段式反思 |
@@ -43,6 +43,7 @@
 | `/trash` | Trash | 回收站 |
 | `/backup` | BackupRestore | 导入导出、存储路径 |
 | `/settings` | SettingsPage | 头像、用户名、主题、默认偏好 |
+| `/settlement` | Settlement | 按今日实际交互汇总的全屏 Canvas 分页海报，零项隐藏、文字明细可展开 |
 
 无路由页面：`SetupPage`（Boot 阶段渲染）。任务清单无路由，由 `TaskBall` 承载。
 
@@ -71,7 +72,9 @@ src/
 │   ├── markdown.ts     Markdown → HTML（先转义后套标签）
 │   ├── extract.ts      识别文本 → 时间/地点/要求/邮箱
 │   ├── search.ts       全局内容搜索
-│   └── avatarCrop.ts   裁剪几何、canvas 输出、图片压缩
+│   ├── avatarCrop.ts   裁剪几何、canvas 输出、图片压缩
+│   ├── settlement.ts   实际交互事件检测、按日净进度汇总、海报数据映射
+│   └── settlementPoster.ts Canvas 海报布局/分页/绘制（单页像素上限）
 │
 ├── db/
 │   ├── index.ts        业务 CRUD（内存 store）、软删除、id 分配
@@ -139,6 +142,7 @@ utils/  →  types/
 | taskBoard | `taskboard.json` | 单记录（id=1） | `nodes:TaskNode[], order:string[]`；末级节点可带 `shelved`（搁置）与 `doneAt`（完成后 30 秒隐去） |
 | linkGroups | `linkGroups.json` | 数组 | `name, items:LinkGroupItem[]`（自定义关联分组；内置「课程」组不落库） |
 | trashItems | `trash.json` | 数组 | `originalTable, originalId, originalData, deletedAt` |
+| activityEvents | `days/<date>/activity.json` | 按日数组 | 结算用实际交互：`id, date, occurredAt, category, action, entityId, title, from, to, parentId?, parentTitle?` |
 
 约定：
 - `TimeBlock.focusScore / efficiencyScore`：0–10，0 = 未评分。
@@ -148,6 +152,7 @@ utils/  →  types/
 - `TaskItem.id` 为字符串；其余表主键 `number`；`TrashItem.originalId` 为 `number|string`。
 - `TaskNode` 只有末级节点的 `done` 有意义；末级用完整链 `a/b/c` 标识。
 - `DdlLink` 存的是**快照**（`kind, id, label, groupName`）：课程/分组被删后 DDL 仍显示当时的名字。
+- `ActivityEvent` 只记录真实发生过的交互，日期取设备本地日历；`from/to` 为 0–1 的进度或布尔转换，新建/删除为 `null`。撤销重做按实体累加净变化，跨日先撤后做不会重复计数；同父节点下的成对增删视为改名，不计新建/删除。历史数据没有时间戳可回溯，因此结算从功能上线后开始积累，不伪造旧活动。
 - `todayStr()` 为设备本地日历日期；全屏日程同用它判断今天，凌晨不再偏到前一天。
 - `Course.semesterStartDate?` 保存所属学期开学日期。旧课程（含回收站）首次加载时补当前学期，未设置学期的在首次设置时补；切换学期不重绑；导入旧备份按备份自身学期补齐。
 
@@ -161,7 +166,8 @@ utils/  →  types/
 
 ```
 Documents/<dir>/
-├── days/<YYYY-MM-DD>/{plan,reflections,harvests,tasks}.json
+├── days/<YYYY-MM-DD>/{plan,reflections,harvests,tasks,activity}.json
+│     activity.json = 那天实际发生过的交互（结算数据源）
 ├── goals.json  routines.json  templates.json  courses.json
 ├── semester.json  ddls.json  important.json  backlog.json
 ├── taskboard.json  linkGroups.json  trash.json
@@ -174,9 +180,9 @@ Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。跨�
 
 | 环节 | 行为 |
 | --- | --- |
-| 变更入口 | `mutate(fn, {writeOrder})`：前后指纹对比，只写变脏文件 |
+| 变更入口 | `mutate(fn, {writeOrder, activityIntent, skipActivity})`：前后指纹对比，只写变脏文件；同时按前后 store 差异生成当日交互事件 |
 | 入队 | 入队瞬间捕获 `{目录, 待写文件}`；单条 promise 链串行 |
-| 全量保存 | 包含 ideas.json；成功写完所有文件后，仅删除 days/YYYY-MM-DD 下不在当前数据中的 plan/reflections/harvests/tasks.json，保留自定义文件和备份 |
+| 全量保存 | 包含 ideas.json 与 activity.json；成功写完所有文件后，仅删除 days/YYYY-MM-DD 下不在当前数据中的 plan/reflections/harvests/tasks/activity.json，保留自定义文件和备份 |
 | 顺序 | 先写新增侧（回收站），后写移除侧（原表）；还原相反 |
 | 失败 | 记录 `getLastPersistError()` 并返回 `false`，不 throw |
 | 编码 | 原生 `writeFile` 必须 `encoding: UTF8`（缺省按 base64 解码 → 乱码） |
@@ -216,7 +222,8 @@ Web 端以同一相对路径为 IndexedDB KV 键（库 `dailynote_kv`）。跨�
 
 - 导出：单 JSON 备份包（`version:1`）。
 - 导入：剥 BOM → 校验（空 / 非 JSON / 损坏 / 缺 `version`+`dailyPlans`）→ 纯合并（存在则更新，永不删除）。
-- 兼容：15 张表缺字段均兜底空数组；`courses` 额外归一化 `dayOfWeek`。
+- 兼容：16 张表缺字段均兜底空数组；`courses` 额外归一化 `dayOfWeek`。
+- 交互记录按不可变事件 ID 去重合并：同一份备份反复导入不会重复计数；旧备份没有 `activityEvents` 时视为空，不伪造历史。
 
 ---
 
@@ -230,7 +237,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 - 无全局状态库；每页自持 Hook 状态。
 - 更新策略：修改类先 setState 后写库；创建/删除类先写库后 setState。
-- 跨页通知：`window` 事件 `dailynote-ddl-changed`、`dailynote-important-changed`、`dailynote-backlog-changed`、`dailynote-task-changed`、`dailynote-ideas-changed`、`dailynote-open-tasks`。杂念的增删改与回收站还原都会广播 `dailynote-ideas-changed`，各页 `useIdeas` 实例立即重读，不等页面重新挂载。
+- 跨页通知：`window` 事件 `dailynote-ddl-changed`、`dailynote-important-changed`、`dailynote-backlog-changed`、`dailynote-task-changed`、`dailynote-ideas-changed`、`dailynote-activity-changed`、`dailynote-open-tasks`。杂念的增删改与回收站还原都会广播 `dailynote-ideas-changed`，各页 `useIdeas` 实例立即重读，不等页面重新挂载；`mutate` 产生新交互记录时广播 `dailynote-activity-changed`，打开着的结算页随之重绘。
 
 ---
 
@@ -291,6 +298,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | BacklogPage | 阻塞中/可推进/已解决/已终止；起始三态（距今/日期/文字）；历时排序；一周宽限气泡 |
 | LongTermGoals | 上半「大愿望」（默认收起，只有摘要；展开见愿景/动机/里程碑；新建与编辑共用表单，里程碑可增删改勾）；下半「长期目标」（摘要点击进入全屏目标地图；新建/编辑为三行页面：名称、全屏 TODO/Markdown 树内容、附件线索；地图从目标根进入一级节点并逐层钻取，每个节点显示等权递归完成度）；两者共用一张表，靠 `kind` 区分 |
 | Reflection / Harvest | 三段式反思；收获 #标签；均支持 `?date=` |
+| Settlement | 全屏今日结算：按 TODO / DDL / 每日计划 / 长期目标 / 大愿望里程碑 / 杂念分门别类，只渲染非零项；数据来自 `activity.json`，`buildSettlement` 按实体累加当日净变化；Canvas 海报优先长图、超长自动分页（每页 ≤4096px / 400 万像素）、文字测量裁剪、可滚动查看并附文字明细；Android 返回键回到计划页 |
 | Trash / BackupRestore / SettingsPage / SetupPage | 回收站；导入导出与路径；头像主题偏好；首次目录选择 |
 
 识别结果核对（`planExtraction`，`utils/extract.ts`）：
@@ -326,12 +334,13 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 400 | 验收弹窗、头像裁剪、ConfirmDialog |
 | 500 | Lightbox |
 | 600 | 庆祝弹窗 CelebrationDialog |
+| 1500 | 全屏结算海报 Settlement |
 
 ---
 
 ## 12. 测试
 
-`npm test`：36 文件 / 743 用例。
+`npm test`：38 文件 / 766 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -347,7 +356,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 时间网格点击映射/futureWindow | 19 | 只看未来：折叠起点、映射与反算、跨起点块、边界与密度 |
 | 任务/celebration | 7 | 全部完成庆祝的判定（最后一条才弹） |
 | 偏好设置/avatarCrop | 17 | 缩放、钳制、裁剪矩形 |
-| 灵感/ideas | 10 | ideas.json 往返、排序、更新、回收站还原、导出导入 |
+| 灵感/ideas | 11 | ideas.json 往返、排序、更新、回收站还原、导出导入、杂念变更事件 |
 | 识别/extract | 41 | 全角、补年份、相对日期、地点防误判、要求/邮箱、去重与冲突、图与图冲突、状态栏时钟与界面噪声回归 |
 | 重要的事/important | 16 | CRUD、回收站、持久化、三天阈值、过期收起 |
 | 时间网格点击映射/blockRenderRect | 16 | 睡眠折叠下的块矩形 |
@@ -359,7 +368,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 任务清单/taskTemplate | 13 | 模板 CRUD、软删除、持久化、套用 |
 | DDL清单/markdownAndLocation | 10 | Markdown 语法、XSS 转义、地点往返 |
 | 数据存储/readIsolation | 3 | db 返回深副本，调用方改对象不会绕过 mutate |
-| 数据存储/storeSchema | 2 | 注册表覆盖全部表、文件与写序唯一、数字主键齐全 |
+| 数据存储/storeSchema | 3 | 注册表覆盖全部表、文件与写序唯一、数字主键齐全、交互记录按日表排除 |
 | 数据存储/storageAccess | 8 | 权限守卫、阻塞时零写入 |
 | 数据存储/nativeWriteEncoding | 3 | 原生写入 utf8 与往返 |
 | 数据存储/startupSnapshot | 7 | 快照命中、日期/分类文件名变化失效、外部内容重扫、换目录不复用 |
@@ -371,7 +380,9 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 长期/goalTree | 27 | 西湖三分支递归等权进度、每层完成度、空树、旧任务投影、`nodes: []` 权威、文本格式校验、改名/重排保留节点状态 |
 | 长期/goalsPage | 5 | 大愿望默认收起、摘要入口、空目标状态 |
 | 长期/goalEditor | 6 | 三行编辑、全屏层级/文本编辑、格式错误、完成状态、草稿保护、保存失败重试、目标地图钻取/回退 |
-| **合计** | **743** | 36 个文件 |
+| 数据存储/settlement | 8 | 本地日期、事件唯一 ID、改名不误计增删、净进度、杂念完成与普通删除、DDL/里程碑、日期 JSON/备份往返、零值隐藏 |
+| settlementPoster | 14 | 长海报优先与分页、三种宽度、459 条不越界、文字测量裁剪、空状态、空/非法页码 |
+| **合计** | **766** | 38 个文件 |
 
 环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
 

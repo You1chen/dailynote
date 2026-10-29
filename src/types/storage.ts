@@ -1,3 +1,4 @@
+import type { ActivityEvent } from './settlement';
 import type {
   DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem,
   TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, ImportantItem,
@@ -22,6 +23,7 @@ export interface StoreShape {
   ideas: Idea[];
   taskBoard: TaskBoard[];
   linkGroups: LinkGroup[];
+  activityEvents: ActivityEvent[];
 }
 
 export interface StorageData extends StoreShape {

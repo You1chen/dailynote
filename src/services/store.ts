@@ -36,6 +36,8 @@ export type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
 import { readSnapshot, writeSnapshot, clearSnapshot, sameNames } from './snapshot';
+import type { ActivityEvent, ActivityOptions } from '../types/settlement';
+import { detectActivity } from '../utils/settlement';
 
 // ============ 布局常量 ============
 
@@ -48,11 +50,11 @@ function oldSingleRel(): string {
   return isCapacitor() ? 'dailynote-data.json' : 'dailynote-data';
 }
 const DAY_DIR = 'days';
-const DAY_TYPES = ['reflections', 'harvests', 'tasks'] as const;
+const DAY_TYPES = ['reflections', 'harvests', 'tasks', 'activity'] as const;
 function dayPlan(date: string): string {
   return `${DAY_DIR}/${date}/plan.json`;
 }
-function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks'): string {
+function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks' | 'activity'): string {
   return `${DAY_DIR}/${date}/${type}.json`;
 }
 
@@ -114,7 +116,11 @@ function clearStore(): void {
 }
 
 function countData(): number {
-  return Object.values(store).reduce((total, rows) => total + rows.length, 0);
+  // 交互记录只服务于结算，不计入「恢复了多少条记录」的用户可见统计。
+  return Object.entries(store).reduce(
+    (total, [table, rows]) => total + (table === 'activityEvents' ? 0 : rows.length),
+    0,
+  );
 }
 
 // ============ 路径管理 ============
@@ -362,7 +368,7 @@ async function listDayDates(dir: string): Promise<string[]> {
 
 /** 枚举应用拥有的日期数据文件；日期目录以外的文件永不参与清理。 */
 async function listManagedDayFiles(dir: string): Promise<string[]> {
-  const managed = /^days\/\d{4}-\d{2}-\d{2}\/(plan|reflections|harvests|tasks)\.json$/;
+  const managed = /^days\/\d{4}-\d{2}-\d{2}\/(plan|reflections|harvests|tasks|activity)\.json$/;
   if (!isCapacitor()) return (await idbKvKeys()).filter(key => managed.test(key));
   const { Filesystem, Directory } = await import('@capacitor/filesystem');
   const files: string[] = [];
@@ -401,6 +407,7 @@ function parseStorageData(text: string): StorageData | null {
        ideas: Array.isArray(data.ideas) ? data.ideas : [],
       taskBoard: Array.isArray(data.taskBoard) ? data.taskBoard : [],
       linkGroups: Array.isArray(data.linkGroups) ? data.linkGroups : [],
+      activityEvents: Array.isArray(data.activityEvents) ? data.activityEvents : [],
     };
   } catch {
     return null;
@@ -442,6 +449,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const reflections: Reflection[] = [];
   const harvests: Harvest[] = [];
   const taskItems: TaskItem[] = [];
+  const activityEvents: ActivityEvent[] = [];
   for (const date of dates) {
     const planText = await readFile(dir, dayPlan(date));
     if (planText != null) {
@@ -455,6 +463,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     reflections.push(...(await readDayArray<Reflection>(dir, dayTypeFile(date, 'reflections'))));
     harvests.push(...(await readDayArray<Harvest>(dir, dayTypeFile(date, 'harvests'))));
     taskItems.push(...(await readDayArray<TaskItem>(dir, dayTypeFile(date, 'tasks'))));
+    activityEvents.push(...(await readDayArray<ActivityEvent>(dir, dayTypeFile(date, 'activity'))));
   }
   const longTermGoals = await readCategory<LongTermGoal>(dir, CATEGORY_FILES.longTermGoals);
   const fixedRoutines = await readCategory<FixedRoutine>(dir, CATEGORY_FILES.fixedRoutines);
@@ -488,6 +497,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
      ideas: ideas ?? [],
     taskBoard: taskBoard ?? [],
     linkGroups: linkGroups ?? [],
+    activityEvents,
   };
 }
 
@@ -540,6 +550,7 @@ function currentNames(): { dates: string[]; files: string[] } {
   for (const r of store.reflections) dates.add(r.date);
   for (const h of store.harvests) dates.add(h.date);
   for (const t of store.taskItems) dates.add(t.date);
+  for (const e of store.activityEvents) dates.add(e.date);
   return { dates: [...dates], files: CATEGORY_NAMES };
 }
 
@@ -550,6 +561,7 @@ function namesFromData(data: StorageData): { dates: string[]; files: string[] } 
   for (const r of data.reflections) dates.add(r.date);
   for (const h of data.harvests) dates.add(h.date);
   for (const t of data.taskItems) dates.add(t.date);
+  for (const e of data.activityEvents ?? []) dates.add(e.date);
   return { dates: [...dates], files: CATEGORY_NAMES };
 }
 
@@ -691,6 +703,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
     ['reflections', 'reflections'],
     ['harvests', 'harvests'],
     ['tasks', 'taskItems'],
+    ['activity', 'activityEvents'],
   ];
   for (const [type, table] of dayMaps) {
     for (const [date, items] of groupByDate(store[table] as unknown as { date: string }[])) {
@@ -707,7 +720,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
 
 interface Fp {
   planDates: Map<string, string>;
-  dayDates: Record<'reflections' | 'harvests' | 'tasks', Map<string, string>>;
+  dayDates: Record<'reflections' | 'harvests' | 'tasks' | 'activity', Map<string, string>>;
   longTermGoals: string;
   fixedRoutines: string;
   taskTemplates: string;
@@ -739,6 +752,7 @@ function fingerprint(): Fp {
       reflections: mk(store.reflections),
       harvests: mk(store.harvests),
       tasks: mk(store.taskItems),
+      activity: mk(store.activityEvents),
     },
     longTermGoals: JSON.stringify(store.longTermGoals),
     fixedRoutines: JSON.stringify(store.fixedRoutines),
@@ -777,6 +791,7 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
     ['reflections', 'reflections'],
     ['harvests', 'harvests'],
     ['tasks', 'taskItems'],
+    ['activity', 'activityEvents'],
   ];
   for (const [type, table] of dayMaps) {
     for (const date of changedKeys(a.dayDates[type], b.dayDates[type])) {
@@ -821,12 +836,21 @@ export function getLastPersistError(): string | null {
  * 同步改 store → 增量持久化（只写被改到的文件）。
  * opts.writeOrder：本操作涉及多文件时指定写序，先写"新增"侧再写"移除"侧。
  */
-export async function mutate(fn: () => void, opts?: { writeOrder?: AnyStoreTable[] }): Promise<boolean> {
+export async function mutate(fn: () => void, opts?: ActivityOptions & { writeOrder?: AnyStoreTable[] }): Promise<boolean> {
   const before = fingerprint();
+  const activityBefore = opts?.skipActivity ? null : deepClone(store);
   fn();
+  const events = activityBefore ? detectActivity(activityBefore, store, opts) : [];
+  store.activityEvents.push(...events);
   const after = fingerprint();
   const ok = await enqueue(() => buildWriteSetDirty(before, after, opts?.writeOrder));
-  if (ok) scheduleSnapshot();
+  if (ok) {
+    scheduleSnapshot();
+    // 有新交互记录才通知；测试桩等无 dispatchEvent 的环境静默跳过
+    if (events.length && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new Event('dailynote-activity-changed'));
+    }
+  }
   return ok;
 }
 
@@ -894,6 +918,12 @@ function mergeIntoStore(data: StorageData): number {
     }
   }
 
+  // Immutable event IDs survive backup roundtrips; importing twice cannot duplicate history.
+  const eventIds = new Set(store.activityEvents.map(e => e.id));
+  for (const event of data.activityEvents) if (!eventIds.has(event.id)) {
+    store.activityEvents.push(event);
+    eventIds.add(event.id);
+  }
   return count;
 }
 
@@ -1041,7 +1071,7 @@ export async function initStore(): Promise<number> {
 
 function applyData(data: StorageData): void {
   for (const table of DEFAULT_WRITE_ORDER) {
-    Object.assign(store, { [table]: data[table] });
+    Object.assign(store, { [table]: data[table] ?? [] });
   }
 }
 
@@ -1082,7 +1112,7 @@ export async function importJSONIntoStore(json: string): Promise<number> {
     bindLegacyCourses(store.semester[0]?.startDate);
     count = mergeIntoStore(data);
     bindLegacyCourses(store.semester[0]?.startDate);
-  });
+  }, { skipActivity: true });
   resetNextId();
   return count;
 }

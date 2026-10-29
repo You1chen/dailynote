@@ -133,16 +133,15 @@ describe('杂念三型', () => {
       await db.deleteIdea(id);
       const trashed = (await db.getTrashItems()).find(t => t.originalTable === 'ideas')!;
       await db.restoreFromTrash(trashed.id!);
+      // 只有灵感计入「记录灵感」；小愿望/琐事的成果按实现时统计
+      await db.saveIdea({ kind: 'idea', text: '真正记下的灵感', date: '2026-10-27', createdAt: 0, updatedAt: 0 });
     } finally {
       if (previousWindow === undefined) delete (globalThis as any).window;
       else (globalThis as any).window = previousWindow;
     }
-    // 新增、更新、删除、还原各一次，顺序与调用一致
-    expect(events).toEqual([
-      'dailynote-ideas-changed',
-      'dailynote-ideas-changed',
-      'dailynote-ideas-changed',
-      'dailynote-ideas-changed',
-    ]);
+    // 新增、更新、删除、还原、再新增各一次
+    expect(events.filter(e => e === 'dailynote-ideas-changed')).toHaveLength(5);
+    // 仅灵感新增产生一条交互记录；更新不算新建，还原不补记
+    expect(events.filter(e => e === 'dailynote-activity-changed')).toHaveLength(1);
   });
 });

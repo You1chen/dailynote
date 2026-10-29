@@ -15,6 +15,7 @@ import WeekViewPage from './pages/WeekViewPage';
 import DdlPage from './pages/DdlPage';
 import ImportantPage from './pages/ImportantPage';
 import BacklogPage from './pages/BacklogPage';
+import SettlementPage from './pages/Settlement';
 import { BackButtonProvider } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import { useBacklogBadge } from './hooks/useBacklog';
@@ -71,6 +72,7 @@ function AppShell() {
           <Route path="/week" element={<WeekViewPage />} />
           <Route path="/ddl" element={<DdlPage />} />
           <Route path="/important" element={<ImportantPage />} />
+          <Route path="/settlement" element={<SettlementPage />} />
         </Routes>
       </div>
       <TabBar />

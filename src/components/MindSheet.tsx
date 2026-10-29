@@ -135,7 +135,7 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
     }
     const delay = item.kind === 'wish' ? 420 : 240;
     window.setTimeout(() => {
-      void removeIdea(id);
+      void removeIdea(id, 'complete');
       setFlashId(null);
     }, delay);
   }

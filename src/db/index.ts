@@ -500,7 +500,7 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
     } catch {
       ok = false;
     }
-  }, { writeOrder });
+  }, { writeOrder, skipActivity: true });
   if (ok && item.originalTable === 'ideas') notifyIdeasChanged();
   return ok;
 }
@@ -688,7 +688,7 @@ export async function saveIdea(item: Idea): Promise<number> {
   return resultId;
 }
 
-export async function deleteIdea(id: number): Promise<void> {
+export async function deleteIdea(id: number, intent?: 'complete'): Promise<void> {
   await mutate(() => {
     const item = store.ideas.find(x => x.id === id);
     if (item) {
@@ -703,7 +703,7 @@ export async function deleteIdea(id: number): Promise<void> {
       store.ideas = store.ideas.filter(x => x.id !== id);
       cleanOldTrashSync();
     }
-  }, { writeOrder: ['trashItems', 'ideas'] });
+  }, { writeOrder: ['trashItems', 'ideas'], activityIntent: intent === 'complete' ? 'complete-idea' : undefined });
   notifyIdeasChanged();
 }
 // ============ 遗留问题 CRUD ============
