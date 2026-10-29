@@ -1344,3 +1344,43 @@ pm run build:apk` 成功（24.8 MB）。
 修改：src/pages/LongTermGoals.tsx（记忆提示、勾选标记、日期格式化、旅程线）、src/pages/LongTermGoals.css（整段大愿望样式 + 深色覆盖）
 新增：大愿望UI美化方案.md（改版前的设计说明）
 ```
+
+## 2026-10-29 — 底部 TabBar 居中修正、窄屏页头折行修复、补打 APK
+
+### 需求
+
+真机截图里「计划 / 反思 / 收获」三个底部标签整体偏右、最后一个几乎贴住屏幕右边，看着是歪的；
+同一张图上 `/goals` 的页头在 360dp 宽度下把标题挤成「目标与愿 / 望」、两个按钮的字各折成两行。
+
+### 根因
+
+- **TabBar**：`left: calc(var(--nav-w) + (100vw - var(--nav-w)) / 2)` 已经把定位点按内容区中点算好，
+  但 `width: 100%` 仍取整屏宽、再用 `translateX(-50%)` 居中——条形比内容区宽出 `--nav-w` 的一半（38px），
+  被 `body { overflow-x: hidden }` 裁掉后，三个标签的中心被推到 100 / 218 / 338，最后一个离屏幕右边只剩 22px，所以显得歪。
+- **页头**：`.page-header` 不换行，标题不收缩、按钮文字可折行；目标与愿望 5 个字 + 两个带图标按钮在 283px 内容宽里放不下，
+  于是标题断成两行、按钮竖排。
+
+### 实现
+
+- `src/components/TabBar.css`：改为 `left: var(--nav-w); right: 0; width: auto; max-width: 480px; margin: 0 auto`，去掉 `calc` 与 `translateX`；
+  条形与内容区同宽同中心，360dp 下实测 `bar=76..360`、三个标签中心 `123 / 218 / 313`，左右余量 47 / 47，不再溢出。
+- `src/App.css`：
+  - `.page-header` 加 `flex-wrap: wrap` + `row-gap: 10px`，放不下时整组操作换到第二行；
+  - `.page-title` 与页头内 `.btn` 加 `white-space: nowrap`，标题和按钮文字不再被拆开；
+  - 仅当页头正好两个子项时才给后一个 `margin-left: auto`（`:first-child:nth-last-child(2) + *`），
+    保证换行后靠右，同时不影响「返回箭头 + 标题 + 占位」的三子项页头（DDL/课程/周视图/设置）。
+- **APK**：用 `D:\android studio\jbr`（JDK 21）+ `D:\Android_Studio_SDK` 执行 `npm run build:apk`，产出 debug APK。
+
+### 验证
+
+- 360dp 视口渲染真实 `App.css` + `TabBar.css` + `LongTermGoals.css`：截图核对 TabBar 三段等距、条形容器与内容区对齐；
+  页头标题单行、按钮整组换行后靠右（`title=92 w100 h32`、`acts` 第二行右对齐至 344 = 360 - 16 内边距）。
+- `npx tsc --noEmit` 通过；`npm test` **698/698** 通过；`npm run build:apk` 成功，`app-debug.apk` 24.7 MB。
+- 预览用 `test/preview/` 已删除。
+
+### 涉及文件
+
+```
+修改：src/components/TabBar.css、src/App.css
+产物：android/app/build/outputs/apk/debug/app-debug.apk（24.7 MB）
+```

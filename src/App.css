@@ -78,14 +78,27 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 10px;
   padding: 8px 0 16px;
   gap: 12px;
+}
+
+/* 头部按钮不折行；窄屏时整组换到下一行并靠右 */
+.page-header .btn {
+  white-space: nowrap;
+}
+
+/* 两个子项时（标题 + 操作组），换行后操作组仍靠右 */
+.page-header > *:first-child:nth-last-child(2) + * {
+  margin-left: auto;
 }
 
 .page-title {
   font-size: var(--font-xl);
   font-weight: 700;
   color: var(--color-text);
+  white-space: nowrap;
 }
 
 /* ============ 卡片 ============ */
