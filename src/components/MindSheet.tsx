@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Sparkles, Star, ListChecks, Plus, Trash2, Hash, Check } from 'lucide-react';
+import { X, Sparkles, Star, ListChecks, Plus, Trash2, Hash, Check, ArrowLeft } from 'lucide-react';
 import { useIdeas } from '../hooks/useIdeas';
 import { playChime } from '../utils/sound';
 import { todayStr } from '../types';
@@ -41,9 +41,18 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
   // 就地编辑 / 展开详情 / 实现动画
   const [editId, setEditId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
-  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [flashId, setFlashId] = useState<number | null>(null);
   const [flying, setFlying] = useState(false);
+
+  // 灵感的独立编辑页（标题 / 详情 / 标签）
+  const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
+  const [itemTitle, setItemTitle] = useState('');
+  const [itemDetail, setItemDetail] = useState('');
+  const [itemTags, setItemTags] = useState<string[]>([]);
+  const [itemTagDraft, setItemTagDraft] = useState('');
+
+  const active = KINDS.find(k => k.key === kind) ?? KINDS[0];
+  const ActiveIcon = active.icon;
 
   const day = date || todayStr();
   /** 灵感只看选中日期（默认今天）；愿望与琐事跨天存在，不按日期筛 */
@@ -88,6 +97,32 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
     await updateIdea(item, patch);
   }
 
+  /** 打开一条灵感的编辑页：标题、详情、标签都能改，不只是改名 */
+  function openIdea(item: Idea) {
+    setEditingIdea(item);
+    setItemTitle(item.title ?? '');
+    setItemDetail(item.text ?? '');
+    setItemTags(item.tags ?? []);
+    setItemTagDraft('');
+    setEditId(null);
+  }
+
+  function addItemTag() {
+    const t = itemTagDraft.trim().replace(/^#/, '');
+    if (!t || itemTags.includes(t)) { setItemTagDraft(''); return; }
+    setItemTags([...itemTags, t]);
+    setItemTagDraft('');
+  }
+
+  async function saveIdeaEdit() {
+    if (!editingIdea) return;
+    const t = itemTitle.trim();
+    const d = itemDetail.trim();
+    if (!t && !d) return;                 // 标题和详情都空：没有可保存的内容
+    await updateIdea(editingIdea, { title: t || undefined, text: d || t, tags: itemTags });
+    setEditingIdea(null);
+  }
+
   /** 实现一条：闪一下 → 消失（小愿望额外放一声叮 + 划过的星星） */
   async function realize(item: Idea) {
     if (!item.id) return;
@@ -109,7 +144,7 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
     <div className="mind-mask" onClick={onClose}>
       <div className="mind-sheet" onClick={e => e.stopPropagation()}>
         <div className="mind-head">
-          <span className="mind-title">杂念</span>
+          <span className="mind-title"><ActiveIcon size={15} /> {active.label}</span>
           <button className="mind-close" onClick={onClose} aria-label="关闭">
             <X size={18} />
           </button>
@@ -234,7 +269,66 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
         )}
 
         {/* 灵感：灵光一闪 */}
-        {kind === 'idea' && (
+        {kind === 'idea' && (editingIdea ? (
+          <div className="mind-body mind-body--idea">
+            <div className="idea-edit-head">
+              <button className="idea-back" onClick={() => setEditingIdea(null)} aria-label="返回灵感列表">
+                <ArrowLeft size={15} /> 返回
+              </button>
+              <span>编辑灵感</span>
+            </div>
+            <div className="idea-card">
+              <input
+                className="idea-title"
+                value={itemTitle}
+                placeholder="给它一个名字"
+                onChange={e => setItemTitle(e.target.value)}
+              />
+              <textarea
+                className="idea-detail"
+                rows={6}
+                value={itemDetail}
+                placeholder="把这个念头写清楚一点…"
+                onChange={e => setItemDetail(e.target.value)}
+              />
+              <div className="idea-tags">
+                {itemTags.map(t => (
+                  <span key={t} className="idea-tag">
+                    <Hash size={10} />{t}
+                    <button onClick={() => setItemTags(itemTags.filter(x => x !== t))} aria-label={`移除标签 ${t}`}>
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  className="idea-tag-input"
+                  value={itemTagDraft}
+                  placeholder="标签"
+                  onChange={e => setItemTagDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); addItemTag(); }
+                    if (e.key === 'Backspace' && !itemTagDraft && itemTags.length) setItemTags(itemTags.slice(0, -1));
+                  }}
+                />
+              </div>
+              <div className="idea-edit-acts">
+                <button
+                  className="idea-edit-del"
+                  onClick={() => {
+                    const id = editingIdea.id;
+                    setEditingIdea(null);
+                    if (id != null) void removeIdea(id);
+                  }}
+                >
+                  <Trash2 size={14} /> 删除
+                </button>
+                <button className="idea-save" onClick={() => void saveIdeaEdit()}>
+                  <Check size={15} /> 保存
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
           <div className="mind-body mind-body--idea">
             <div className="idea-card">
               <div className="idea-glow" />
@@ -306,9 +400,10 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
                       </span>
                     )}
                     <button
-                      className={`idea-more ${expandedId === i.id ? 'is-on' : ''}`}
-                      title="详情"
-                      onClick={() => setExpandedId(expandedId === i.id ? null : (i.id ?? null))}
+                      className="idea-more"
+                      title="编辑这条灵感"
+                      aria-label={`编辑灵感：${i.title || i.text.slice(0, 16)}`}
+                      onClick={() => openIdea(i)}
                     >…</button>
                     <button className="idea-done" title="已实现" onClick={() => void realize(i)}>
                       <Check size={13} />
@@ -317,24 +412,11 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
                       <Trash2 size={13} />
                     </button>
                   </div>
-
-                  {expandedId === i.id && (
-                    <div className="idea-item-body">
-                      {i.title && <p className="idea-item-text">{i.text}</p>}
-                      {(i.tags?.length ?? 0) > 0 && (
-                        <div className="idea-item-tags">
-                          {i.tags!.map(t => (
-                            <span key={t} className="idea-tag idea-tag--mini"><Hash size={9} />{t}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
           </div>
-        )}
+        ))}
 
         {flying && <span className="wish-fly" aria-hidden="true">★</span>}
       </div>

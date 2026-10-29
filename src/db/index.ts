@@ -501,6 +501,7 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
       ok = false;
     }
   }, { writeOrder });
+  if (ok && item.originalTable === 'ideas') notifyIdeasChanged();
   return ok;
 }
 
@@ -652,7 +653,15 @@ export async function deleteTaskTemplate(id: number): Promise<void> {
   }, { writeOrder: ['trashItems', 'taskTemplates'] });
 }
 
-// ============ 灵感 CRUD ============
+// ============ 杂念（小愿望 / 琐事 / 灵感） CRUD ============
+
+/**
+ * 杂念变更通知：计划页的分类计数、收获页的按日统计各自持有 useIdeas 实例，
+ * 靠这个事件立即刷新，而不是等切换页面重新挂载。
+ */
+function notifyIdeasChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('dailynote-ideas-changed'));
+}
 
 /** 按日期倒序、同日按创建时间倒序 */
 export async function getAllIdeas(): Promise<Idea[]> {
@@ -675,6 +684,7 @@ export async function saveIdea(item: Idea): Promise<number> {
     resultId = allocId('ideas');
     store.ideas.push({ ...item, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
   });
+  notifyIdeasChanged();
   return resultId;
 }
 
@@ -694,6 +704,7 @@ export async function deleteIdea(id: number): Promise<void> {
       cleanOldTrashSync();
     }
   }, { writeOrder: ['trashItems', 'ideas'] });
+  notifyIdeasChanged();
 }
 // ============ 遗留问题 CRUD ============
 

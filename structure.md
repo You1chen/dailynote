@@ -230,7 +230,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 - 无全局状态库；每页自持 Hook 状态。
 - 更新策略：修改类先 setState 后写库；创建/删除类先写库后 setState。
-- 跨页通知：`window` 事件 `dailynote-ddl-changed`、`dailynote-important-changed`、`dailynote-backlog-changed`、`dailynote-task-changed`、`dailynote-open-tasks`。
+- 跨页通知：`window` 事件 `dailynote-ddl-changed`、`dailynote-important-changed`、`dailynote-backlog-changed`、`dailynote-task-changed`、`dailynote-ideas-changed`、`dailynote-open-tasks`。杂念的增删改与回收站还原都会广播 `dailynote-ideas-changed`，各页 `useIdeas` 实例立即重读，不等页面重新挂载。
 
 ---
 
@@ -245,6 +245,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | useReflections(date) | reflections, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllReflections） |
 | useHarvests(date) | harvests, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllHarvests） |
 | useBacklog() | items, loading, addItem, updateItem, changeStatus, removeItem, reload |
+| useIdeas() | ideas, byKind, countByDate, addMind, updateIdea, removeIdea, reload；监听 `dailynote-ideas-changed` |
 | useBacklogBadge() | count |
 | useDdlBadge() | count（剩余 < 7 天） |
 | useImportantBadge() | count（剩余 < 3 天且未收起） |
@@ -264,6 +265,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | CelebrationDialog | 150 | 清单全部完成的庆祝弹窗（内联 SVG 插画 + 随机走心文案 + 纸屑动画） | TaskBall |
 | GoalPlanEditor | 202 | 三行目标编辑 + 独立全屏层级/文本内容编辑（四键和完成）、草稿保护；完成记录不清理 | LongTermGoals |
 | GoalMap | 73 | 全屏根/一级树图，节点点击钻取、面包屑回退、叶勾选与各节点进度；共用 GoalPlanEditor.css | LongTermGoals |
+| MindSheet | 425 | 杂念底部面板：小愿望 / 琐事 / 灵感三型，页头按当前类型显示；灵感的 `…` 进入可改标题、详情、标签的独立编辑页 | DailyPlan、Harvest、TaskBall |
 | FullscreenSchedule | 306 | 全屏日程网格 | DailyPlan |
 | AvatarCropper | 297 | 头像裁剪 | SettingsPage |
 | CourseEditModal | 233 | 课程新建/编辑 | CoursesPage、WeekViewPage |

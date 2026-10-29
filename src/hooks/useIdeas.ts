@@ -12,6 +12,9 @@ export interface NewMind {
   source?: Idea['source'];
 }
 
+/** 任一处的杂念增删改都会广播这个事件，其他页面的计数据此立即刷新 */
+const CHANGED_EVENT = 'dailynote-ideas-changed';
+
 /** 杂念：小愿望 / 琐事 / 灵感，共用一张表，按日期倒序 */
 export function useIdeas() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -23,6 +26,14 @@ export function useIdeas() {
 
   useEffect(() => {
     (async () => { await reload(); setLoading(false); })();
+  }, [reload]);
+
+  // 别处（杂念面板、回收站还原）改了杂念：本实例立刻重读，不等页面重新挂载
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onChanged = () => { void reload(); };
+    window.addEventListener(CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(CHANGED_EVENT, onChanged);
   }, [reload]);
 
   /** 新增一条杂念，返回新 id */

@@ -120,4 +120,29 @@ describe('杂念三型', () => {
     expect(list).toHaveLength(1);
     expect(list[0].kind).toBe('chore');
   });
+
+  it('每次增删改与还原都广播变更事件，各页计数可即时刷新', async () => {
+    const events: string[] = [];
+    const previousWindow = (globalThis as any).window;
+    (globalThis as any).window = {
+      dispatchEvent(event: { type: string }) { events.push(event.type); return true; },
+    };
+    try {
+      const id = await db.saveIdea({ kind: 'wish', text: '新增', date: '2026-10-27', createdAt: 0, updatedAt: 0 });
+      await db.saveIdea({ kind: 'wish', text: '改名', date: '2026-10-27', createdAt: 0, updatedAt: 0, id });
+      await db.deleteIdea(id);
+      const trashed = (await db.getTrashItems()).find(t => t.originalTable === 'ideas')!;
+      await db.restoreFromTrash(trashed.id!);
+    } finally {
+      if (previousWindow === undefined) delete (globalThis as any).window;
+      else (globalThis as any).window = previousWindow;
+    }
+    // 新增、更新、删除、还原各一次，顺序与调用一致
+    expect(events).toEqual([
+      'dailynote-ideas-changed',
+      'dailynote-ideas-changed',
+      'dailynote-ideas-changed',
+      'dailynote-ideas-changed',
+    ]);
+  });
 });
