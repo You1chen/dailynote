@@ -16,6 +16,18 @@ export interface TaskLine {
   level: number;
 }
 
+/** 插入一行空白任务，紧跟在指定行之后，并继承该行缩进。 */
+export function insertTaskLineAfter(lines: TaskLine[], index: number, title = ''): TaskLine[] {
+  if (index < 0 || index >= lines.length) return [...lines];
+  const current = lines[index];
+  return [...lines.slice(0, index + 1), { title, level: current.level }, ...lines.slice(index + 1)];
+}
+
+/** 序列化/保存前丢弃编辑器中尚未填写的空白行。 */
+export function withoutBlankTaskLines(lines: TaskLine[]): TaskLine[] {
+  return lines.filter(line => line.title.trim().length > 0);
+}
+
 /** 完整链 → key */
 export function leafKey(chain: string[]): string {
   return chain.join('/');

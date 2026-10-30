@@ -13,6 +13,8 @@ import {
   linesToText,
   linesToTree,
   parseTaskText,
+  insertTaskLineAfter,
+  withoutBlankTaskLines,
   treeToLines,
   pruneDoneLeaves,
   treeToText,
@@ -141,15 +143,17 @@ export default function TaskBall() {
     if (!editing) return;
     const title = editing.title.trim();
     const idx = editing.index;
-    setEditing(null);
-    if (!title) return; // 空内容：保持原样，不惊动用户
+    // blur 先于工具栏 click；保留当前行选择，让随后换行/缩进仍作用于该行。
     setLines(ls => ls.map((l, i) => (i === idx ? { ...l, title } : l)));
   }
 
-  /** 换行：先提交就地编辑，再准备下一行 */
+  /** 就地换行：提交当前标题，在它正下方插入同缩进的可编辑空行。 */
   function newLine() {
-    if (editing) commitEdit();
-    else commitLine();
+    if (!editing) { commitLine(); return; }
+    const index = editing.index;
+    const current = lines.map((line, i) => i === index ? { ...line, title: editing.title.trim() } : line);
+    setLines(insertTaskLineAfter(current, index));
+    setEditing({ index: index + 1, title: '' });
   }
 
   function indent() {
@@ -193,7 +197,9 @@ export default function TaskBall() {
   function switchMode(next: 'lines' | 'text') {
     if (next === mode) return;
     setEditing(null);
-    if (next === 'text') setText(linesToText(lines));
+    if (next === 'text') setText(linesToText(withoutBlankTaskLines(editing
+      ? lines.map((line, index) => index === editing.index ? { ...line, title: editing.title.trim() } : line)
+      : lines)));
     else setLines(parseTaskText(text));
     setMode(next);
   }
@@ -202,7 +208,7 @@ export default function TaskBall() {
     // 输入框里还有没提交的内容：先当成新的一行收下，再完成
     const pendingText = pending.trim();
     const baseLines = editing
-      ? lines.map((l, i) => (i === editing.index && editing.title.trim() ? { ...l, title: editing.title.trim() } : l))
+      ? lines.map((l, i) => (i === editing.index ? { ...l, title: editing.title.trim() } : l))
       : lines;
     const withPending = pendingText
       ? [...baseLines, { title: pendingText, level: Math.max(0, Math.min(level, (baseLines.length ? baseLines[baseLines.length - 1].level : -1) + 1)) }]
@@ -212,7 +218,7 @@ export default function TaskBall() {
     setPending('');
     if (pendingText) setLines(withPending);
 
-    const finalLines = mode === 'text' ? parseTaskText(text) : withPending;
+    const finalLines = mode === 'text' ? parseTaskText(text) : withoutBlankTaskLines(withPending);
     if (finalLines.length === 0) { setPanel('list'); return; }
     setBusy(true);
     try {
@@ -416,7 +422,7 @@ export default function TaskBall() {
                             onClick={e => e.stopPropagation()}
                             onBlur={commitEdit}
                             onKeyDown={e => {
-                              if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                              if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); newLine(); }
                               if (e.key === 'Escape') { e.preventDefault(); setEditing(null); }
                             }}
                           />
@@ -439,6 +445,7 @@ export default function TaskBall() {
                     className="tb-input"
                     value={pending}
                     placeholder="输入一行"
+                    onFocus={() => setEditing(null)}
                     onChange={e => setPending(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitLine(); } }}
                   />

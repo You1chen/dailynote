@@ -9,3 +9,5 @@ android/local.properties
 *.jks
 *.keystore
 android/keystore.properties
+artifacts/
+

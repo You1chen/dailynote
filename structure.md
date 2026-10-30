@@ -67,7 +67,8 @@ src/
 │   ├── ddl.ts          剩余时间、一周与三天阈值、过期收起
 │   ├── ddlLinks.ts     关联项生成/切换/去重、展示文案
 │   ├── backlog.ts      距今折算、历时文案、一周宽限、排序
-│   ├── taskTree.ts     标准文本 ⇄ 层级 ⇄ 末级并列、完成状态回填
+│   ├── taskTree.ts     标准文本 ⇄ 层级 ⇄ 末级并列、完成状态回填、行内插入与空行过滤
+│   ├── mindmap.ts      目标脑图世界坐标布局（双翼、避重叠、边界、命中检测）
 │   ├── goalTree.ts     长期目标树：标准文本互转、严格等权递归进度、状态保留、旧扁平任务投影
 │   ├── markdown.ts     Markdown → HTML（先转义后套标签）
 │   ├── extract.ts      识别文本 → 时间/地点/要求/邮箱
@@ -272,7 +273,8 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | TaskBall | 390 | 任务悬浮球（可拖动）+ 清单面板 + 层级/文本填写；勾掉最后一条未完成时弹庆祝 | App |
 | CelebrationDialog | 150 | 清单全部完成的庆祝弹窗（内联 SVG 插画 + 随机走心文案 + 纸屑动画） | TaskBall |
 | GoalPlanEditor | 202 | 三行目标编辑 + 独立全屏层级/文本内容编辑（四键和完成）、草稿保护；完成记录不清理 | LongTermGoals |
-| GoalMap | 73 | 全屏根/一级树图，节点点击钻取、面包屑回退、叶勾选与各节点进度；共用 GoalPlanEditor.css | LongTermGoals |
+| GoalMap | 77 | 全屏目标地图：双翼脑图 + 钻取、面包屑回退、叶勾选、折叠文字目录；共用 GoalPlanEditor.css | LongTermGoals |
+| PlanMindmap | 205 | Canvas2D 双翼脑图：中心节点 + 左右交替分支、彩色连线、进度条、拖动/双指缩放/适配视图；点分支钻取、点末级完成 | GoalMap |
 | MindSheet | 425 | 杂念底部面板：小愿望 / 琐事 / 灵感三型，页头按当前类型显示；灵感的 `…` 进入可改标题、详情、标签的独立编辑页 | DailyPlan、Harvest、TaskBall |
 | FullscreenSchedule | 306 | 全屏日程网格 | DailyPlan |
 | AvatarCropper | 297 | 头像裁剪 | SettingsPage |
@@ -349,7 +351,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 数据存储/store | 53 | CRUD、persist、迁移、自愈、导出、课程/DDL 存储 |
 | 课程表/courseSchedule | 36 | 周次、单双周、节假日、当日课程 |
 | 数据导入导出/jsonImport | 23 | 解析、BOM、乱码拒绝、错误分级、往返 |
-| 任务/taskTree | 32 | 文本⇄层级、完整链、状态回填、删除、排序 |
+| 任务/taskTree | 32 | 文本⇄层级、完整链、状态回填、删除、排序、行后插入与空行过滤 |
 | 遗留问题/backlog | 20 | CRUD、回收站、持久化、历时与宽限 |
 | 搜索/search | 22 | 内容命中、路由、不命中界面文案与日期、DDL 阈值、目标树深层节点与大愿望文案 |
 | 任务清单/taskList | 18 | 创建、切换、排序、日期隔离 |
@@ -381,9 +383,10 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 长期/goalTree | 27 | 西湖三分支递归等权进度、每层完成度、空树、旧任务投影、`nodes: []` 权威、文本格式校验、改名/重排保留节点状态 |
 | 长期/goalsPage | 5 | 大愿望默认收起、摘要入口、空目标状态 |
 | 长期/goalEditor | 6 | 三行编辑、全屏层级/文本编辑、格式错误、完成状态、草稿保护、保存失败重试、目标地图钻取/回退 |
+| 长期/mindmap | 3 | 双翼左右分布、卡片不重叠与边界、空树命中 |
 | 数据存储/settlement | 8 | 本地日期、事件唯一 ID、改名不误计增删、净进度、杂念完成与普通删除、DDL/里程碑、日期 JSON/备份往返、零值隐藏 |
 | settlementPoster | 14 | 长海报优先与分页、三种宽度、459 条不越界、文字测量裁剪、空状态、空/非法页码 |
-| **合计** | **766** | 38 个文件 |
+| **合计** | **776** | 40 个文件 |
 
 环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
 

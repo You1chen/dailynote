@@ -1,4 +1,5 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { insertTaskLineAfter, withoutBlankTaskLines } from '../utils/taskTree';
 import { ArrowLeft, Check, ChevronRight, CornerDownLeft, Indent, Outdent, Save, Trash2, X } from 'lucide-react';
 import type { GoalNode, LongTermGoal } from '../types';
 import type { TaskLine } from '../utils/taskTree';
@@ -27,17 +28,25 @@ function ContentEditor({ initial, onDone, onBack }: { initial: GoalNode[]; onDon
   const [selected, setSelected] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [confirmBack, setConfirmBack] = useState(false);
+  const rowInputs = useRef(new Map<number, HTMLInputElement>());
+  const focusRow = useRef<number | null>(null);
+  useEffect(() => {
+    if (focusRow.current === null) return;
+    rowInputs.current.get(focusRow.current)?.focus();
+    focusRow.current = null;
+  }, [lines]);
   const referenceForLines = (): GoalNode[] => {
     const original = goalNodesToLines(reference);
-    if (original.length !== lines.length || original.some((line, index) => line.level !== lines[index].level)) return reference;
+    const filled = withoutBlankTaskLines(lines);
+    if (original.length !== filled.length || original.some((line, index) => line.level !== filled[index].level)) return reference;
     return flatten(reference).reduce((tree, node, index) => {
-      const renamed = lines[index].title.trim();
+      const renamed = filled[index].title.trim();
       return renamed && renamed !== node.title ? updateNodeTitle(tree, node.id, renamed) : tree;
     }, reference);
   };
-  const withPending = (): TaskLine[] => pending.trim()
+  const withPending = (): TaskLine[] => withoutBlankTaskLines(pending.trim()
     ? [...lines, { title: pending.trim(), level: Math.max(0, Math.min(level, lines.length ? lines[lines.length - 1].level + 1 : 0)) }]
-    : lines;
+    : lines);
   const parsed = mode === 'text' ? parseGoalText(text) : null;
   const preview = (() => {
     try { return goalLinesToNodes(withPending(), referenceForLines()); }
@@ -56,6 +65,15 @@ function ContentEditor({ initial, onDone, onBack }: { initial: GoalNode[]; onDon
     setPending('');
     setLevel(next[next.length - 1].level);
     setSelected(null);
+    setError('');
+  }
+
+  function newLine() {
+    if (selected === null) { commitLine(); return; }
+    const index = selected + 1;
+    focusRow.current = index;
+    setLines(current => insertTaskLineAfter(current, selected));
+    setSelected(index);
     setError('');
   }
 
@@ -110,8 +128,8 @@ function ContentEditor({ initial, onDone, onBack }: { initial: GoalNode[]; onDon
 
   function toggleLeaf(index: number) {
     try {
-      const current = goalLinesToNodes(lines, referenceForLines());
-      const node = flatten(current)[index];
+      const current = goalLinesToNodes(withoutBlankTaskLines(lines), referenceForLines());
+      const node = flatten(current)[withoutBlankTaskLines(lines.slice(0, index)).length];
       if (!node || node.children.length) return;
       const next = toggleNode(current, node.id);
       setReference(next);
@@ -145,16 +163,16 @@ function ContentEditor({ initial, onDone, onBack }: { initial: GoalNode[]; onDon
       <div className="gp-lines">
         {lines.length === 0 && <p className="gp-empty">从第一步开始拆解目标</p>}
         {lines.map((line, index) => {
-          const node = previewFlat[index];
+          const node = line.title.trim() ? previewFlat[withoutBlankTaskLines(lines.slice(0, index)).length] : undefined;
           const leaf = index === lines.length - 1 || lines[index + 1].level <= line.level;
           return <div className={`gp-line ${selected === index ? 'gp-line--selected' : ''}`} key={index} style={{ '--gp-depth': line.level } as React.CSSProperties}>
             {leaf && node ? <button type="button" className={`gp-check ${node.completed ? 'gp-check--done' : ''}`} title={node.completed ? '取消完成' : '标记完成'} aria-label={`${node.completed ? '取消完成' : '标记完成'}：${line.title}`} onClick={() => toggleLeaf(index)}><Check size={15} /></button> : <span className="gp-line-dot" />}
-            <input aria-label={`第 ${index + 1} 行目标`} value={line.title} onFocus={() => setSelected(index)} onChange={event => setLines(current => current.map((item, i) => i === index ? { ...item, title: event.target.value } : item))} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); setSelected(null); event.currentTarget.blur(); } }} />
+            <input ref={element => { if (element) rowInputs.current.set(index, element); else rowInputs.current.delete(index); }} aria-label={`第 ${index + 1} 行目标`} value={line.title} onFocus={() => setSelected(index)} onChange={event => setLines(current => current.map((item, i) => i === index ? { ...item, title: event.target.value } : item))} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); newLine(); } }} />
           </div>;
         })}
       </div>
       <div className="gp-entry"><span>第 {Math.min(level, lines.length ? lines[lines.length - 1].level + 1 : 0) + 1} 层</span><input value={pending} placeholder="添加下一步" onFocus={() => setSelected(null)} onChange={event => setPending(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLine(); } }} /></div>
-      <div className="gp-tools" role="group" aria-label="层级编辑工具"><button type="button" onClick={commitLine}><CornerDownLeft size={17} />换行</button><button type="button" onClick={() => adjustLevel(1)}><Indent size={17} />缩进</button><button type="button" onClick={() => adjustLevel(-1)}><Outdent size={17} />缩退</button><button type="button" onClick={deleteLine}><Trash2 size={17} />删除</button></div>
+      <div className="gp-tools" role="group" aria-label="层级编辑工具"><button type="button" onClick={newLine}><CornerDownLeft size={17} />换行</button><button type="button" onClick={() => adjustLevel(1)}><Indent size={17} />缩进</button><button type="button" onClick={() => adjustLevel(-1)}><Outdent size={17} />缩退</button><button type="button" onClick={deleteLine}><Trash2 size={17} />删除</button></div>
     </> : <div className="gp-text-wrap"><textarea spellCheck={false} aria-label="Markdown 目标内容" placeholder={'- 第一步\n\t- 子步骤'} value={text} onChange={event => { setText(event.target.value); setError(''); }} onKeyDown={onTextKeyDown} /><small>每行 - 标题；支持 Tab 或每层 2 / 4 个空格缩进</small></div>}
     {error && <p className="gp-error" role="alert">{error}</p>}
     {mode === 'text' && parsed?.error && !error && <p className="gp-error" role="alert">{parsed.error}</p>}

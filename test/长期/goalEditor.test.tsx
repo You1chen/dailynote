@@ -19,8 +19,10 @@ vi.mock('react', async original => ({
     }];
   },
   useEffect: () => undefined,
+  useRef: (initial: unknown) => ({ current: initial }),
 }));
 vi.mock('../../src/contexts/BackButtonContext', () => ({ useRegisterBackHandler: () => undefined }));
+vi.mock('../../src/components/PlanMindmap', () => ({ default: () => null }));
 vi.mock('../../src/components/ConfirmDialog', async () => ({
   default: ({ open, message, onConfirm, onCancel }: { open: boolean; message: string; onConfirm: () => void; onCancel: () => void }) =>
     open ? createElement('div', { role: 'alertdialog' }, message,
