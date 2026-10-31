@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addDays, startOfWeek, format, isSameDay } from 'date-fns';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -27,6 +27,16 @@ export default function WeekViewPage() {
   const [plans, setPlans] = useState<(DailyPlan | undefined)[]>([]);
   // 编辑弹窗：undefined=关闭
   const [editingCourse, setEditingCourse] = useState<Course | undefined>(undefined);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [gridWidth, setGridWidth] = useState(0);
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setGridWidth(entry.contentRect.width));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useRegisterBackHandler(() => {
     navigate(-1);
@@ -68,6 +78,9 @@ export default function WeekViewPage() {
   const sleepEnd = prefs.sleepEnd;
   const visibleHours = hideSleep ? getVisibleHours(sleepStart, sleepEnd) : 24;
   const gridHeight = visibleHours * hourHeight + barHeight;
+  const timeColWidth = gridWidth > 0 ? Math.min(TIME_COL_W, gridWidth * 0.15) : TIME_COL_W;
+  const dayColWidth = gridWidth > 0 ? (gridWidth - timeColWidth) / 7 : COL_W;
+  const gridWidthStyle = gridWidth > 0 ? { width: gridWidth } : undefined;
   const gridGeo = { hideSleep, sleepStart, sleepEnd, hourHeight, barHeight, gridHeight };
 
   /**
@@ -79,7 +92,7 @@ export default function WeekViewPage() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top - GRID_HEADER_H;
     if (y < 0) return;
-    const idx = Math.floor((x - TIME_COL_W) / COL_W);
+    const idx = Math.floor((x - timeColWidth) / dayColWidth);
     if (idx < 0 || idx > 6) return;
     const minutes = topToMinutes(y, gridGeo);
     if (minutes == null) return;
@@ -110,11 +123,11 @@ export default function WeekViewPage() {
         </button>
       </div>
 
-      <div className="wv-scroll">
-        <div className="wv-inner" style={{ height: GRID_HEADER_H + gridHeight }} onClick={handleGridClick}>
+      <div className="wv-scroll" ref={scrollRef}>
+        <div className="wv-inner" style={{ height: GRID_HEADER_H + gridHeight, ...gridWidthStyle, '--time-col-width': `${timeColWidth}px` } as React.CSSProperties} onClick={handleGridClick}>
           {/* 极淡列分隔线（替代原来的格子边框） */}
           {Array.from({ length: 8 }, (_, i) => (
-            <div key={`col-${i}`} className="wv-col-line" style={{ left: TIME_COL_W + i * COL_W }} />
+            <div key={`col-${i}`} className="wv-col-line" style={{ left: timeColWidth + i * dayColWidth }} />
           ))}
           {/* 表头：星期 + 日期 + 周次 + 放假角标 */}
           <div className="wv-head" style={{ height: GRID_HEADER_H }}>
@@ -126,7 +139,7 @@ export default function WeekViewPage() {
                 <div
                   key={ds}
                   className={`wv-head-cell${isSameDay(d, new Date()) ? ' wv-head-cell--today' : ''}`}
-                  style={{ left: TIME_COL_W + i * COL_W, width: COL_W }}
+                  style={{ left: timeColWidth + i * dayColWidth, width: dayColWidth }}
                 >
                   <span className="wv-head-day">{DAY_LABELS[(i + 1) % 7]}</span>
                   <span className="wv-head-date">{format(d, 'M/d')}</span>
@@ -171,21 +184,29 @@ export default function WeekViewPage() {
                 <div
                   key={b.id}
                   className="wv-task-block"
-                  title={`${b.taskTitle} · ${b.startTime}-${b.endTime}`}
+                  title={b.taskTitle}
+                  aria-label={b.taskTitle}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/?date=${weekDateStrs[i]}&block=${b.id}`);
+                    }
+                  }}
                   onClick={e => {
                     e.stopPropagation();
                     navigate(`/?date=${weekDateStrs[i]}&block=${b.id}`);
                   }}
                   style={{
-                    left: TIME_COL_W + i * COL_W + 2,
-                    width: COL_W - 6,
+                    left: timeColWidth + i * dayColWidth + 2,
+                    width: dayColWidth - 4,
                     top: GRID_HEADER_H + rect.top,
                     height: rect.height,
                   }}
                 >
-                  <div className="wv-block-inner">
-                    <span className="wv-block-time">{b.startTime}-{b.endTime}</span>
-                    <span className="wv-block-title">{b.taskTitle}</span>
+                  <div className="wv-block-inner wv-task-block-inner">
+                    <span className="wv-block-title" aria-hidden="true">{Array.from(b.taskTitle).slice(0, 2).join('')}</span>
                   </div>
                 </div>
               );
@@ -204,8 +225,8 @@ export default function WeekViewPage() {
                   className="wv-course-block"
                   title={`${c.name} · ${c.startTime}-${c.endTime}${c.location ? ` · ${c.location}` : ''}`}
                   style={{
-                    left: TIME_COL_W + i * COL_W + 2,
-                    width: COL_W - 6,
+                    left: timeColWidth + i * dayColWidth + 2,
+                    width: dayColWidth - 4,
                     top: GRID_HEADER_H + rect.top,
                     height: rect.height,
                   }}
@@ -214,10 +235,8 @@ export default function WeekViewPage() {
                     setEditingCourse(c);
                   }}
                 >
-                  <div className="wv-block-inner">
-                    <span className="wv-block-time">{c.startTime}-{c.endTime}</span>
-                    <span className="wv-block-title">{c.name}</span>
-                    {c.location && <span className="wv-block-loc">{c.location}</span>}
+                  <div className="wv-block-inner wv-task-block-inner">
+                    <span className="wv-block-title">{Array.from(c.name).slice(0, 2).join('')}</span>
                   </div>
                 </div>
               );

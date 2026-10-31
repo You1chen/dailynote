@@ -180,15 +180,14 @@ describe('目标树搜索', () => {
     expect(hits[0].route).toBe('/goals');
   });
 
-  it('命中的是大愿望时位置文案是「大愿望」', () => {
-    const hits = searchStore(withTree, '攒路费');
-    expect(hits).toHaveLength(1);
-    expect(hits[0].where).toBe('大愿望 · 其他');
+  it('秘密花园的标题与里程碑不泄露到全局搜索', () => {
+    expect(searchStore(withTree, '去海边')).toHaveLength(0);
+    expect(searchStore(withTree, '攒路费')).toHaveLength(0);
   });
 
-  it('大愿望的愿景与动机可被搜索', () => {
-    expect(searchStore(withTree, '礁石上听浪')).toHaveLength(1);
-    expect(searchStore(withTree, '想记住安静')).toHaveLength(1);
+  it('秘密花园的愿景与动机不出现在全局搜索', () => {
+    expect(searchStore(withTree, '礁石上听浪')).toHaveLength(0);
+    expect(searchStore(withTree, '想记住安静')).toHaveLength(0);
   });
 });
 

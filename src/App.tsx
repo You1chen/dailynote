@@ -5,6 +5,7 @@ import TaskBall from './components/TaskBall';
 import SideNav from './components/SideNav';
 import DailyPlanPage from './pages/DailyPlan';
 import LongTermGoalsPage from './pages/LongTermGoals';
+import GardenGate from './components/GardenGate';
 import ReflectionPage from './pages/Reflection';
 import HarvestPage from './pages/Harvest';
 import TrashPage from './pages/Trash';
@@ -62,6 +63,7 @@ function AppShell() {
         <Routes>
           <Route path="/" element={<DailyPlanPage />} />
           <Route path="/goals" element={<LongTermGoalsPage />} />
+          <Route path="/garden" element={<GardenGate><LongTermGoalsPage garden /></GardenGate>} />
           <Route path="/backlog" element={<BacklogPage />} />
           <Route path="/reflection" element={<ReflectionPage />} />
           <Route path="/harvest" element={<HarvestPage />} />

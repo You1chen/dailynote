@@ -110,27 +110,22 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
 
   // ---- 大愿望 / 长期目标 ----
   for (const g of data.longTermGoals) {
-    const isWish = g.kind === 'wish';
+    if (g.kind === 'wish') continue; // 秘密花园内容不出现在全局搜索
     const nodeTitles: string[] = [];
-    if (isWish) {
-      nodeTitles.push(...(g.tasks ?? []).map(t => t.title));
-    } else {
-      // 树可能有多层；旧目标由 effectiveNodes 惰性投影，搜索不需要区分新旧
-      const walkNodes = (nodes: ReturnType<typeof effectiveNodes>) => {
-        for (const node of nodes) {
-          nodeTitles.push(node.title);
-          if (node.children.length > 0) walkNodes(node.children);
-        }
-      };
-      walkNodes(effectiveNodes(g));
-    }
+    const walkNodes = (nodes: ReturnType<typeof effectiveNodes>) => {
+      for (const node of nodes) {
+        nodeTitles.push(node.title);
+        if (node.children.length > 0) walkNodes(node.children);
+      }
+    };
+    walkNodes(effectiveNodes(g));
 
     push(makeHit(
       q,
       `goal:${g.id}`,
-      g.title || (isWish ? '(大愿望)' : '(目标)'),
+      g.title || '(目标)',
       [g.title, g.description, g.vision ?? '', ...nodeTitles],
-      `${isWish ? '大愿望' : '长期目标'}${g.category ? ` · ${g.category}` : ''}`,
+      `长期目标${g.category ? ` · ${g.category}` : ''}`,
       '/goals',
     ));
   }

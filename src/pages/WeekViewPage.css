@@ -50,7 +50,8 @@
 /* 44（时间列）+ 7×52（天列） */
 .wv-inner {
   position: relative;
-  min-width: 408px;
+  min-width: 100%;
+  overflow: hidden;
 }
 
 /* ---- 表头（sticky top） ---- */
@@ -122,10 +123,10 @@
 }
 
 .wv-hour-label {
-  width: 44px;
-  padding: 2px 8px 0 0;
+  width: var(--time-col-width, 44px);
+  padding: 2px 4px 0 0;
   text-align: right;
-  font-size: 10.5px;
+  font-size: clamp(7px, 2.5vw, 10.5px);
   color: var(--color-text-muted);
   font-weight: 500;
   flex-shrink: 0;
@@ -213,6 +214,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   letter-spacing: 0.01em;
+}
+
+.wv-task-block-inner {
+  align-items: center;
+  justify-content: flex-start;
+  padding: 4px 1px;
+}
+
+.wv-task-block-inner .wv-block-title {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  white-space: nowrap;
+  text-overflow: clip;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .wv-block-loc {

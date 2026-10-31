@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus, Target, ChevronDown, ChevronUp, Trash2, CheckCircle2, Circle,
   Star, CalendarDays, Sparkles, Heart, Feather, Pencil, X,
@@ -65,13 +66,14 @@ const EMPTY_WISH: WishDraft = {
   title: '', vision: '', why: '', targetDate: '', status: 'active', tasks: [], dirty: false,
 };
 
-export default function LongTermGoalsPage() {
+export default function LongTermGoalsPage({ garden = false }: { garden?: boolean }) {
+  const navigate = useNavigate();
   const {
     goals, loading, addGoal, addWish, setWishStatus, updateGoal, removeGoal,
     addTask, toggleTask, removeTask,
   } = useGoals();
 
-  // ---- 大愿望编辑器 ----
+  // ---- 愿望编辑器 ----
   const [wishDraft, setWishDraft] = useState<WishDraft | null>(null);
   const [wishMilestone, setWishMilestone] = useState('');
 
@@ -226,7 +228,7 @@ export default function LongTermGoalsPage() {
 
   function askRemoveGoal(goal: LongTermGoal, isWish: boolean) {
     setConfirm({
-      message: `删除${isWish ? '大愿望' : '长期目标'}「${goal.title}」？可以在回收站恢复。`,
+      message: `删除${isWish ? '愿望' : '长期目标'}「${goal.title}」？可以在回收站恢复。`,
       confirmText: '删除',
       onConfirm: async () => {
         const ok = await removeGoal(goal.id!);
@@ -271,8 +273,9 @@ export default function LongTermGoalsPage() {
     if (confirm) { setConfirm(null); return true; }
     if (wishDraft) { requestCloseWish(); return true; }
     if (goalMapId !== null && goalEditor === null) { setGoalMapId(null); return true; }
+    if (garden) { navigate('/goals', { replace: true }); return true; }
     return false;
-  }, [confirm, wishDraft, goalMapId, goalEditor]);
+  }, [confirm, wishDraft, goalMapId, goalEditor, garden, navigate]);
 
   // ============ 渲染：页面 ============
 
@@ -288,21 +291,17 @@ export default function LongTermGoalsPage() {
   return (
     <div className="app-container">
       <div className="page-header">
-        <h1 className="page-title">目标与愿望</h1>
+        <h1 className="page-title">{garden ? '秘密花园' : '目标'}</h1>
         <span className="goal-head-acts">
-          <button className="btn btn-outline btn-sm" onClick={openWishCreate}>
-            <Star size={15} /> 大愿望
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={openGoalCreate}>
-            <Plus size={16} /> 目标
-          </button>
+          {garden ? <><button className="btn btn-outline btn-sm" onClick={() => navigate('/goals', { replace: true })}>离开花园</button><button className="btn btn-primary btn-sm" onClick={openWishCreate}><Plus size={15} /> 写下愿望</button></> : <button className="btn btn-primary btn-sm" onClick={openGoalCreate}><Plus size={16} /> 目标</button>}
         </span>
       </div>
 
-      {/* ============ 大愿望 ============ */}
-      <section className="wish-section">
+      {!garden && <button className="btn btn-outline garden-entry" onClick={() => navigate('/garden')}><span>✿ 秘密花园</span><span aria-hidden="true">进入 →</span></button>}
+      {/* 愿望内容只在通过密码验证的花园内挂载 */}
+      {garden && <section className="wish-section">
         <div className="section-title">
-          <Star size={14} /> 大愿望
+          <Star size={14} /> 愿望
           <span className="section-count">{wishes.length}</span>
         </div>
 
@@ -313,7 +312,7 @@ export default function LongTermGoalsPage() {
             <p className="wish-empty-title">还没有写下一件真正想做到的事</p>
             <p className="wish-empty-sub">先把它好好记住，不必急着完成。</p>
             <button className="wish-empty-btn" onClick={openWishCreate}>
-              <Star size={13} /> 写下第一个大愿望
+              <Star size={13} /> 写下第一个愿望
             </button>
           </div>
         ) : wishes.map(wish => {
@@ -339,7 +338,7 @@ export default function LongTermGoalsPage() {
                   <button
                     className="wish-icon-btn"
                     onClick={e => { e.stopPropagation(); openWishEdit(wish); }}
-                    aria-label="编辑大愿望"
+                    aria-label="编辑愿望"
                   >
                     <Pencil size={14} />
                   </button>
@@ -462,10 +461,10 @@ export default function LongTermGoalsPage() {
             </div>
           );
         })}
-      </section>
+      </section>}
 
       {/* ============ 长期目标 ============ */}
-      <section className="goal-section">
+      {!garden && <section className="goal-section">
         <div className="section-title">
           <Target size={14} /> 长期目标
           <span className="section-count">{plainGoals.length}</span>
@@ -499,14 +498,14 @@ export default function LongTermGoalsPage() {
             </div>
           );
         })}
-      </section>
+      </section>}
 
-      {/* ============ 大愿望编辑器 ============ */}
+      {/* ============ 愿望编辑器 ============ */}
       {wishDraft && (
         <div className="modal-overlay" onClick={requestCloseWish}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-head">
-              <h3 className="modal-title">{wishDraft.id != null ? '编辑大愿望' : '新增大愿望'}</h3>
+              <h3 className="modal-title">{wishDraft.id != null ? '编辑愿望' : '新增愿望'}</h3>
               <button className="modal-x" onClick={requestCloseWish} aria-label="关闭">
                 <X size={18} />
               </button>

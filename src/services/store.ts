@@ -30,6 +30,7 @@
 
 import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, TaskBoard, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
+import { loadCourseTimeCombinations, saveCourseTimeCombinations } from '../utils/courseTimeCombinations';
 import type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { CATEGORY_FILES, CATEGORY_NAMES, CATEGORY_TABLES, DEFAULT_WRITE_ORDER, NUMERIC_TABLES, emptyStore } from './storeSchema';
 export type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
@@ -1116,12 +1117,17 @@ export async function importJSONIntoStore(json: string): Promise<number> {
     recoverTimestampedActivity(store);
   }, { skipActivity: true });
   resetNextId();
+  // Older backups omit preferences: preserve this device's combinations in that case.
+  const imported = JSON.parse(trimmed);
+  if (Array.isArray(imported.courseTimeCombinations)) {
+    saveCourseTimeCombinations(imported.courseTimeCombinations);
+  }
   return count;
 }
 
 /** 当前内存数据的 JSON 字符串（手动导出 / 备份包） */
 export function exportJSON(): string {
-  return JSON.stringify(snapshot(), null, 2);
+  return JSON.stringify({ ...snapshot(), courseTimeCombinations: loadCourseTimeCombinations() }, null, 2);
 }
 
 function backupFileName(): string {

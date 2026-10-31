@@ -16,6 +16,7 @@ vi.mock('react', async importOriginal => ({
   useCallback: (callback: unknown) => callback,
 }));
 
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('../../src/contexts/BackButtonContext', () => ({ useRegisterBackHandler: vi.fn() }));
 vi.mock('../../src/components/ConfirmDialog', () => ({ default: () => null }));
 
@@ -67,7 +68,7 @@ const emptyGoal: LongTermGoal = {
   updatedAt: 0,
 };
 
-interface Opts { expandedWishId?: number | null }
+interface Opts { expandedWishId?: number | null; garden?: boolean }
 
 function render(goals: LongTermGoal[], opts: Opts = {}): string {
   state.values = [
@@ -78,32 +79,41 @@ function render(goals: LongTermGoal[], opts: Opts = {}): string {
     opts.expandedWishId ?? null,        // expandedWishId
     '',                                 // milestoneDraft
   ];
-  return renderToStaticMarkup(<LongTermGoalsPage />);
+  return renderToStaticMarkup(<LongTermGoalsPage garden={opts.garden} />);
 }
 
 beforeEach(() => { state.values = []; });
 
-describe('目标页 — 大愿望默认收起', () => {
+describe('秘密花园与目标页隔离', () => {
+  it('目标页只有花园入口，不挂载愿望卡片或创建愿望按钮', () => {
+    const html = render([wishGoal, goalWithTree]);
+    expect(html).toContain('秘密花园');
+    expect(html).toContain('英语考试');
+    expect(html).not.toContain('去海边');
+    expect(html).not.toContain('坐在礁石上听浪');
+    expect(html).not.toContain('写下愿望');
+    expect(html).not.toContain('wish-card');
+  });
   it('收起时只有标题、状态与进度，不铺开愿景和里程碑', () => {
-    const html = render([wishGoal]);
+    const html = render([wishGoal], { garden: true });
     expect(html).toContain('去海边');
     expect(html).toContain('进行中');
     expect(html).toContain('1/1 个里程碑');
     expect(html).not.toContain('坐在礁石上听浪');
     expect(html).not.toContain('攒路费');
     // 从摘要就能进入编辑
-    expect(html).toContain('编辑大愿望');
+    expect(html).toContain('编辑愿望');
   });
 
   it('展开后才显示愿景、动机和里程碑', () => {
-    const html = render([wishGoal], { expandedWishId: 1 });
+    const html = render([wishGoal], { expandedWishId: 1, garden: true });
     expect(html).toContain('坐在礁石上听浪');
     expect(html).toContain('想记住安静');
     expect(html).toContain('攒路费');
   });
 
   it('没有里程碑时显示「尚未拆解」，不是 0/0', () => {
-    const html = render([{ ...wishGoal, tasks: [] }]);
+    const html = render([{ ...wishGoal, tasks: [] }], { garden: true });
     expect(html).toContain('尚未拆解');
     expect(html).not.toContain('0/0');
   });

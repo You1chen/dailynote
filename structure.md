@@ -32,7 +32,8 @@
 | 路由 | 页面 | 内容 |
 | --- | --- | --- |
 | `/` | DailyPlan | 时间网格、时间块 CRUD、验收、课程块只读；顶部可打开今日结算 |
-| `/goals` | LongTermGoals | 大愿望 + 长期目标摘要；目标地图逐层查看；三行编辑与全屏 TODO/Markdown 树编辑 |
+| `/goals` | LongTermGoals | 长期目标摘要与秘密花园入口；不显示或创建愿望；目标地图与全屏树编辑 |
+| `/garden` | GardenGate + LongTermGoals | 本机数字密码验证后展示/创建愿望；离开或刷新重新上锁 |
 | `/backlog` | BacklogPage | 遗留问题（状态、历时、气泡） |
 | `/reflection` | Reflection | 三段式反思 |
 | `/harvest` | Harvest | 每日收获 |

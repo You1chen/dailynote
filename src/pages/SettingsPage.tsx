@@ -4,6 +4,7 @@ import { ArrowLeft, RotateCcw, Camera } from 'lucide-react';
 import { usePreferences, type ThemeMode } from '../hooks/usePreferences';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import AvatarCropper from '../components/AvatarCropper';
+import CourseTimeSettings from '../components/CourseTimeSettings';
 import './SettingsPage.css';
 
 const AVATAR_OPTIONS = [
@@ -210,6 +211,11 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      <CourseTimeSettings
+        combinations={prefs.courseTimeCombinations}
+        onChange={courseTimeCombinations => updatePrefs({ courseTimeCombinations })}
+      />
 
       {/* === 恢复默认 === */}
       <section className="settings-section">

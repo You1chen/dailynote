@@ -287,6 +287,18 @@
   color: var(--color-primary);
 }
 
+.settings-course-time-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.settings-course-time-item > span {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 恢复默认按钮 */
 .settings-reset-btn {
   width: 100%;

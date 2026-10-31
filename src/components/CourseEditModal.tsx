@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getSemester, saveCourse } from '../db';
+import { isValidCourseTime, loadCourseTimeCombinations } from '../utils/courseTimeCombinations';
 import type { Course } from '../types';
 // settings-chip / settings-time-row / settings-field-hint 等表单样式复用设置页
 import '../pages/SettingsPage.css';
@@ -72,11 +73,20 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
       : DEFAULT_FORM,
   );
   const [formError, setFormError] = useState('');
+  const combinations = loadCourseTimeCombinations();
+  const changeStartTime = (startTime: string) => {
+    const match = combinations.find(pair => pair.startTime === startTime);
+    setForm({ ...form, startTime, endTime: match?.endTime ?? form.endTime });
+  };
 
   const handleSave = async () => {
     const name = form.name.trim();
     if (!name) {
       setFormError('请输入课程名');
+      return;
+    }
+    if (!isValidCourseTime(form.startTime) || !isValidCourseTime(form.endTime)) {
+      setFormError('请输入有效的开始和结束时间');
       return;
     }
     if (form.endTime <= form.startTime) {
@@ -173,22 +183,38 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
         </div>
         <div className="form-group">
           <label className="label">上课时间</label>
+          {combinations.length > 0 && (
+            <div className="settings-chip-row" style={{ marginBottom: 8 }}>
+              {combinations.map(pair => (
+                <button
+                  key={pair.startTime}
+                  className={`settings-chip ${form.startTime === pair.startTime && form.endTime === pair.endTime ? 'settings-chip--active' : ''}`}
+                  onClick={() => changeStartTime(pair.startTime)}
+                >
+                  {pair.startTime} → {pair.endTime}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="settings-time-row">
             <input
               className="input input-sm"
               type="time"
+              aria-label="课程开始时间"
               value={form.startTime}
-              onChange={e => setForm({ ...form, startTime: e.target.value })}
+              onChange={e => changeStartTime(e.target.value)}
             />
             <span className="settings-time-sep">—</span>
             <input
               className="input input-sm"
               type="time"
+              aria-label="课程结束时间"
               value={form.endTime}
               onChange={e => setForm({ ...form, endTime: e.target.value })}
             />
           </div>
         </div>
+        <p className="settings-field-hint">选择组合或输入匹配的开始时间会自动填写结束时间，之后仍可手动调整。组合可在设置中管理。</p>
         <div className="form-group">
           <label className="label">单双周</label>
           <div className="settings-chip-row">
