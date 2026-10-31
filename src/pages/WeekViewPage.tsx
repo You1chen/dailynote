@@ -206,7 +206,7 @@ export default function WeekViewPage() {
                   }}
                 >
                   <div className="wv-block-inner wv-task-block-inner">
-                    <span className="wv-block-title" aria-hidden="true">{Array.from(b.taskTitle).slice(0, 2).join('')}</span>
+                    <span className="wv-block-title" aria-hidden="true">{Array.from(b.taskTitle).slice(0, 5).join('')}</span>
                   </div>
                 </div>
               );
@@ -236,7 +236,7 @@ export default function WeekViewPage() {
                   }}
                 >
                   <div className="wv-block-inner wv-task-block-inner">
-                    <span className="wv-block-title">{Array.from(c.name).slice(0, 2).join('')}</span>
+                    <span className="wv-block-title">{Array.from(c.name).slice(0, 5).join('')}</span>
                   </div>
                 </div>
               );

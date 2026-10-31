@@ -73,16 +73,16 @@ export function usePreferences() {
   }, []);
 
   const updatePrefs = useCallback((partial: Partial<UserPreferences>) => {
-    setPrefs(prev => {
-      const next = { ...prev, ...partial };
-      savePrefs(next);
-      return next;
-    });
+    const next = { ...loadPrefs(), ...partial };
+    savePrefs(next);
+    setPrefs(next);
+    window.dispatchEvent(new Event(PREFERENCES_CHANGED));
   }, []);
 
   const resetPrefs = useCallback(() => {
-    setPrefs({ ...DEFAULTS });
     savePrefs({ ...DEFAULTS });
+    setPrefs({ ...DEFAULTS });
+    window.dispatchEvent(new Event(PREFERENCES_CHANGED));
   }, []);
 
   return { prefs, updatePrefs, resetPrefs };

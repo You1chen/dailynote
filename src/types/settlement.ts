@@ -2,6 +2,8 @@
 export type ActivityCategory = 'todo' | 'ddl' | 'plan' | 'goal' | 'wish-milestone' | 'small-wish' | 'chore' | 'idea';
 export type ActivityAction = 'create' | 'complete' | 'delete' | 'shelve' | 'progress';
 export interface ActivityEvent {
+  /** Legacy secret-garden event labels are migrated to authenticated ciphertext. */
+  encrypted?: import('./garden').GardenCipher;
   id: string;
   date: string;
   occurredAt: number;

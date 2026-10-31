@@ -173,12 +173,13 @@
   opacity: 0.9;
 }
 
-/* ---- 任务块（只读） ---- */
+/* ---- 任务块（点击打开日计划详情） ---- */
 .wv-task-block {
   position: absolute;
   border-radius: 10px;
   background: var(--color-primary-bg);
   border-left: 3px solid var(--color-primary);
+  cursor: pointer;
   overflow: hidden;
   z-index: 3;
   min-height: 20px;

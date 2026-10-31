@@ -73,7 +73,7 @@ describe('结算实际活动与净推进', () => {
     expect(summary.choresCompleted).toBe(0);
     expect(summary.ideasCreated).toBe(1);
   });
-  it('DDL 撤销重做、大愿望里程碑分别保留净数', async () => {
+  it('DDL 保留净数，秘密花园不写公开活动记录', async () => {
     await mutate(() => {
       getStore().ddls = [{ id: 1, name: '交作业', deadlineDate: date(), deadlineTime: '', location: '', notes: '', images: [], createdAt: 0, updatedAt: 0 }];
       getStore().longTermGoals = [{ ...goal(), kind: 'wish', tasks: [{ id: 'm', title: '里程碑', completed: false, createdAt: 0 }] }];
@@ -81,7 +81,12 @@ describe('结算实际活动与净推进', () => {
     for (const complete of [true, false, true]) await mutate(() => { getStore().ddls[0].dismissedAt = complete ? Date.now() : 0; getStore().longTermGoals[0].tasks[0].completed = complete; });
     const summary = buildSettlement(getStore().activityEvents, date());
     expect(summary.ddlCompleted).toBe(1);
-    expect(summary.wishMilestones[0]).toMatchObject({ title: '里程碑', delta: 1, parentTitle: '学习' });
+    expect(summary.wishMilestones).toEqual([]);
+    expect(getStore().activityEvents.some(e => e.category === 'wish-milestone')).toBe(false);
+    const historical = { id: 'old-wish', date: date(), occurredAt: 1, category: 'wish-milestone' as const, action: 'progress' as const, entityId: 'secret', title: '私密里程碑', parentTitle: '私密愿望', from: 0, to: 1 };
+    const publicSummary = buildSettlement([...getStore().activityEvents, historical], date());
+    expect(JSON.stringify(publicSummary)).not.toContain('私密');
+    expect(publicSummary.wishMilestones).toEqual([]);
   });
   it('日期 JSON/快照/备份导入保留活动，反复导入去重且旧备份不伪造活动', async () => {
     await db.saveIdea({ text: '灵感', date: '2000-01-01', createdAt: 0, updatedAt: 0 });

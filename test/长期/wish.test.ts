@@ -17,10 +17,14 @@ import { _resetForTest, initStore, getStore } from '../../src/services/store';
 import * as db from '../../src/db';
 import { effectiveNodes } from '../../src/utils/goalTree';
 import type { LongTermGoal } from '../../src/types';
+import { setupGarden, decryptWish, lockGarden, unlockGarden } from '../../src/services/gardenSecurity';
+const readGoals = async () => Promise.all((await db.getAllGoals()).map(g => g.encrypted ? decryptWish(g) : g));
 
 beforeEach(async () => {
   Object.keys(mem).forEach(k => delete mem[k]);
   await _resetForTest();
+  lockGarden();
+  await setupGarden('1234');
 });
 
 const wish = (over: Partial<LongTermGoal> = {}): LongTermGoal => ({
@@ -40,7 +44,7 @@ const wish = (over: Partial<LongTermGoal> = {}): LongTermGoal => ({
 describe('大愿望', () => {
   it('保存后能读回愿景、期望日期与状态', async () => {
     const id = await db.saveGoal(wish());
-    const saved = (await db.getAllGoals()).find(g => g.id === id)!;
+    const saved = (await readGoals()).find(g => g.id === id)!;
     expect(saved.kind).toBe('wish');
     expect(saved.vision).toBe('坐在礁石上听一整晚的浪');
     expect(saved.targetDate).toBe('2027-07-01');
@@ -50,14 +54,14 @@ describe('大愿望', () => {
   it('与长期目标同表共存，靠 kind 区分', async () => {
     await db.saveGoal(wish());
     await db.saveGoal({ title: '考过六级', description: '', category: '学业', tasks: [], createdAt: 0, updatedAt: 0 });
-    const all = await db.getAllGoals();
+    const all = await readGoals();
     expect(all.filter(g => g.kind === 'wish')).toHaveLength(1);
     expect(all.filter(g => g.kind !== 'wish')).toHaveLength(1);
   });
 
   it('旧数据没有 kind，按长期目标处理，不丢字段', async () => {
     const id = await db.saveGoal({ title: '旧目标', description: '说明', category: '学业', tasks: [], createdAt: 0, updatedAt: 0 });
-    const old = (await db.getAllGoals()).find(g => g.id === id)!;
+    const old = (await readGoals()).find(g => g.id === id)!;
     expect(old.kind).toBeUndefined();
     expect(old.description).toBe('说明');
   });
@@ -69,16 +73,20 @@ describe('大愿望', () => {
         { id: 'm2', title: '订票', completed: false, createdAt: 0 },
       ],
     }));
-    const saved = (await db.getAllGoals()).find(g => g.id === id)!;
+    const saved = (await readGoals()).find(g => g.id === id)!;
     expect(saved.tasks.filter(t => t.completed)).toHaveLength(1);
   });
 
   it('状态改变后落盘并在重启后仍在', async () => {
     const id = await db.saveGoal(wish());
-    const saved = (await db.getAllGoals()).find(g => g.id === id)!;
+    const saved = (await readGoals()).find(g => g.id === id)!;
     await db.saveGoal({ ...saved, status: 'done' });
+    lockGarden();
     await initStore();
-    expect(getStore().longTermGoals.find(g => g.id === id)!.status).toBe('done');
+    expect(getStore().longTermGoals.find(g => g.id === id)!.encrypted).toBeDefined();
+    expect(JSON.stringify(getStore().longTermGoals)).not.toContain('坐在礁石');
+    await unlockGarden('1234');
+    expect((await readGoals()).find(g => g.id === id)!.status).toBe('done');
   });
 
   it('删除进回收站，还原后仍是愿望', async () => {
@@ -91,7 +99,7 @@ describe('大愿望', () => {
     expect(item).toBeTruthy();
 
     await db.restoreFromTrash(item.id!);
-    const restored = (await db.getAllGoals()).find(g => g.id === id)!;
+    const restored = (await readGoals()).find(g => g.id === id)!;
     expect(restored.kind).toBe('wish');
     expect(restored.vision).toBe('坐在礁石上听一整晚的浪');
   });
@@ -102,7 +110,7 @@ describe('愿望编辑闭环', () => {
     const id = await db.saveGoal(wish({
       tasks: [{ id: 'm1', title: '攒钱', completed: true, createdAt: 0 }],
     }));
-    const saved = (await db.getAllGoals()).find(g => g.id === id)!;
+    const saved = (await readGoals()).find(g => g.id === id)!;
 
     await db.saveGoal({
       ...saved,
@@ -115,7 +123,7 @@ describe('愿望编辑闭环', () => {
       ],
     });
 
-    const all = await db.getAllGoals();
+    const all = await readGoals();
     expect(all).toHaveLength(1);
     expect(all[0].id).toBe(id);
     expect(all[0].title).toBe('去海边看日出');
@@ -165,7 +173,7 @@ describe('长期目标树', () => {
       updatedAt: 0,
     });
 
-    const legacy = (await db.getAllGoals()).find(g => g.id === id)!;
+    const legacy = (await readGoals()).find(g => g.id === id)!;
     expect(effectiveNodes(legacy).map(n => n.title)).toEqual(['旧任务']);
     expect(effectiveNodes(legacy)[0].completed).toBe(true);
 
@@ -186,7 +194,7 @@ describe('长期目标树', () => {
     const item = (await db.getTrashItems()).find(t => t.originalTable === 'longTermGoals')!;
     await db.restoreFromTrash(item.id!);
 
-    const restored = (await db.getAllGoals()).find(g => g.id === id)!;
+    const restored = (await readGoals()).find(g => g.id === id)!;
     expect(restored.nodes![0].children.map(n => n.title)).toEqual(['精听', '泛听']);
   });
 });

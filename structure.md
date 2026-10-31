@@ -33,7 +33,7 @@
 | --- | --- | --- |
 | `/` | DailyPlan | 时间网格、时间块 CRUD、验收、课程块只读；顶部可打开今日结算 |
 | `/goals` | LongTermGoals | 长期目标摘要与秘密花园入口；不显示或创建愿望；目标地图与全屏树编辑 |
-| `/garden` | GardenGate + LongTermGoals | 本机数字密码验证后展示/创建愿望；离开或刷新重新上锁 |
+| `/garden` | GardenGate + LongTermGoals | 旧数字密码验证后完成加密迁移并展示/创建愿望；离开、切后台或刷新立即清除内存密钥并重新上锁 |
 | `/backlog` | BacklogPage | 遗留问题（状态、历时、气泡） |
 | `/reflection` | Reflection | 三段式反思 |
 | `/harvest` | Harvest | 每日收获 |
@@ -43,7 +43,7 @@
 | `/week` | WeekViewPage | 周日程（课程过滤 + 当天任务块） |
 | `/trash` | Trash | 回收站 |
 | `/backup` | BackupRestore | 导入导出、存储路径 |
-| `/settings` | SettingsPage | 头像、用户名、主题、默认偏好 |
+| `/settings` | SettingsPage | 五组设置入口：个人与外观、日程与时间、课程、隐私与安全、数据与备份；`?section=` 进入详情 |
 | `/settlement` | Settlement | 按今日实际交互汇总的全屏 Canvas 分页海报，零项隐藏、文字明细可展开 |
 
 无路由页面：`SetupPage`（Boot 阶段渲染）。任务清单无路由，由 `TaskBall` 承载。
@@ -76,6 +76,7 @@ src/
 │   ├── search.ts       全局内容搜索
 │   ├── avatarCrop.ts   裁剪几何、canvas 输出、图片压缩
 │   ├── settlement.ts   实际交互事件检测、按日净进度汇总、海报数据映射
+│   ├── gardenLock.ts   旧版花园数字密码摘要（仅迁移验证，成功后删除）
 │   └── settlementPoster.ts Canvas 海报布局/分页/绘制（单页像素上限）
 │
 ├── db/
@@ -87,6 +88,7 @@ src/
 │   ├── storage.ts      兼容 facade（旧导出名）
 │   ├── ocr.ts          OCR 桥（原生 ML Kit；Web 端不可用）
 │   ├── swUpdate.ts     PWA 更新检测（新版本接管 → 提示刷新）
+│   ├── gardenSecurity.ts 秘密花园混合加密、密钥信封、迁移、解锁/改密、明文导出与快照守卫
 │   └── snapshot.ts     启动快照（IndexedDB 缓存，按日期集合判定是否可复用）
 │
 ├── contexts/BackButtonContext.tsx   Android 返回键
@@ -124,7 +126,7 @@ utils/  →  types/
 
 ## 5. 数据模型
 
-持久化 15 张表。字段定义见 `src/types/index.ts`。
+持久化 16 张表。字段定义见 `src/types/index.ts`；花园密钥信封见 `src/types/garden.ts`。
 
 | 表 | 文件 | 形态 | 关键字段 |
 | --- | --- | --- | --- |
@@ -132,7 +134,8 @@ utils/  →  types/
 | reflections | `days/<date>/reflections.json` | 数组 | `date, period, problem, cause, solution` |
 | harvests | `days/<date>/harvests.json` | 数组 | `date, period, subject, content` |
 | taskItems | `days/<date>/tasks.json` | 数组 | `id:string, title, done, date, sortOrder` |
-| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]`；`kind: wish` = 大愿望（另带 `vision, targetDate, status`）；`nodes?` = 长期目标树（标准文本可编辑、逐层等权递归进度） |
+| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]`；`kind: wish` = 大愿望（另带 `vision, targetDate, status`）；已加密愿望只留 `id, kind, createdAt, updatedAt` 与 `encrypted` 信封，正文全部在密文中 |
+| gardenKeys | `garden-keys.json` | 数组 | `keyId, version, publicKey, salt, iterations, iv, privateKey, updatedAt`：RSA 公钥 + 口令加密的 PKCS8 私钥信封；随备份迁移 |
 | fixedRoutines | `routines.json` | 数组 | `name, timeBlocks[], isActive` |
 | taskTemplates | `templates.json` | 数组 | `name, items[]` |
 | courses | `courses.json` | 数组 | `dayOfWeek:number[], weekType, startWeek, weekCount, semesterStartDate?` |
@@ -144,7 +147,7 @@ utils/  →  types/
 | taskBoard | `taskboard.json` | 单记录（id=1） | `nodes:TaskNode[], order:string[]`；末级节点可带 `shelved`（搁置）与 `doneAt`（完成后 30 秒隐去） |
 | linkGroups | `linkGroups.json` | 数组 | `name, items:LinkGroupItem[]`（自定义关联分组；内置「课程」组不落库） |
 | trashItems | `trash.json` | 数组 | `originalTable, originalId, originalData, deletedAt` |
-| activityEvents | `days/<date>/activity.json` | 按日数组 | 结算用实际交互：`id, date, occurredAt, category, action, entityId, title, from, to, parentId?, parentTitle?` |
+| activityEvents | `days/<date>/activity.json` | 按日数组 | 结算用实际交互：`id, date, occurredAt, category, action, entityId, title, from, to, parentId?, parentTitle?`；花园里程碑的旧标题在迁移时转入 `encrypted`，公开字段改为中性文案 |
 
 约定：
 - `TimeBlock.focusScore / efficiencyScore`：0–10，0 = 未评分。
@@ -158,6 +161,8 @@ utils/  →  types/
 - 扫描只采信能证明「什么时候发生」的字段：TODO 叶子的 `doneAt`、DDL 的 `dismissedAt`、灵感的 `createdAt`（含回收站中可解析的记录）。计划块完成、目标节点推进、大愿望里程碑、TODO 新建都没有完成/创建时间，不推算，也不用 `updatedAt` 冒充。扫描按「类别+动作+实体+日期」与实时事件对齐：同一件事两边都有时保留实时事件，重复启动与重复导入都幂等。
 - `todayStr()` 为设备本地日历日期；全屏日程同用它判断今天，凌晨不再偏到前一天。
 - `Course.semesterStartDate?` 保存所属学期开学日期。旧课程（含回收站）首次加载时补当前学期，未设置学期的在首次设置时补；切换学期不重绑；导入旧备份按备份自身学期补齐。
+- **秘密花园加密**：每条愿望生成独立 AES-256-GCM 内容密钥加密全部内容（含 `nodes` 与未知自定义字段），再用该 `keyId` 对应 RSA-OAEP-3072 公钥包裹内容密钥。私钥 PKCS8 由 PBKDF2-SHA256（310000 次）派生密钥以 AES-GCM 封装，只存密文信封；解锁后的私钥仅驻留内存。`gardenKeys` 按 `keyId` 合并，数字主键冲突不覆盖新信封；导入不同口令的备份可各自保留密钥，未持有对应口令的愿望隐藏且禁止覆盖。更改口令只重包私钥，不改任何愿望密文。
+- 旧数字密码迁移前必须先通过原摘要校验；迁移成功后删除旧 `dailynote_garden_lock`。旧明文愿望、回收站愿望与历史活动标题在一次持久化写入中转为密文；失败则恢复内存原值并保留旧验证信息。存在未迁移明文时禁止导出备份并跳过新快照缓存，避免明文被缓存或带出。已导出到应用外部的旧备份无法追溯改写，只能由用户自行销毁。
 
 ---
 
@@ -173,7 +178,7 @@ Documents/<dir>/
 │     activity.json = 那天实际发生过的交互（结算数据源）
 ├── goals.json  routines.json  templates.json  courses.json
 ├── semester.json  ddls.json  important.json  backlog.json
-├── taskboard.json  linkGroups.json  trash.json
+├── taskboard.json  linkGroups.json  trash.json  garden-keys.json
 └── dailynote-backup-<时间戳>.json     （导出存档，不参与读取）
 ```
 
@@ -251,7 +256,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | useDailyPlan(date) | plan, loading, addBlock, addFullBlock, updateBlock, removeBlock, importFromRoutine, reload |
 | useTaskBoard() | nodes, leaves, undone, loading, saveTree, toggle, remove, reorder, reload |
 | useTaskBadge() | count |
-| useGoals() | goals, loading, addGoal, addWish, setWishStatus, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload；更新返回是否落盘成功 |
+| useGoals() | goals, loading, addGoal, addWish, setWishStatus, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload；更新返回是否落盘成功；只返回当前已解锁密钥可解的愿望，保存时再加密 |
 | useReflections(date) | reflections, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllReflections） |
 | useHarvests(date) | harvests, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllHarvests） |
 | useBacklog() | items, loading, addItem, updateItem, changeStatus, removeItem, reload |
@@ -261,7 +266,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | useImportantBadge() | count（剩余 < 3 天且未收起） |
 | useTrash() | items, loading, restore, permDelete, clearAll, reload |
 | useLinkGroups() | groups, loading, addGroup, removeGroup, addItem, removeItem, reload（DDL 关联的自定义分组） |
-| usePreferences() | prefs（含 `futureOnly` 只看未来）、updatePrefs、resetPrefs |
+| usePreferences() | prefs（含 `futureOnly` 只看未来、课程时间组合）、updatePrefs、resetPrefs；更新广播到同页面消费者，从最新持久化值合并 |
 
 ---
 
@@ -279,6 +284,8 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | MindSheet | 425 | 杂念底部面板：小愿望 / 琐事 / 灵感三型，页头按当前类型显示；灵感的 `…` 进入可改标题、详情、标签的独立编辑页 | DailyPlan、Harvest、TaskBall |
 | FullscreenSchedule | 306 | 全屏日程网格 | DailyPlan |
 | AvatarCropper | 297 | 头像裁剪 | SettingsPage |
+| GardenGate | 31 | 花园解锁/首次加密：验证旧数字密码、迁移、切后台或离开即清空内存密钥并卸载明文 | App `/garden` |
+| GardenSecuritySettings | 40 | 花园加密状态、更改口令（成功后清空输入并上锁） | SettingsPage |
 | CourseEditModal | 233 | 课程新建/编辑 | CoursesPage、WeekViewPage |
 | DayNavigator | 140 | 月历日期选择器 | DailyPlan、Reflection、Harvest、FullscreenSchedule |
 | PreferencePanel | 124 | 偏好底部面板 | DailyPlan |
@@ -297,7 +304,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | --- | --- |
 | DailyPlan | 粘性头部（日期/周条/统计/工具）、FAB 新建、点空白新建、点块编辑或验收、睡眠折叠、只看未来（折叠当前小时之前）、课程块只读、支持 `?date=&new=&block=` |
 | CoursesPage | 列表/课表双视图、学期与特殊日期、折叠不重要时段（24px 条） |
-| WeekViewPage | 7 列周日程、课程按周过滤、点空白/点块跳日计划编辑、睡眠折叠 |
+| WeekViewPage | 七天同屏，计划/课程块竖排前五个 Unicode 字符，完整名称保留；点空白/任务块进入对应日期编辑（等待目标计划加载后消费查询参数），课程打开课程编辑；睡眠折叠 |
 | DdlPage / ImportantPage | 共用 DeadlineListPage：地点、Markdown 备注（编辑/预览）、图片查看（Lightbox）、图片识别（识别全部备注图片）、解除威胁；**关联内容只有 DDL 有**（`allowLinks`，重要的事关闭）；重要的事三天气泡 + 过期一天收起 |
 | BacklogPage | 阻塞中/可推进/已解决/已终止；起始三态（距今/日期/文字）；历时排序；一周宽限气泡 |
 | LongTermGoals | 上半「大愿望」（默认收起，只有摘要；展开见愿景/动机/里程碑；新建与编辑共用表单，里程碑可增删改勾）；下半「长期目标」（摘要点击进入全屏目标地图；新建/编辑为三行页面：名称、全屏 TODO/Markdown 树内容、附件线索；地图从目标根进入一级节点并逐层钻取，每个节点显示等权递归完成度）；两者共用一张表，靠 `kind` 区分 |

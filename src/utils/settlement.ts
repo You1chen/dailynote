@@ -69,9 +69,8 @@ function collect(data: StoreShape): Record<ActivityCategory, Entries> {
     out.plan.set(`${p.date}:${b.id}`, { title: b.taskTitle, progress: b.completed ? 1 : checks.length ? checks.filter(c => c.done).length / checks.length : 0, structure: JSON.stringify(checks.map(c => c.id).sort()), parentId: p.date, parentTitle: p.date });
   }));
   data.longTermGoals.forEach(g => {
-    if (g.kind === 'wish') {
-      g.tasks.forEach(t => out['wish-milestone'].set(`${g.id}:${t.id}`, { title: t.title, progress: t.completed ? 1 : 0, parentId: String(g.id), parentTitle: g.title }));
-    } else {
+    // 秘密花园不向公开的结算记录写入内容或里程碑。
+    if (g.kind !== 'wish') {
       const nodes = effectiveNodes(g);
       const shape = (list: typeof nodes): unknown => list.map(n => [n.id, shape(n.children)]).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
       out.goal.set(String(g.id), { title: g.title, progress: (treeProgress(nodes) ?? 0) / 100, structure: JSON.stringify(shape(nodes)) });
@@ -155,7 +154,8 @@ function pairRenames(
 
 /** Sum signed transitions per identity: undo/redo cannot inflate a day's result. */
 export function buildSettlement(allEvents: readonly ActivityEvent[], date: string): SettlementSummary {
-  const unique = [...new Map(allEvents.map(e => [e.id, e])).values()];
+  const publicEvents = allEvents.filter(e => e.category !== 'wish-milestone');
+  const unique = [...new Map(publicEvents.map(e => [e.id, e])).values()];
   const events = unique.filter(e => e.date === date).sort((a, b) => a.occurredAt - b.occurredAt);
   const count = (category: ActivityCategory, action: ActivityEvent['action']) => {
     const net = new Map<string, number>();

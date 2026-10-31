@@ -57,7 +57,8 @@ export default function TrashPage() {
         <div className="trash-list">
           {items.map(item => {
             const gid = item.id!;
-            const label = TABLE_LABELS[item.originalTable] || item.originalTable;
+            const gardenItem = item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish';
+            const label = gardenItem ? '秘密花园' : TABLE_LABELS[item.originalTable] || item.originalTable;
             const daysLeft = Math.max(
               0,
               30 - Math.floor((Date.now() - item.deletedAt) / (1000 * 60 * 60 * 24))
@@ -67,7 +68,7 @@ export default function TrashPage() {
               <div key={gid} className="trash-item animate-in">
                 <div className="trash-item-info">
                   <span className="trash-item-type">{label}</span>
-                  <span className="trash-item-title">{item.title}</span>
+                  <span className="trash-item-title">{gardenItem ? '秘密花园条目' : item.title}</span>
                   <span className="trash-item-meta">
                     删除于 {new Date(item.deletedAt).toLocaleDateString('zh-CN')}
                     {' · '}

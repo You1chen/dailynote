@@ -12,6 +12,7 @@ import { store, mutate, allocId, deepClone, bindLegacyCourses, type AnyStoreTabl
 import { toggleLeafDone, removeLeaf, setLeafShelved, normalizeOrder } from '../utils/taskTree';
 import { searchStore, type SearchHit } from '../utils/search';
 import { DDL_DEFAULT_TIME } from '../utils/ddl';
+import { decryptGoals, encryptWish } from '../services/gardenSecurity';
 
 // ============ 每日计划 CRUD ============
 
@@ -43,7 +44,8 @@ export async function getAllPlans(): Promise<DailyPlan[]> {
 // ============ 长期目标 CRUD ============
 
 export async function getAllGoals(): Promise<LongTermGoal[]> {
-  return deepClone([...store.longTermGoals].sort((a, b) => b.createdAt - a.createdAt));
+  const goals = deepClone([...store.longTermGoals].sort((a, b) => b.createdAt - a.createdAt));
+  return decryptGoals(goals);
 }
 
 export async function saveGoal(goal: LongTermGoal): Promise<number> {
@@ -56,7 +58,7 @@ export async function saveGoal(goal: LongTermGoal): Promise<number> {
  * 又不想破坏 `saveGoal` 原有的 number 返回值。
  */
 export async function saveGoalDetailed(goal: LongTermGoal): Promise<{ id: number; ok: boolean }> {
-  const clean = deepClone(goal);
+  const clean = await encryptWish(deepClone(goal));
   let resultId = 0;
   const ok = await mutate(() => {
     if (clean.id != null) {
@@ -80,7 +82,7 @@ export async function deleteGoal(id: number): Promise<boolean> {
         originalTable: 'longTermGoals',
         originalId: id,
         originalData: deepClone(goal),
-        title: goal.title,
+        title: goal.kind === 'wish' ? '秘密花园条目' : goal.title,
         deletedAt: Date.now(),
       });
       store.longTermGoals = store.longTermGoals.filter(g => g.id !== id);

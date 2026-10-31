@@ -1,4 +1,5 @@
 import type { ActivityEvent } from './settlement';
+import type { GardenKeyEnvelope } from './garden';
 import type {
   DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem,
   TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, ImportantItem,
@@ -24,6 +25,7 @@ export interface StoreShape {
   taskBoard: TaskBoard[];
   linkGroups: LinkGroup[];
   activityEvents: ActivityEvent[];
+  gardenKeys: GardenKeyEnvelope[];
 }
 
 export interface StorageData extends StoreShape {

@@ -66,6 +66,8 @@ export type WishStatus = 'active' | 'done' | 'paused';
  * kind 缺省视为 'goal'，旧的长期目标数据不需要迁移。
  */
 export interface LongTermGoal {
+  /** Encrypted wish content; other content fields are empty in persisted envelopes. */
+  encrypted?: import('./garden').GardenCipher;
   id?: number;
   kind?: GoalKind;
   title: string;
@@ -375,6 +377,7 @@ export const BACKLOG_BLOCKER_HINTS = ['能力不足', '资源不足', '时间不
 // ============ 回收站 ============
 
 export interface TrashItem {
+  encrypted?: import('./garden').GardenCipher;
   id?: number;
   originalTable: string;     // 来源表名
   originalId: number | string; // 原记录 ID

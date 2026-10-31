@@ -409,6 +409,7 @@ function parseStorageData(text: string): StorageData | null {
       taskBoard: Array.isArray(data.taskBoard) ? data.taskBoard : [],
       linkGroups: Array.isArray(data.linkGroups) ? data.linkGroups : [],
       activityEvents: Array.isArray(data.activityEvents) ? data.activityEvents : [],
+      gardenKeys: Array.isArray(data.gardenKeys) ? data.gardenKeys : [],
     };
   } catch {
     return null;
@@ -499,6 +500,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     taskBoard: taskBoard ?? [],
     linkGroups: linkGroups ?? [],
     activityEvents,
+    gardenKeys: (await readCategory<any>(dir, CATEGORY_FILES.gardenKeys)) ?? [],
   };
 }
 
@@ -567,7 +569,11 @@ function namesFromData(data: StorageData): { dates: string[]; files: string[] } 
 }
 
 /** 落一份快照（失败不影响主流程） */
+function pendingGardenEncryption(): boolean {
+  return store.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) || store.trashItems.some(t => t.originalTable === 'longTermGoals' && t.originalData?.kind === 'wish' && !t.originalData?.encrypted) || store.activityEvents.some(e => e.category === 'wish-milestone' && !e.encrypted);
+}
 function saveSnapshot(): Promise<void> {
+  if (pendingGardenEncryption()) return clearSnapshot();
   const { dates, files } = currentNames();
   return writeSnapshot({ root: getStoragePath(), dates, files, savedAt: Date.now(), data: snapshot() });
 }
@@ -584,6 +590,7 @@ function scheduleSnapshot(): void {
 
 /** 立即落快照（flush / 切后台时用） */
 async function flushSnapshot(): Promise<void> {
+  if (pendingGardenEncryption()) { await clearSnapshot(); return; }
   if (snapTimer) {
     clearTimeout(snapTimer);
     snapTimer = null;
@@ -612,7 +619,7 @@ async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boo
   }
 
   const data = await readNewStructure(dir);
-  if (data) {
+  if (data && !data.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) && !data.trashItems.some(t => t.originalTable === 'longTermGoals' && t.originalData?.kind === 'wish' && !t.originalData?.encrypted) && !data.activityEvents.some(e => e.category === 'wish-milestone' && !e.encrypted)) {
     const names = await listBackendNames(dir);
     const { dates, files } = namesFromData(data);
     await writeSnapshot({
@@ -714,6 +721,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
   for (const { table, file } of CATEGORY_TABLES) {
     writes.push({ relPath: file, json: JSON.stringify(store[table], null, 2), table });
   }
+  writes.sort((a, b) => Number(b.table === 'gardenKeys') - Number(a.table === 'gardenKeys'));
   return { writes, deletes: [] };
 }
 
@@ -734,6 +742,7 @@ interface Fp {
   taskBoard: string;
   linkGroups: string;
   trashItems: string;
+  gardenKeys: string;
 }
 
 function fingerprint(): Fp {
@@ -767,6 +776,7 @@ function fingerprint(): Fp {
     taskBoard: JSON.stringify(store.taskBoard),
     linkGroups: JSON.stringify(store.linkGroups),
     trashItems: JSON.stringify(store.trashItems),
+    gardenKeys: JSON.stringify(store.gardenKeys),
   };
 }
 
@@ -812,7 +822,7 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
   // writeOrder：跨文件操作控制写序（先写"新增"侧，再写"移除"侧）
   const orderIndex = new Map<string, number>();
   (order ?? DEFAULT_WRITE_ORDER).forEach((t, i) => orderIndex.set(t, i));
-  writes.sort((x, y) => (orderIndex.get(x.table) ?? 999) - (orderIndex.get(y.table) ?? 999));
+  writes.sort((x, y) => Number(y.table === 'gardenKeys') - Number(x.table === 'gardenKeys') || (orderIndex.get(x.table) ?? 999) - (orderIndex.get(y.table) ?? 999));
 
   return { writes, deletes };
 }
@@ -917,6 +927,13 @@ function mergeIntoStore(data: StorageData): number {
       }
       count++;
     }
+  }
+
+  for (const envelope of data.gardenKeys) {
+    const existing = store.gardenKeys.find(k => k.keyId === envelope.keyId);
+    if (!existing) store.gardenKeys.push(envelope);
+    else if ((envelope.updatedAt ?? 0) > (existing.updatedAt ?? 0)) Object.assign(existing, envelope, { id: existing.id });
+    count++;
   }
 
   // Immutable event IDs survive backup roundtrips; importing twice cannot duplicate history.
@@ -1034,6 +1051,8 @@ export async function initStore(): Promise<number> {
   // 权限被阻塞时不动内存 store：既不能把磁盘数据误判为空，更不能把空数组写回覆盖磁盘
   if (await storageAccessBlocked()) return INIT_STORAGE_BLOCKED;
 
+  const cached = await readSnapshot(getStoragePath());
+  if (cached && (cached.data.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) || cached.data.trashItems.some(t => t.originalData?.kind === 'wish' && !t.originalData?.encrypted) || cached.data.activityEvents?.some(e => e.category === 'wish-milestone' && !e.encrypted))) await clearSnapshot();
   const { data: backend, oldFormat } = await readBackend();
   const legacy = await readLegacyTablesSafe();
 
@@ -1101,6 +1120,9 @@ export async function importJSONIntoStore(json: string): Promise<number> {
   }
   const data = parseStorageData(trimmed);
   if (!data) throw new Error('不是 DailyNote 数据文件（缺少 version/dailyPlans 字段）');
+  const referenced = [...data.longTermGoals.map(g => g.encrypted?.keyId), ...data.trashItems.map(t => t.originalData?.encrypted?.keyId), ...data.activityEvents.map(e => e.encrypted?.keyId)].filter(Boolean);
+  for (const keyId of referenced) if (![...data.gardenKeys, ...store.gardenKeys].some(k => k.keyId === keyId)) throw new Error('备份缺少花园密钥，无法安全导入');
+  const security = await import('./gardenSecurity'); security.lockGarden();
   // 导入旧备份时，先按备份自己的学期补归属，避免误绑成本机学期。
   const importedStart = data.semester[0]?.startDate;
   if (importedStart) {
@@ -1127,6 +1149,7 @@ export async function importJSONIntoStore(json: string): Promise<number> {
 
 /** 当前内存数据的 JSON 字符串（手动导出 / 备份包） */
 export function exportJSON(): string {
+  if (pendingGardenEncryption()) throw new Error('请先进入秘密花园，验证原密码并完成加密迁移，再导出备份');
   return JSON.stringify({ ...snapshot(), courseTimeCombinations: loadCourseTimeCombinations() }, null, 2);
 }
 

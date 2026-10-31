@@ -415,14 +415,16 @@ export default function DailyPlanPage() {
   const weekDates = weekOf(date);
   // 从周视图跳过来：用同一套面板新建/编辑（参数用掉后清掉，避免刷新重复弹）
   useEffect(() => {
-    if (loading) return;
+    // 日期切换后的首帧仍可能保留上一天的 plan/loading；等目标日期加载完成再消费参数。
+    const requestedDate = searchParams.get('date');
+    if (loading || !plan || plan.date !== date || (requestedDate && requestedDate !== date)) return;
     const newAt = searchParams.get('new');
     const blockId = searchParams.get('block');
     if (!newAt && !blockId) return;
 
     if (blockId) {
       const b = plan?.timeBlocks.find(x => x.id === blockId);
-      if (b) setEditingBlock({ ...b });
+      if (b) setEditingBlock({ ...b, checklist: b.checklist || [] });
     } else if (newAt && /^\d{2}:\d{2}$/.test(newAt)) {
       setNewStartTime(newAt);
       setEditingBlock({
@@ -441,7 +443,7 @@ export default function DailyPlanPage() {
     }
     navigate(`/?date=${date}`, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, plan, searchParams]);
+  }, [loading, plan, searchParams, date]);
   /** 新建时间块（FAB / 空档点击共用） */
   const openNewBlock = useCallback(() => {
     const start = '08:00';

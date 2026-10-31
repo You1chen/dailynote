@@ -3,6 +3,7 @@ import type { LongTermGoal, GoalTask, WishStatus } from '../types';
 import { genId } from '../types';
 import { getAllGoals, saveGoalDetailed, deleteGoal } from '../db';
 
+
 /**
  * 目标数据 Hook。
  *
