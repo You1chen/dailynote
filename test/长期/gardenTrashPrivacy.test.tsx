@@ -5,9 +5,9 @@ vi.mock('../../src/hooks/useTrash',()=>({useTrash:()=>({items:state.items,loadin
 vi.mock('../../src/components/ConfirmDialog',()=>({default:()=>null}));
 import TrashPage from '../../src/pages/Trash';
 describe('garden trash privacy',()=>{
- it('redacts even legacy wish titles outside garden while keeping other trash visible',()=>{
+ it('keeps even legacy wish titles out of public trash while other trash stays visible',()=>{
   state.items=[{id:1,originalTable:'longTermGoals',originalId:2,title:'秘密旧愿望标题',originalData:{kind:'wish'},deletedAt:Date.now()},{id:3,originalTable:'courses',originalId:4,title:'数学课',originalData:{},deletedAt:Date.now()}];
   const html=renderToStaticMarkup(<TrashPage/>);
-  expect(html).not.toContain('秘密旧愿望标题');expect(html).toContain('秘密花园条目');expect(html).toContain('数学课');
+  expect(html).not.toContain('秘密旧愿望标题');expect(html).not.toContain('秘密花园');expect(html).toContain('数学课');
  });
 });

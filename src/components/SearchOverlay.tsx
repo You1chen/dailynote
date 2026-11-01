@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { searchEverything } from '../db';
 import type { SearchHit } from '../utils/search';
+import { hiddenGardenEntries } from '../utils/gardenEntry';
 import './SearchOverlay.css';
 
 interface Props {
@@ -31,6 +32,8 @@ export default function SearchOverlay({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return undefined;
     let alive = true;
+    const hidden = hiddenGardenEntries(q);
+    if (hidden.length) { setHits(hidden); setBusy(false); return undefined; }
     const text = q.trim();
     if (!text) { setHits([]); setBusy(false); return undefined; }
     setBusy(true);

@@ -4,7 +4,7 @@
 | --- | --- |
 | 应用版本 | 1.3.0（`versionName 1.3.0` / `versionCode 6`） |
 | 技术栈 | React 18.3 · TypeScript 5.5 · Vite 5.4 · Capacitor 8.4 · Vitest 4.1 |
-| 规模 | `src/` 104 文件；`test/` 38 个测试文件 / 766 用例 |
+| 规模 | `src/` 120 文件；`test/` 48 个测试文件 / 799 用例 |
 | 形态 | Web/PWA（IndexedDB）· Android APK（公共 Documents） |
 | 数据 | 无后端、无账号；用户目录 JSON 为唯一数据源 |
 | 相关文档 | 变更记录 `PROGRESS.md`；开发规则 `principle.txt` |
@@ -16,7 +16,7 @@
 | 依赖 | 用途 |
 | --- | --- |
 | react / react-dom 18.3 | UI |
-| react-router-dom 6.26 | `HashRouter`，12 条路由 |
+| react-router-dom 6.26 | `HashRouter`，14 条路由 |
 | @capacitor/core·cli·android 8.4 | 原生容器 |
 | @capacitor/filesystem 8.1 | 文件读写（必须显式 `encoding: UTF8`） |
 | @capacitor/app 8.1 | 返回键、前后台、版本号 |
@@ -32,8 +32,8 @@
 | 路由 | 页面 | 内容 |
 | --- | --- | --- |
 | `/` | DailyPlan | 时间网格、时间块 CRUD、验收、课程块只读；顶部可打开今日结算 |
-| `/goals` | LongTermGoals | 长期目标摘要与秘密花园入口；不显示或创建愿望；目标地图与全屏树编辑 |
-| `/garden` | GardenGate + LongTermGoals | 旧数字密码验证后完成加密迁移并展示/创建愿望；离开、切后台或刷新立即清除内存密钥并重新上锁 |
+| `/goals` | LongTermGoals | 长期目标摘要；不显示或创建愿望，也没有花园入口；目标地图与全屏树编辑 |
+| `/garden/*` | GardenGate + GardenPage | 独立隐藏页：只有搜索「秘密花园 」才进入；解锁后是倾述、愿望与门内设置；离开、切后台或刷新立即清除内存密钥并卸载明文；门内隐藏外壳导航与底栏 |
 | `/backlog` | BacklogPage | 遗留问题（状态、历时、气泡） |
 | `/reflection` | Reflection | 三段式反思 |
 | `/harvest` | Harvest | 每日收获 |
@@ -43,7 +43,7 @@
 | `/week` | WeekViewPage | 周日程（课程过滤 + 当天任务块） |
 | `/trash` | Trash | 回收站 |
 | `/backup` | BackupRestore | 导入导出、存储路径 |
-| `/settings` | SettingsPage | 五组设置入口：个人与外观、日程与时间、课程、隐私与安全、数据与备份；`?section=` 进入详情 |
+| `/settings` | SettingsPage | 四组设置入口：个人与外观、日程与时间、课程、数据与备份；`?section=` 进入详情；不出现花园线索 |
 | `/settlement` | Settlement | 按今日实际交互汇总的全屏 Canvas 分页海报，零项隐藏、文字明细可展开 |
 
 无路由页面：`SetupPage`（Boot 阶段渲染）。任务清单无路由，由 `TaskBall` 承载。
@@ -55,7 +55,7 @@
 ```
 src/
 ├── main.tsx            Boot：loading / setup / storagePermission / ready
-├── App.tsx             外壳：主题 + SideNav + Routes + TabBar + TaskBall
+├── App.tsx             外壳：主题 + SideNav + Routes + TabBar + TaskBall；花园路由隐藏侧栏与底栏
 ├── App.css             CSS 变量、重置、通用类
 │
 ├── types/index.ts      领域数据模型 + genId / todayStr / appendTemplateItems / PERIODS
@@ -73,7 +73,8 @@ src/
 │   ├── goalTree.ts     长期目标树：标准文本互转、严格等权递归进度、状态保留、旧扁平任务投影
 │   ├── markdown.ts     Markdown → HTML（先转义后套标签）
 │   ├── extract.ts      识别文本 → 时间/地点/要求/邮箱
-│   ├── search.ts       全局内容搜索
+│   ├── search.ts       全局内容搜索（跳过花园愿望与倾述）
+│   ├── gardenEntry.ts  隐藏入口：仅输入恰为「秘密花园 」时返回入口与设置命中
 │   ├── avatarCrop.ts   裁剪几何、canvas 输出、图片压缩
 │   ├── settlement.ts   实际交互事件检测、按日净进度汇总、海报数据映射
 │   ├── gardenLock.ts   旧版花园数字密码摘要（仅迁移验证，成功后删除）
@@ -95,9 +96,9 @@ src/
 │
 ├── hooks/              13 个数据 Hook（见 §8）
 │
-├── components/         18 个 tsx（见 §9）
+├── components/         24 个 tsx（见 §9）
 │
-└── pages/              13 个页面
+└── pages/              15 个页面
 ```
 
 ```
@@ -134,7 +135,7 @@ utils/  →  types/
 | reflections | `days/<date>/reflections.json` | 数组 | `date, period, problem, cause, solution` |
 | harvests | `days/<date>/harvests.json` | 数组 | `date, period, subject, content` |
 | taskItems | `days/<date>/tasks.json` | 数组 | `id:string, title, done, date, sortOrder` |
-| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]`；`kind: wish` = 大愿望（另带 `vision, targetDate, status`）；已加密愿望只留 `id, kind, createdAt, updatedAt` 与 `encrypted` 信封，正文全部在密文中 |
+| longTermGoals | `goals.json` | 数组 | `title, category, tasks[]`；`kind: wish` = 花园内容，`gardenEntry` 区分愿望与倾述（只在密文内）；已加密条目只留 `id, kind, createdAt, updatedAt` 与 `encrypted` 信封，正文与 `gardenEntry` 全部在密文中 |
 | gardenKeys | `garden-keys.json` | 数组 | `keyId, version, publicKey, salt, iterations, iv, privateKey, updatedAt`：RSA 公钥 + 口令加密的 PKCS8 私钥信封；随备份迁移 |
 | fixedRoutines | `routines.json` | 数组 | `name, timeBlocks[], isActive` |
 | taskTemplates | `templates.json` | 数组 | `name, items[]` |
@@ -161,8 +162,11 @@ utils/  →  types/
 - 扫描只采信能证明「什么时候发生」的字段：TODO 叶子的 `doneAt`、DDL 的 `dismissedAt`、灵感的 `createdAt`（含回收站中可解析的记录）。计划块完成、目标节点推进、大愿望里程碑、TODO 新建都没有完成/创建时间，不推算，也不用 `updatedAt` 冒充。扫描按「类别+动作+实体+日期」与实时事件对齐：同一件事两边都有时保留实时事件，重复启动与重复导入都幂等。
 - `todayStr()` 为设备本地日历日期；全屏日程同用它判断今天，凌晨不再偏到前一天。
 - `Course.semesterStartDate?` 保存所属学期开学日期。旧课程（含回收站）首次加载时补当前学期，未设置学期的在首次设置时补；切换学期不重绑；导入旧备份按备份自身学期补齐。
-- **秘密花园加密**：每条愿望生成独立 AES-256-GCM 内容密钥加密全部内容（含 `nodes` 与未知自定义字段），再用该 `keyId` 对应 RSA-OAEP-3072 公钥包裹内容密钥。私钥 PKCS8 由 PBKDF2-SHA256（310000 次）派生密钥以 AES-GCM 封装，只存密文信封；解锁后的私钥仅驻留内存。`gardenKeys` 按 `keyId` 合并，数字主键冲突不覆盖新信封；导入不同口令的备份可各自保留密钥，未持有对应口令的愿望隐藏且禁止覆盖。更改口令只重包私钥，不改任何愿望密文。
+- **秘密花园加密**：每条愿望或倾述生成独立 AES-256-GCM 内容密钥加密全部内容（含 `nodes`、`gardenEntry` 与未知自定义字段），再用该 `keyId` 对应 RSA-OAEP-3072 公钥包裹内容密钥。私钥 PKCS8 由 PBKDF2-SHA256（310000 次）派生密钥以 AES-GCM 封装，只存密文信封；解锁后的私钥仅驻留内存。`gardenKeys` 按 `keyId` 合并，数字主键冲突不覆盖新信封；导入不同口令的备份可各自保留密钥，未持有对应口令的内容隐藏且禁止覆盖。更改口令只重包私钥，不改任何愿望或倾述密文。
 - 旧数字密码迁移前必须先通过原摘要校验；迁移成功后删除旧 `dailynote_garden_lock`。旧明文愿望、回收站愿望与历史活动标题在一次持久化写入中转为密文；失败则恢复内存原值并保留旧验证信息。存在未迁移明文时禁止导出备份并跳过新快照缓存，避免明文被缓存或带出。已导出到应用外部的旧备份无法追溯改写，只能由用户自行销毁。
+- **隐藏入口**：花园不挂在目标页、公开设置或侧栏；只有全局搜索框的原始值恰为 `秘密花园 `（末尾一个半角空格；不去空格，不接受全角空格、制表符、多余空格或其他文字）时，才返回「秘密花园」与「花园设置」两条入口。入口是发现手势，不是认证；真正的内容保护仍靠密码短语与加密。
+- **倾述**：与愿望共用加密表，`kind: wish`、`gardenEntry: confession` 只存在密文内；公开壳、备份明文、全局搜索、公开回收站都看不到标题或正文。倾述不要求标题、没有截止日期、里程碑或完成状态，按创建时间倒序回看；收起后 30 天内只在门内设置里恢复。
+- **公开隔离**：`/goals` 只取非 wish 条目；`useTrash` 与公开回收站过滤 wish；「清空回收站」只清公开内容，花园条目保留给门内处理；全局内容搜索直接跳过 wish。
 
 ---
 
@@ -256,7 +260,8 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | useDailyPlan(date) | plan, loading, addBlock, addFullBlock, updateBlock, removeBlock, importFromRoutine, reload |
 | useTaskBoard() | nodes, leaves, undone, loading, saveTree, toggle, remove, reorder, reload |
 | useTaskBadge() | count |
-| useGoals() | goals, loading, addGoal, addWish, setWishStatus, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload；更新返回是否落盘成功；只返回当前已解锁密钥可解的愿望，保存时再加密 |
+| useGoals() | goals, loading, addGoal, addWish, setWishStatus, updateGoal, removeGoal, addTask, toggleTask, removeTask, reload；更新返回是否落盘成功；只返回当前已解锁密钥可解的花园内容，保存时再加密 |
+| useGardenEntries() | entries（仅倾述）、loading、error、reload、save、archive；保存时写入加密愿望表，可无标题 |
 | useReflections(date) | reflections, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllReflections） |
 | useHarvests(date) | harvests, loading, addOrUpdate, remove, getByPeriod, reload（另导出 useAllHarvests） |
 | useBacklog() | items, loading, addItem, updateItem, changeStatus, removeItem, reload |
@@ -284,8 +289,10 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | MindSheet | 425 | 杂念底部面板：小愿望 / 琐事 / 灵感三型，页头按当前类型显示；灵感的 `…` 进入可改标题、详情、标签的独立编辑页 | DailyPlan、Harvest、TaskBall |
 | FullscreenSchedule | 306 | 全屏日程网格 | DailyPlan |
 | AvatarCropper | 297 | 头像裁剪 | SettingsPage |
-| GardenGate | 31 | 花园解锁/首次加密：验证旧数字密码、迁移、切后台或离开即清空内存密钥并卸载明文 | App `/garden` |
-| GardenSecuritySettings | 40 | 花园加密状态、更改口令（成功后清空输入并上锁） | SettingsPage |
+| GardenGate | 102 | 花园解锁/首次加密：验证旧数字密码、迁移、切后台或离开即清空内存密钥并卸载明文；改密后提示用新口令重进 | App `/garden/*` |
+| GardenSecuritySettings | 46 | 花园加密状态、更改口令（成功后清空输入并上锁） | GardenPage `/garden/settings` |
+| GardenWishes | 500 | 门内愿望：摘要/展开、里程碑、状态与编辑表单 | GardenPage |
+| GardenConfessionEditor | 74 | 倾述书写面：可无标题、只保存正文、未保存离开确认 | GardenPage |
 | CourseEditModal | 233 | 课程新建/编辑 | CoursesPage、WeekViewPage |
 | DayNavigator | 140 | 月历日期选择器 | DailyPlan、Reflection、Harvest、FullscreenSchedule |
 | PreferencePanel | 124 | 偏好底部面板 | DailyPlan |
@@ -307,10 +314,11 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | WeekViewPage | 七天同屏，计划/课程块竖排前五个 Unicode 字符，完整名称保留；点空白/任务块进入对应日期编辑（等待目标计划加载后消费查询参数），课程打开课程编辑；睡眠折叠 |
 | DdlPage / ImportantPage | 共用 DeadlineListPage：地点、Markdown 备注（编辑/预览）、图片查看（Lightbox）、图片识别（识别全部备注图片）、解除威胁；**关联内容只有 DDL 有**（`allowLinks`，重要的事关闭）；重要的事三天气泡 + 过期一天收起 |
 | BacklogPage | 阻塞中/可推进/已解决/已终止；起始三态（距今/日期/文字）；历时排序；一周宽限气泡 |
-| LongTermGoals | 上半「大愿望」（默认收起，只有摘要；展开见愿景/动机/里程碑；新建与编辑共用表单，里程碑可增删改勾）；下半「长期目标」（摘要点击进入全屏目标地图；新建/编辑为三行页面：名称、全屏 TODO/Markdown 树内容、附件线索；地图从目标根进入一级节点并逐层钻取，每个节点显示等权递归完成度）；两者共用一张表，靠 `kind` 区分 |
+| LongTermGoals | 只做长期目标：摘要点击进入全屏目标地图；新建/编辑为三行页面（名称、全屏 TODO/Markdown 树内容、附件线索）；地图从目标根进入一级节点并逐层钻取，每个节点显示等权递归完成度；不显示愿望，也没有花园入口 |
+| GardenPage | 独立隐藏花园：门内欢迎、倾述题名/正文编辑与回看、愿望页签、门内设置（改口令、恢复收起内容）；无侧栏/底栏；底部可回门内设置 |
 | Reflection / Harvest | 三段式反思；收获 #标签；均支持 `?date=` |
 | Settlement | 全屏结算：按 TODO / DDL / 每日计划 / 长期目标 / 大愿望里程碑 / 杂念分门别类，只渲染非零项；数据来自 `activity.json`，`buildSettlement` 按实体累加当日净变化；支持 `?date=` 指定日期（计划页把当前选中日期带过来），顶部日期可改选，非今天显示「当日结算」；Canvas 海报优先长图、超长自动分页（每页 ≤4096px / 400 万像素）、文字测量裁剪、可滚动查看并附文字明细；Android 返回键回到对应日期的计划页 |
-| Trash / BackupRestore / SettingsPage / SetupPage | 回收站；导入导出与路径；头像主题偏好；首次目录选择 |
+| Trash / BackupRestore / SettingsPage / SetupPage | 回收站（不含花园内容）；导入导出与路径；四组偏好；首次目录选择 |
 
 识别结果核对（`planExtraction`，`utils/extract.ts`）：
 
@@ -351,7 +359,7 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 12. 测试
 
-`npm test`：38 文件 / 766 用例。
+`npm test`：48 文件 / 799 用例。
 
 | 文件 | 用例 | 覆盖 |
 | --- | --- | --- |
@@ -389,14 +397,20 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 课程表/coursesPageSemester | 3 | 当前课表过滤、历史课空态、列表保留历史归属 |
 | 长期/wish | 10 | 大愿望字段往返、与目标共存、旧数据无 kind、里程碑、状态落盘、回收站还原、编辑保留原 ID |
 | 长期/goalTree | 27 | 西湖三分支递归等权进度、每层完成度、空树、旧任务投影、`nodes: []` 权威、文本格式校验、改名/重排保留节点状态 |
-| 长期/goalsPage | 5 | 大愿望默认收起、摘要入口、空目标状态 |
+| 长期/goalsPage | 6 | 目标页无花园线索；门内愿望收起/展开、摘要编辑、空里程碑状态 |
+| hiddenGarden | 2 | 精确尾随空格才显示两条入口；倾述加密、备份、公开搜索/回收站隔离、收起与恢复 |
+| gardenEncryption | 4 | 旧密码迁移、独立密钥信封、取消解锁、大文本往返与改密不改密文 |
+| dailyPlanNavigation | 3 | 跨日期 `?block=` 等待计划加载后消费，不被旧计划提前清掉 |
+| weekViewNavigation | 4 | 前五个 Unicode 字符、鼠标与键盘打开正确日期详情 |
+| 偏好设置/preferencesSync | 2 | 偏好更新从最新持久化值合并并广播到其他消费者 |
+| 长期/gardenTrashPrivacy | 1 | 公开回收站即使收到花园条目也不渲染标题，普通条目照常显示 |
 | 长期/goalEditor | 6 | 三行编辑、全屏层级/文本编辑、格式错误、完成状态、草稿保护、保存失败重试、目标地图钻取/回退 |
 | 长期/mindmap | 3 | 双翼左右分布、卡片不重叠与边界、空树命中 |
-| 数据存储/settlement | 8 | 本地日期、事件唯一 ID、改名不误计增删、净进度、杂念完成与普通删除、DDL/里程碑、日期 JSON/备份往返、零值隐藏 |
+| 数据存储/settlement | 10 | 本地日期、事件唯一 ID、改名不误计增删、净进度、杂念完成与普通删除、DDL/里程碑、日期 JSON/备份往返、零值隐藏、花园不进入公开结算 |
 | settlementPoster | 14 | 长海报优先与分页、三种宽度、459 条不越界、文字测量裁剪、空状态、空/非法页码 |
-| **合计** | **776** | 40 个文件 |
+| **全量** | **799** | **48 个文件** |
 
-环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。`tsconfig.json` 的 include:["src"] 不检查历史测试；本轮新增四份测试另行通过严格 tsc 检查。
+环境：`npm test` 使用 vitest.config.mjs + native 配置加载器 + threads 池；测试独立于应用 PWA 构建配置。上表列主要测试文件，合计为整轮实际结果。
 
 ---
 

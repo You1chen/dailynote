@@ -8,19 +8,24 @@ export default function GardenSecuritySettings() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    const hide = () => { if (document.visibilityState === 'hidden') { lockGarden(); setCurrent(''); setNext(''); setConfirm(''); } };
+    const hide = () => { if (document.visibilityState === 'hidden') { setCurrent(''); setNext(''); setConfirm(''); } };
     document.addEventListener('visibilitychange', hide);
-    return () => { document.removeEventListener('visibilitychange', hide); lockGarden(); };
+    return () => { document.removeEventListener('visibilitychange', hide); };
   }, []);
   async function change() {
     if (busy) return;
     if (next !== confirm) { setMessage('两次新口令不一致'); return; }
     setBusy(true); setMessage('');
+    let changed = false;
     try {
       await changeGardenPassphrase(current, next);
-      setMessage('口令已更改'); setCurrent(''); setNext(''); setConfirm('');
+      changed = true;
+      setCurrent(''); setNext(''); setConfirm('');
     } catch (e) { setMessage(e instanceof Error ? e.message : '操作失败'); }
-    finally { lockGarden(); setBusy(false); }
+    finally {
+      if (changed) { lockGarden(); window.dispatchEvent(new CustomEvent('dailynote-garden-locked', { detail: { changed: true } })); }
+      setBusy(false);
+    }
   }
   return <section className="settings-section" aria-labelledby="garden-security-title">
     <h2 className="settings-section-title" id="garden-security-title">秘密花园加密</h2>

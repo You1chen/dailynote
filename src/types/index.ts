@@ -70,6 +70,8 @@ export interface LongTermGoal {
   encrypted?: import('./garden').GardenCipher;
   id?: number;
   kind?: GoalKind;
+  /** Private garden subtype; stored only inside encrypted content, never the shell. */
+  gardenEntry?: 'wish' | 'confession';
   title: string;
   description: string;
   category: string;        // 分类（学科/技能/其他）

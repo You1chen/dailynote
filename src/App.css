@@ -316,6 +316,10 @@ body {
   flex-direction: column;
 }
 
+.app-main.app-main--garden {
+  margin-left: 0;
+}
+
 /* ============ 深色主题 ============ */
 [data-theme="dark"] {
   --color-bg: #0f0f1a;

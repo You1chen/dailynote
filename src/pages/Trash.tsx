@@ -23,6 +23,8 @@ export default function TrashPage() {
   const { items, loading, restore, permDelete, clearAll } = useTrash();
   const [askClear, setAskClear] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Wishes and confessions never surface in the public trash, even if a stale row slips through.
+  const visible = items.filter(item => !(item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish'));
 
   if (loading) {
     return (
@@ -37,7 +39,7 @@ export default function TrashPage() {
     <div className="app-container">
       <div className="page-header">
         <h1 className="page-title">回收站</h1>
-        {items.length > 0 && (
+        {visible.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setAskClear(true)}>
             <AlertTriangle size={14} /> 清空回收站
           </button>
@@ -48,17 +50,16 @@ export default function TrashPage() {
         已删除的内容会保留 30 天，之后自动清理。
       </p>
 
-      {items.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="empty-state">
           <Trash2 size={48} className="icon" />
           <p>回收站为空</p>
         </div>
       ) : (
         <div className="trash-list">
-          {items.map(item => {
+          {visible.map(item => {
             const gid = item.id!;
-            const gardenItem = item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish';
-            const label = gardenItem ? '秘密花园' : TABLE_LABELS[item.originalTable] || item.originalTable;
+            const label = TABLE_LABELS[item.originalTable] || item.originalTable;
             const daysLeft = Math.max(
               0,
               30 - Math.floor((Date.now() - item.deletedAt) / (1000 * 60 * 60 * 24))
@@ -68,7 +69,7 @@ export default function TrashPage() {
               <div key={gid} className="trash-item animate-in">
                 <div className="trash-item-info">
                   <span className="trash-item-type">{label}</span>
-                  <span className="trash-item-title">{gardenItem ? '秘密花园条目' : item.title}</span>
+                  <span className="trash-item-title">{item.title}</span>
                   <span className="trash-item-meta">
                     删除于 {new Date(item.deletedAt).toLocaleDateString('zh-CN')}
                     {' · '}

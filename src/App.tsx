@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
 import TabBar from './components/TabBar';
 import TaskBall from './components/TaskBall';
 import SideNav from './components/SideNav';
 import DailyPlanPage from './pages/DailyPlan';
 import LongTermGoalsPage from './pages/LongTermGoals';
 import GardenGate from './components/GardenGate';
+import GardenPage from './pages/GardenPage';
 import ReflectionPage from './pages/Reflection';
 import HarvestPage from './pages/Harvest';
 import TrashPage from './pages/Trash';
@@ -36,6 +37,8 @@ function applyTheme(theme: ThemeMode) {
 }
 
 function AppShell() {
+  const location = useLocation();
+  const inGarden = location.pathname === '/garden' || location.pathname.startsWith('/garden/');
   const { prefs } = usePreferences();
   const backlogBadge = useBacklogBadge();
   const ddlBadge = useDdlBadge();
@@ -57,13 +60,13 @@ function AppShell() {
 
   return (
     <>
-      <SideNav badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />
+      {!inGarden && <SideNav badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />}
 
-      <div className="app-main">
+      <div className={inGarden ? "app-main app-main--garden" : "app-main"}>
         <Routes>
           <Route path="/" element={<DailyPlanPage />} />
           <Route path="/goals" element={<LongTermGoalsPage />} />
-          <Route path="/garden" element={<GardenGate><LongTermGoalsPage garden /></GardenGate>} />
+          <Route path="/garden/*" element={<GardenGate><GardenPage /></GardenGate>} />
           <Route path="/backlog" element={<BacklogPage />} />
           <Route path="/reflection" element={<ReflectionPage />} />
           <Route path="/harvest" element={<HarvestPage />} />
@@ -77,8 +80,7 @@ function AppShell() {
           <Route path="/settlement" element={<SettlementPage />} />
         </Routes>
       </div>
-      <TabBar />
-      <TaskBall />
+      {!inGarden && <><TabBar /><TaskBall /></>}
 
       {updateReady && (
         <div className="app-update-bar" role="status">

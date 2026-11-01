@@ -535,9 +535,11 @@ export async function permanentlyDelete(trashId: number): Promise<void> {
   });
 }
 
-export async function clearAllTrash(): Promise<void> {
+export async function clearAllTrash(publicOnly = false): Promise<void> {
   await mutate(() => {
-    store.trashItems = [];
+    store.trashItems = publicOnly
+      ? store.trashItems.filter(item => item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish')
+      : [];
   });
 }
 

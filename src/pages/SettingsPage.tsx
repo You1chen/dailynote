@@ -1,12 +1,11 @@
 import { useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Camera, Palette, CalendarClock, GraduationCap, ShieldCheck, Database, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Camera, Palette, CalendarClock, GraduationCap, Database, RotateCcw } from 'lucide-react';
 import { usePreferences, type ThemeMode } from '../hooks/usePreferences';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import AvatarCropper from '../components/AvatarCropper';
 import CourseTimeSettings from '../components/CourseTimeSettings';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { GardenSecuritySettings } from '../components/GardenSecuritySettings';
 import './SettingsPage.css';
 
 const AVATARS = ['👤','😊','🎯','💪','🧠','🌟','🔥','💡','📚','✏️','🎨','🎵','🏃','🌱','☕','🐱','🐶','🦊','🌙','⭐','🚀','💎','🎉','🌈'];
@@ -15,7 +14,6 @@ const SECTIONS = [
   {id:'appearance',title:'个人与外观',description:'头像、名字与明暗主题',icon:Palette},
   {id:'schedule',title:'日程与时间',description:'睡眠折叠、默认时长与网格显示',icon:CalendarClock},
   {id:'courses',title:'课程与时间组合',description:'常用上下课时间、学期与特殊日期',icon:GraduationCap},
-  {id:'security',title:'隐私与安全',description:'秘密花园与密码短语',icon:ShieldCheck},
   {id:'data',title:'数据与备份',description:'导入导出、存储目录与偏好恢复',icon:Database},
 ];
 export default function SettingsPage() {
@@ -53,18 +51,13 @@ export default function SettingsPage() {
       <CourseTimeSettings combinations={prefs.courseTimeCombinations} onChange={courseTimeCombinations=>updatePrefs({courseTimeCombinations})}/>
       <button className="settings-link-card" onClick={()=>navigate('/courses')}><GraduationCap size={20}/><span><strong>学期与课程</strong><small>开学日期、放假补课、课程内容</small></span><ChevronRight size={18}/></button>
     </>}
-    {section?.id==='security' && <>
-      <p className="settings-intro">留给自己的心事，也值得被认真保护。</p>
-      <GardenSecuritySettings />
-      <button className="settings-link-card" onClick={()=>navigate('/garden')}><ShieldCheck size={20}/><span><strong>进入秘密花园</strong><small>验证密码短语后查看与编辑</small></span><ChevronRight size={18}/></button>
-    </>}
     {section?.id==='data' && <>
       <p className="settings-intro">数据保存在你选择的设备目录。定期导出，给日常留一份副本。</p>
       <button className="settings-link-card" onClick={()=>navigate('/backup')}><Database size={20}/><span><strong>备份、导入与存储位置</strong><small>导出副本、恢复数据、查看或更换目录</small></span><ChevronRight size={18}/></button>
-      <section className="settings-section settings-reset-area"><h2 className="settings-section-title">偏好恢复</h2><div className="card"><p className="settings-field-hint">恢复头像、名字、主题、日程偏好与课程时间组合。不会删除计划、课程或秘密花园内容，也不会更改密码短语。</p><button className="btn btn-ghost settings-reset-btn" onClick={()=>setConfirmReset(true)}><RotateCcw size={16}/>恢复默认偏好</button>{resetNotice && <p role="status" className="settings-field-hint">已恢复默认偏好。</p>}</div></section>
+      <section className="settings-section settings-reset-area"><h2 className="settings-section-title">偏好恢复</h2><div className="card"><p className="settings-field-hint">恢复头像、名字、主题、日程偏好与课程时间组合。不会删除已有内容。</p><button className="btn btn-ghost settings-reset-btn" onClick={()=>setConfirmReset(true)}><RotateCcw size={16}/>恢复默认偏好</button>{resetNotice && <p role="status" className="settings-field-hint">已恢复默认偏好。</p>}</div></section>
     </>}
     <input ref={fileInput} type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file){setCropperFile(file);setAvatarPicker(false);}}}/>
     {cropperFile && <AvatarCropper file={cropperFile} onCancel={()=>setCropperFile(null)} onConfirm={avatar=>{updatePrefs({avatar});setCropperFile(null);}}/>}
-    <ConfirmDialog open={confirmReset} message="恢复默认偏好？头像、名字、主题、日程偏好和课程时间组合会重置，已有内容与花园密码不受影响。" confirmText="恢复默认" onCancel={()=>setConfirmReset(false)} onConfirm={()=>{resetPrefs();setConfirmReset(false);setResetNotice(true);}}/>
+    <ConfirmDialog open={confirmReset} message="恢复默认偏好？头像、名字、主题、日程偏好和课程时间组合会重置，已有内容不受影响。" confirmText="恢复默认" onCancel={()=>setConfirmReset(false)} onConfirm={()=>{resetPrefs();setConfirmReset(false);setResetNotice(true);}}/>
   </div>;
 }

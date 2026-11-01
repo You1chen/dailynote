@@ -21,6 +21,7 @@ vi.mock('../../src/contexts/BackButtonContext', () => ({ useRegisterBackHandler:
 vi.mock('../../src/components/ConfirmDialog', () => ({ default: () => null }));
 
 import LongTermGoalsPage from '../../src/pages/LongTermGoals';
+import GardenWishes from '../../src/components/GardenWishes';
 
 const wishGoal: LongTermGoal = {
   id: 1,
@@ -71,23 +72,19 @@ const emptyGoal: LongTermGoal = {
 interface Opts { expandedWishId?: number | null; garden?: boolean }
 
 function render(goals: LongTermGoal[], opts: Opts = {}): string {
-  state.values = [
-    goals, false,                        // useGoals: goals, loading
-    null, '',                            // wishDraft, wishMilestone
-    null, null,                          // goalEditor, goalMapId
-    false, '', null,                     // saving, saveError, confirm
-    opts.expandedWishId ?? null,        // expandedWishId
-    '',                                 // milestoneDraft
-  ];
-  return renderToStaticMarkup(<LongTermGoalsPage garden={opts.garden} />);
+  state.values = opts.garden
+    ? [goals, false, null, '', false, '', null, opts.expandedWishId ?? null, '']
+    : [goals, false, null, null, null];
+  return renderToStaticMarkup(opts.garden ? <GardenWishes /> : <LongTermGoalsPage />);
 }
 
 beforeEach(() => { state.values = []; });
 
 describe('秘密花园与目标页隔离', () => {
-  it('目标页只有花园入口，不挂载愿望卡片或创建愿望按钮', () => {
+  it('目标页没有花园入口、愿望卡片或创建愿望按钮', () => {
     const html = render([wishGoal, goalWithTree]);
-    expect(html).toContain('秘密花园');
+    expect(html).not.toContain('秘密花园');
+    expect(html).not.toContain('/garden');
     expect(html).toContain('英语考试');
     expect(html).not.toContain('去海边');
     expect(html).not.toContain('坐在礁石上听浪');
