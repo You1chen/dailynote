@@ -13,7 +13,7 @@
     "cap:add": "npx cap add android",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",
-    "cap:assets": "node scripts/svg2png.mjs && npx capacitor-assets generate --android"
+    "cap:assets": "node scripts/generate-launcher-icons.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
