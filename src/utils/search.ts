@@ -7,6 +7,7 @@
 
 import type { StoreShape } from '../types/storage';
 import { effectiveNodes } from './goalTree';
+import { noteToText } from './knowledgeMap';
 
 export interface SearchHit {
   key: string;
@@ -175,6 +176,23 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
       '课程表',
       '/courses',
     ));
+  }
+
+  // ---- 知识地图笔记方框项 ----
+  for (const map of data.knowledgeMaps ?? []) {
+    const course = data.courses.find(item => item.id === map.courseId);
+    for (const node of map.nodes) {
+      const checklist = node.note?.blocks.filter(block => block.checklist) ?? [];
+      if (!checklist.length) continue;
+      push(makeHit(
+        q,
+        `knowledge-check:${map.courseId}:${node.id}`,
+        checklist.find(block => block.text.toLowerCase().includes(q))?.text || node.title,
+        checklist.map(block => `${block.checked ? '[已完成] ' : '[待办] '}${block.text}`),
+        `知识地图 · ${course?.name ?? map.courseName} · ${node.title}`,
+        `/courses?knowledgeCourse=${map.courseId}&knowledgeNode=${node.id}`,
+      ));
+    }
   }
 
   // ---- 任务树 ----

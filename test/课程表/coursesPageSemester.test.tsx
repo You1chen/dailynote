@@ -9,7 +9,7 @@ vi.mock('react', async importOriginal => ({
   useEffect: vi.fn(),
   useCallback: (callback: unknown) => callback,
 }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn(), useSearchParams: () => [new URLSearchParams(), vi.fn()] }));
 vi.mock('../../src/db', () => ({
   getAllCourses: vi.fn(), deleteCourse: vi.fn(), getSemester: vi.fn(), saveSemester: vi.fn(),
 }));

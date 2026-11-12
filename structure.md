@@ -455,3 +455,13 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 | 测试类型 | 应用 tsc 检查 src；新增测试单独通过类型检查，全部历史测试尚未纳入严格类型检查。 |
 | Android | 仍需公共 Documents 的所有文件访问权限；本轮 APK 构建通过，未做真机安装验收。 |
 | NDK / VLM | 属于延期能力，不为清债安装工具链或下载/接入新模型；现有离线 ML Kit 保持使用。 |
+
+## 2026-11 知识地图补充
+
+- 课程内嵌知识地图，不新增独立路由；`CoursesPage` 的课程卡打开 `KnowledgeMapPanel`。
+- `StoreShape.knowledgeMaps` 对应 Android `knowledge-maps.json` 与 Web IndexedDB；一个课程 `courseId` 只绑定一张地图。课程删除不级联删除地图。
+- `KnowledgeMapPanel` 负责树视图、默认折叠、节点状态、Markdown 重建、末端笔记、思维导图预览和 Markdown 下载；纯解析与笔记触发规则在 `utils/knowledgeMap.ts`。
+- `KnowledgeNode.status` 是独立的 `todo/debt/learned`，不计算父子进度；切到 `learned` 时提供一次轻音效和闪光。
+- 知识笔记使用 `KnowledgeNote.blocks` 保存；行末三个或更多 ASCII 半角空格表示 checklist，文本不进入全局隐私内容之外的特殊表；方框正文被 `utils/search.ts` 索引，点击搜索结果带 `knowledgeCourse`/`knowledgeNode` 查询参数回课程面板。
+- `utils/knowledgeNoteRender.ts` 使用 KaTeX 阅读态渲染；用户原文仍保存，普通文本先 HTML 转义，公式失败时回退为转义原文。
+- 思维导图预览是知识树的具象化视图，叶节点笔记摘要挂在分支下；下载格式为包含层级与笔记的 Markdown，可用于其他文本/思维导图工具的再加工。

@@ -6,7 +6,9 @@
  * 保持与旧版完全一致的导出函数签名，页面/Hook 无需改动。
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
+import type {
+  KnowledgeMap, KnowledgeNode, KnowledgeNote, KnowledgeStatus,
+ DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, bindLegacyCourses, type AnyStoreTable } from '../services/store';
 import { toggleLeafDone, removeLeaf, setLeafShelved, normalizeOrder } from '../utils/taskTree';
@@ -256,6 +258,31 @@ export async function saveCourse(course: Course): Promise<number> {
     store.courses.push({ ...clean, semesterStartDate: clean.semesterStartDate ?? store.semester[0]?.startDate ?? undefined, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
   });
   return resultId;
+}
+
+export async function getKnowledgeMap(courseId: number): Promise<KnowledgeMap | undefined> {
+  const map = store.knowledgeMaps.find(item => item.courseId === courseId);
+  return map ? deepClone(map) : undefined;
+}
+
+export async function saveKnowledgeMap(map: KnowledgeMap): Promise<number> {
+  const clean = deepClone(map);
+  let resultId = 0;
+  await mutate(() => {
+    const idx = store.knowledgeMaps.findIndex(item => item.courseId === clean.courseId);
+    if (idx >= 0) {
+      resultId = store.knowledgeMaps[idx].id!;
+      store.knowledgeMaps[idx] = { ...clean, id: resultId, updatedAt: Date.now() };
+    } else {
+      resultId = allocId('knowledgeMaps');
+      store.knowledgeMaps.push({ ...clean, id: resultId, createdAt: clean.createdAt || Date.now(), updatedAt: Date.now() });
+    }
+  });
+  return resultId;
+}
+
+export async function deleteKnowledgeMap(courseId: number): Promise<void> {
+  await mutate(() => { store.knowledgeMaps = store.knowledgeMaps.filter(item => item.courseId !== courseId); });
 }
 
 export async function deleteCourse(id: number): Promise<void> {

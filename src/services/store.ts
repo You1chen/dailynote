@@ -38,6 +38,7 @@ import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
 import { readSnapshot, writeSnapshot, clearSnapshot, sameNames } from './snapshot';
 import type { ActivityEvent, ActivityOptions } from '../types/settlement';
+import type { KnowledgeMap } from '../types/knowledge';
 import { detectActivity, recoverTimestampedActivity } from '../utils/settlement';
 
 // ============ 布局常量 ============
@@ -410,6 +411,7 @@ function parseStorageData(text: string): StorageData | null {
       linkGroups: Array.isArray(data.linkGroups) ? data.linkGroups : [],
       activityEvents: Array.isArray(data.activityEvents) ? data.activityEvents : [],
       gardenKeys: Array.isArray(data.gardenKeys) ? data.gardenKeys : [],
+      knowledgeMaps: Array.isArray(data.knowledgeMaps) ? data.knowledgeMaps : [],
     };
   } catch {
     return null;
@@ -479,7 +481,8 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
    const ideas = await readCategory<Idea>(dir, CATEGORY_FILES.ideas);
   const taskBoard = await readCategory<TaskBoard>(dir, CATEGORY_FILES.taskBoard);
   const linkGroups = await readCategory<LinkGroup>(dir, CATEGORY_FILES.linkGroups);
-  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !ideas && !taskBoard && !linkGroups) return null;
+  const knowledgeMaps = await readCategory<KnowledgeMap>(dir, CATEGORY_FILES.knowledgeMaps);
+  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !ideas && !taskBoard && !linkGroups && !knowledgeMaps) return null;
   return {
     version: 1,
     savedAt: 0,
@@ -501,6 +504,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     linkGroups: linkGroups ?? [],
     activityEvents,
     gardenKeys: (await readCategory<any>(dir, CATEGORY_FILES.gardenKeys)) ?? [],
+    knowledgeMaps: knowledgeMaps ?? [],
   };
 }
 
@@ -743,6 +747,7 @@ interface Fp {
   linkGroups: string;
   trashItems: string;
   gardenKeys: string;
+  knowledgeMaps: string;
 }
 
 function fingerprint(): Fp {
@@ -777,6 +782,7 @@ function fingerprint(): Fp {
     linkGroups: JSON.stringify(store.linkGroups),
     trashItems: JSON.stringify(store.trashItems),
     gardenKeys: JSON.stringify(store.gardenKeys),
+    knowledgeMaps: JSON.stringify(store.knowledgeMaps),
   };
 }
 
@@ -914,6 +920,7 @@ function mergeIntoStore(data: StorageData): number {
     { key: 'taskBoard', items: data.taskBoard, numeric: true },
     { key: 'linkGroups', items: data.linkGroups, numeric: true },
     { key: 'trashItems', items: data.trashItems, numeric: true },
+    { key: 'knowledgeMaps', items: data.knowledgeMaps, numeric: true },
   ];
   for (const { key, items, numeric } of tables) {
     for (const rec of items) {
@@ -1006,6 +1013,7 @@ function liveArr(table: string): any[] {
      case 'ideas': return store.ideas;
     case 'taskBoard': return store.taskBoard;
     case 'linkGroups': return store.linkGroups;
+    case 'knowledgeMaps': return store.knowledgeMaps;
     default: return [];
   }
 }

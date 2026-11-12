@@ -286,6 +286,8 @@ export const PERIODS: PeriodLabel[] = [
 ];
 
 /** 生成简单唯一 ID */
+export type { KnowledgeMap, KnowledgeNode, KnowledgeNote, KnowledgeNoteBlock, KnowledgeStatus } from './knowledge';
+
 export function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Plus, Trash2, BookOpen } from 'lucide-react';
+import KnowledgeMapPanel from '../components/KnowledgeMapPanel';
 import { getAllCourses, deleteCourse, getSemester, saveSemester } from '../db';
 import type { Course, SemesterRecord } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
@@ -38,6 +39,7 @@ const FOLD_BAR_H = 24;
 
 export default function CoursesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { prefs } = usePreferences();
   const [courses, setCourses] = useState<Course[]>([]);
   const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
@@ -53,6 +55,8 @@ export default function CoursesPage() {
   const [editingCourse, setEditingCourse] = useState<Course | null | undefined>(undefined);
   const [askDeleteCourse, setAskDeleteCourse] = useState<Course | null>(null);
   const [askDeleteSpecial, setAskDeleteSpecial] = useState<number | null>(null);
+  const [knowledgeCourse, setKnowledgeCourse] = useState<Course | null>(null);
+  const [knowledgeNodeId, setKnowledgeNodeId] = useState<string | null>(null);
 
   // 特殊日期表单
   const [specialDate, setSpecialDate] = useState('');
@@ -74,6 +78,16 @@ export default function CoursesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const courseId = Number(searchParams.get('knowledgeCourse'));
+    if (!Number.isSafeInteger(courseId) || courseId <= 0) return;
+    const course = courses.find(item => item.id === courseId);
+    if (!course) return;
+    setKnowledgeCourse(course);
+    setKnowledgeNodeId(searchParams.get('knowledgeNode'));
+    setSearchParams({}, { replace: true });
+  }, [courses, searchParams, setSearchParams]);
 
   const handleBack = useCallback(() => {
     navigate(-1);
@@ -404,6 +418,7 @@ export default function CoursesPage() {
                               ? `所属学期：${c.semesterStartDate} 开学${isCourseInSemester(c, semester) ? '（当前）' : '（非当前）'}`
                               : '所属学期：待设置开学时间'}
                           </span>
+                          <button className="courses-map-link" onClick={e => { e.stopPropagation(); setKnowledgeCourse(c); }}><BookOpen size={14} /> 知识地图</button>
                         </div>
                         <button
                           className="btn btn-ghost btn-icon"
@@ -433,6 +448,7 @@ export default function CoursesPage() {
           onSaved={handleCourseSaved}
         />
       )}
+      {knowledgeCourse && <KnowledgeMapPanel course={knowledgeCourse} initialNodeId={knowledgeNodeId} onClose={() => { setKnowledgeCourse(null); setKnowledgeNodeId(null); }} />}
       <ConfirmDialog
         open={askDeleteCourse !== null}
         message={askDeleteCourse ? `确定删除课程「${askDeleteCourse.name}」？删除后可在回收站恢复。` : ''}
