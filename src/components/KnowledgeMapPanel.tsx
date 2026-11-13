@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, Check, ChevronDown, ChevronRight, Download, Edit3, Minus, Plus, Save, Sparkles, X } from 'lucide-react';
 import type { Course } from '../types';
 import type { KnowledgeCard, KnowledgeMap, KnowledgeNode, KnowledgeStatus } from '../types/knowledge';
@@ -30,6 +30,7 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
   const [imageIndex, setImageIndex] = useState(0);
   const [cardDraft, setCardDraft] = useState<KnowledgeCard | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const touchStartX = useRef<number | null>(null);
   const [presentation, setPresentation] = useState<'tree' | 'mind'>('tree');
   const selected = map?.nodes.find(node => node.id === selectedId);
 
@@ -141,7 +142,7 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
     const addImages = (files: FileList | null) => { if (!files) return; Promise.all(Array.from(files).map(file => fileToCompressedDataURL(file, 1600, 0.82))).then(images => setCardField({ images: [...(draft?.images ?? []), ...images.filter(Boolean)] })).catch(() => undefined); };
     return <div className="knowledge-panel knowledge-card-page">
       <header className="knowledge-header"><button className="knowledge-icon-btn" onClick={() => setSelectedId(null)} aria-label="返回知识地图"><ArrowLeft size={19} /></button><div><span className="knowledge-kicker">{course.name}</span><h2>{selected.title}</h2></div><button className="knowledge-icon-btn" onClick={() => setCardDraft({ id: `card-${Date.now()}`, title: '', images: [], text: '', createdAt: Date.now(), updatedAt: Date.now() })} aria-label="新建卡片"><Plus size={18} /></button></header>
-      <div className="knowledge-card-stage">
+      <div className="knowledge-card-stage" onTouchStart={event => { touchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={event => { const start = touchStartX.current; const end = event.changedTouches[0]?.clientX ?? start; touchStartX.current = null; if (start === null || end === null || Math.abs(end - start) < 45) return; if (draft?.images.length && event.target instanceof HTMLImageElement) setImageIndex(index => end < start ? Math.min((draft.images.length - 1), index + 1) : Math.max(0, index - 1)); else if (!cardDraft && cards.length > 1) setCardIndex(index => end < start ? Math.min(cards.length - 1, index + 1) : Math.max(0, index - 1)); }}>
         {draft ? <>
           <input className="knowledge-card-title-input" value={draft.title} onChange={e => setCardField({ title: e.target.value })} placeholder="卡片名称（必填）" />
           <div className="knowledge-image-frame">
