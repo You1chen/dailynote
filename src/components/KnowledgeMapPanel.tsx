@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, BookOpen, Check, ChevronDown, ChevronRight, Download, Edit3, Minus, Plus, Save, Sparkles, X } from 'lucide-react';
 import type { Course } from '../types';
-import type { KnowledgeMap, KnowledgeNode, KnowledgeStatus } from '../types/knowledge';
+import type { KnowledgeCard, KnowledgeMap, KnowledgeNode, KnowledgeStatus } from '../types/knowledge';
 import { getKnowledgeMap, saveKnowledgeMap } from '../db';
 import { buildKnowledgeNodes, KNOWLEDGE_STATUS_LABEL, nodesToMarkdown, noteToText, parseNoteBlocks } from '../utils/knowledgeMap';
 import { renderKnowledgeNoteText } from '../utils/knowledgeNoteRender';
+import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import './KnowledgeMapPanel.css';
 
@@ -25,6 +26,10 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
   const [statusFlash, setStatusFlash] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [noteDirty, setNoteDirty] = useState(false);
+  const [cardIndex, setCardIndex] = useState(0);
+  const [imageIndex, setImageIndex] = useState(0);
+  const [cardDraft, setCardDraft] = useState<KnowledgeCard | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const [presentation, setPresentation] = useState<'tree' | 'mind'>('tree');
   const selected = map?.nodes.find(node => node.id === selectedId);
 
@@ -35,7 +40,7 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
       setMap(existing ?? null); setSource(existing?.sourceMarkdown ?? '');
       if (existing) {
         const target = initialNodeId ? existing.nodes.find(node => node.id === initialNodeId) : undefined;
-        const open = new Set(existing.nodes.filter(node => node.depth === 0).map(node => node.id));
+        const open = new Set<string>();
         if (target) {
           let parent = target.parentId;
           while (parent) { open.add(parent); parent = existing.nodes.find(node => node.id === parent)?.parentId; }
@@ -48,7 +53,7 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
     return () => { alive = false; };
   }, [course.id]);
 
-  useEffect(() => { setNoteText(selected ? noteToText(selected.note) : ''); setNoteDirty(false); }, [selectedId, selected?.note?.updatedAt]);
+  useEffect(() => { setNoteText(selected ? noteToText(selected.note) : ''); setNoteDirty(false); setCardIndex(0); setCardDraft(null); }, [selectedId, selected?.note?.updatedAt]);
 
   useRegisterBackHandler(() => {
     if (selectedId !== null) { if (noteDirty) void saveNote(); else setSelectedId(null); return true; }
@@ -73,6 +78,19 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
     const next: KnowledgeMap = map ? { ...map, sourceMarkdown: source, nodes: built.nodes, updatedAt: now } : { id: undefined, courseId: course.id!, courseName: course.name, sourceMarkdown: source, nodes: built.nodes, createdAt: now, updatedAt: now };
     const id = await saveKnowledgeMap(next); setMap({ ...next, id }); setEditingSource(false); setSourceError('');
     setExpanded(new Set(built.nodes.filter(node => node.depth === 0).map(node => node.id)));
+  }
+
+  async function saveCard(card: KnowledgeCard) {
+    if (!map || !selected) return;
+    const cards = selected.cards ?? [];
+    const next: KnowledgeMap = { ...map, nodes: map.nodes.map(node => node.id === selected.id ? { ...node, cards: cards.some(item => item.id === card.id) ? cards.map(item => item.id === card.id ? card : item) : [...cards, card] } : node), updatedAt: Date.now() };
+    await saveKnowledgeMap(next); setMap(next); setCardDraft(null);
+  }
+
+  async function deleteCard(cardId: string) {
+    if (!map || !selected) return;
+    const next: KnowledgeMap = { ...map, nodes: map.nodes.map(node => node.id === selected.id ? { ...node, cards: (node.cards ?? []).filter(card => card.id !== cardId) } : node), updatedAt: Date.now() };
+    await saveKnowledgeMap(next); setMap(next); setCardIndex(0);
   }
 
   async function saveNote() {
@@ -113,15 +131,31 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
   }
 
   if (loading) return <div className="knowledge-panel"><p>正在打开知识地图…</p></div>;
-  if (selected) return <div className="knowledge-panel knowledge-note-page">
-    <header className="knowledge-header"><button className="knowledge-icon-btn" onClick={() => { if (noteDirty) void saveNote(); else setSelectedId(null); }} aria-label="返回知识地图"><ArrowLeft size={19} /></button><div><span className="knowledge-kicker">{course.name}</span><h2>{selected.title}</h2></div><button className="knowledge-icon-btn" onClick={() => setSelectedId(null)} aria-label="关闭"><X size={18} /></button></header>
-    <div className="knowledge-note-meta"><BookOpen size={14} /> 末端节点笔记{selected.page && <span>{selected.page}</span>}</div>
-    <textarea className="knowledge-note-input" value={noteText} onChange={e => { setNoteText(e.target.value); setNoteDirty(true); }} placeholder="写下你理解的、疑惑的，或者下一步要查的……" autoFocus />
-    <div className="knowledge-note-tools"><button onClick={() => { setNoteText(text => `  ${text}`); setNoteDirty(true); }}><Plus size={15} /> 缩进</button><button onClick={() => { setNoteText(text => text.replace(/^  /, '')); setNoteDirty(true); }}><Minus size={15} /> 缩退</button><button className="knowledge-save" onClick={() => void saveNote()} disabled={!noteDirty}><Save size={15} /> 保存</button></div>
-    <p className="knowledge-note-hint">句末三个或以上半角空格会变成可勾选方框；公式保留原文，在阅读时渲染。</p>
-    <div className="knowledge-note-preview" dangerouslySetInnerHTML={{ __html: renderKnowledgeNoteText(noteText) }} />
-    {selected.note?.blocks.map(block => block.checklist && <label key={block.id} className="knowledge-check-row"><input type="checkbox" checked={block.checked ?? false} onChange={() => void toggleBlock(block.id)} /><span>{block.text}</span></label>)}
-  </div>;
+  if (selected) {
+    const cards = selected.cards ?? [];
+    const activeCard = cards[cardIndex];
+    const draft = cardDraft ?? activeCard;
+    const activeImage = draft?.images[imageIndex];
+    const setCardField = (changes: Partial<KnowledgeCard>) => setCardDraft(current => ({ ...(current ?? activeCard ?? { id: `card-${Date.now()}`, title: '', images: [], text: '', createdAt: Date.now(), updatedAt: Date.now() }), ...changes, updatedAt: Date.now() }));
+    const setTextFullscreen = () => { const next = window.prompt('文字说明', draft?.text ?? ''); if (next !== null) setCardField({ text: next }); };
+    const addImages = (files: FileList | null) => { if (!files) return; Promise.all(Array.from(files).map(file => fileToCompressedDataURL(file, 1600, 0.82))).then(images => setCardField({ images: [...(draft?.images ?? []), ...images.filter(Boolean)] })).catch(() => undefined); };
+    return <div className="knowledge-panel knowledge-card-page">
+      <header className="knowledge-header"><button className="knowledge-icon-btn" onClick={() => setSelectedId(null)} aria-label="返回知识地图"><ArrowLeft size={19} /></button><div><span className="knowledge-kicker">{course.name}</span><h2>{selected.title}</h2></div><button className="knowledge-icon-btn" onClick={() => setCardDraft({ id: `card-${Date.now()}`, title: '', images: [], text: '', createdAt: Date.now(), updatedAt: Date.now() })} aria-label="新建卡片"><Plus size={18} /></button></header>
+      <div className="knowledge-card-stage">
+        {draft ? <>
+          <input className="knowledge-card-title-input" value={draft.title} onChange={e => setCardField({ title: e.target.value })} placeholder="卡片名称（必填）" />
+          <div className="knowledge-image-frame">
+            {draft.images.length ? <><img src={activeImage} alt={`卡片图片 ${imageIndex + 1}`} onClick={() => setLightbox(activeImage)} /><button className="knowledge-image-delete" onClick={() => { setCardField({ images: draft.images.filter((_, index) => index !== imageIndex) }); setImageIndex(Math.max(0, imageIndex - 1)); }} aria-label="删除图片"><X size={16} /></button><button className="knowledge-image-prev" onClick={() => setImageIndex(index => Math.max(0, index - 1))} aria-label="上一张">‹</button><button className="knowledge-image-next" onClick={() => setImageIndex(index => Math.min(draft.images.length - 1, index + 1))} aria-label="下一张">›</button></> : <label className="knowledge-image-add"><Plus size={38} /><span>添加图片</span><input type="file" accept="image/*" multiple onChange={e => addImages(e.target.files)} /></label>}
+          </div>
+          <div className="knowledge-card-dots">{draft.images.map((_, index) => <button key={index} className={index === imageIndex ? 'is-active' : ''} onClick={() => setImageIndex(index)} aria-label={`第 ${index + 1} 张图片`} />)}{draft.images.length > 0 && <label className="knowledge-image-more"><Plus size={15} /><input type="file" accept="image/*" multiple onChange={e => addImages(e.target.files)} /></label>}</div>
+          <div className="knowledge-card-text-wrap"><textarea className="knowledge-card-text" value={draft.text} onChange={e => setCardField({ text: e.target.value })} placeholder="补充一点文字说明（可选）" /><button onClick={setTextFullscreen}>全屏输入</button></div>
+          <div className="knowledge-card-actions"><select value={draft.status ?? ''} onChange={e => setCardField({ status: (e.target.value || undefined) as KnowledgeStatus | undefined })} aria-label="卡片状态"><option value="">状态留空</option><option value="todo">待学</option><option value="debt">负债</option><option value="learned">已学</option></select><button className="knowledge-save" disabled={!draft.title.trim()} onClick={() => void saveCard({ ...draft, title: draft.title.trim() })}><Save size={15} /> 保存卡片</button><button className="knowledge-danger" onClick={() => void deleteCard(draft.id)}>删除</button></div>
+        </> : <><div className="knowledge-card-empty"><Plus size={56} /><button onClick={() => setCardDraft({ id: `card-${Date.now()}`, title: '', images: [], text: '', createdAt: Date.now(), updatedAt: Date.now() })}>建立第一张卡片</button></div></>}
+      </div>
+      {cards.length > 1 && !cardDraft && <div className="knowledge-card-pager"><button onClick={() => setCardIndex(index => Math.max(0, index - 1))} disabled={cardIndex === 0} aria-label="上一张卡片">‹</button><span>{cardIndex + 1} / {cards.length}</span><button onClick={() => setCardIndex(index => Math.min(cards.length - 1, index + 1))} disabled={cardIndex === cards.length - 1} aria-label="下一张卡片">›</button></div>}
+      {lightbox && <div className="knowledge-lightbox" onClick={() => setLightbox(null)}><img src={lightbox} alt="全屏图片" /></div>}
+    </div>;
+  }
 
   return <div className="knowledge-panel">
     <header className="knowledge-header"><button className="knowledge-icon-btn" onClick={onClose} aria-label="返回课程"><ArrowLeft size={19} /></button><div><span className="knowledge-kicker">{course.name}</span><h2>知识地图</h2></div><div className="knowledge-head-actions"><button className="knowledge-icon-btn" onClick={() => setPresentation(value => value === 'tree' ? 'mind' : 'tree')} aria-label={presentation === 'tree' ? '查看思维导图' : '查看知识树'}>{presentation === 'tree' ? <Sparkles size={17} /> : <BookOpen size={17} />}</button><button className="knowledge-icon-btn" onClick={exportText} aria-label="导出知识地图"><Download size={18} /></button></div></header>

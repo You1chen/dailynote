@@ -183,13 +183,20 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     const course = data.courses.find(item => item.id === map.courseId);
     for (const node of map.nodes) {
       const checklist = node.note?.blocks.filter(block => block.checklist) ?? [];
-      if (!checklist.length) continue;
-      push(makeHit(
+      if (checklist.length) push(makeHit(
         q,
         `knowledge-check:${map.courseId}:${node.id}`,
         checklist.find(block => block.text.toLowerCase().includes(q))?.text || node.title,
         checklist.map(block => `${block.checked ? '[已完成] ' : '[待办] '}${block.text}`),
         `知识地图 · ${course?.name ?? map.courseName} · ${node.title}`,
+        `/courses?knowledgeCourse=${map.courseId}&knowledgeNode=${node.id}`,
+      ));
+      for (const card of node.cards ?? []) push(makeHit(
+        q,
+        `knowledge-card:${map.courseId}:${node.id}:${card.id}`,
+        card.title || node.title,
+        [card.title, card.text],
+        `知识卡片 · ${course?.name ?? map.courseName} · ${node.title}`,
         `/courses?knowledgeCourse=${map.courseId}&knowledgeNode=${node.id}`,
       ));
     }

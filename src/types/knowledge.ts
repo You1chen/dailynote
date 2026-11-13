@@ -12,6 +12,16 @@ export interface KnowledgeNote {
   updatedAt: number;
 }
 
+export interface KnowledgeCard {
+  id: string;
+  title: string;
+  status?: KnowledgeStatus;
+  images: string[];
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface KnowledgeNode {
   id: string;
   parentId?: string;
@@ -21,6 +31,7 @@ export interface KnowledgeNode {
   status: KnowledgeStatus;
   children: string[];
   note?: KnowledgeNote;
+  cards?: KnowledgeCard[];
 }
 
 export interface KnowledgeMap {

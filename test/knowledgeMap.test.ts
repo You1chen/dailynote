@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildKnowledgeNodes, nodesToMarkdown, parseKnowledgeMarkdown, parseNoteBlocks } from '../src/utils/knowledgeMap';
+import type { KnowledgeNode } from '../src/types/knowledge';
 import { renderKnowledgeNoteText } from '../src/utils/knowledgeNoteRender';
 
 const source = '- 绪论 p1\n- 第一章 数制和码制 p4\n  - 1.1 概述 p4\n    - 1.1.1 二进制 p6\n';
@@ -37,6 +38,13 @@ describe('knowledge map parser', () => {
     expect(note.blocks.map(block => block.checklist)).toEqual([false, false, false, true, false]);
     expect(note.blocks[3].text).toBe('three');
     expect(parseNoteBlocks('three   ', note).blocks[0].checked).toBe(false);
+  });
+
+  it('keeps a parent note when a child is later added', () => {
+    const old = buildKnowledgeNodes('- Chapter').nodes;
+    old[0].note = { updatedAt: 1, blocks: [{ id: 'n', text: 'parent note', checklist: false }] };
+    const next = buildKnowledgeNodes('- Chapter\n  - Child', old).nodes;
+    expect(next.find((node: KnowledgeNode) => node.title === 'Chapter')?.note?.blocks[0].text).toBe('parent note');
   });
 
   it('roundtrips tree markdown and renders LaTeX safely', () => {
