@@ -112,7 +112,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     setError('');
     setNotice('');
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setError('当前环境不支持录音，请使用支持麦克风的浏览器或应用。');
+      setError('当前环境不支持录音。');
       return;
     }
     const token = ++permissionToken.current;
@@ -342,7 +342,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       }} onPointerUp={clearPress} onPointerCancel={() => { clearPress(); longPressed.current = true; if (phaseRef.current === 'permission') cancelPermission(); }} onLostPointerCapture={clearPress} onClick={() => {
         if (longPressed.current) { longPressed.current = false; return; }
         addText();
-      }}><Plus size={25} /><span>文字 · 长按录音</span></button>
+      }}><Plus size={25} /><span>文字</span></button>
       <button type="button" disabled={locked} onClick={() => fileInput.current?.click()}><ImageIcon size={22} /><span>图片</span></button>
       <input ref={fileInput} className="kce-file" type="file" accept="image/*" multiple onChange={event => {
         const files = Array.from(event.currentTarget.files ?? []);
