@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KnowledgeCard } from '../src/types/knowledge';
-import { cardDateKey, groupCardsByDate } from '../src/utils/knowledgeCards';
+import { cardDateKey, cardSearchText, groupCardsByDate } from '../src/utils/knowledgeCards';
 
 const card = (id: string, createdAt: number): KnowledgeCard => ({ id, title: id, contents: [], createdAt, updatedAt: createdAt });
 
@@ -20,5 +20,17 @@ describe('collector date grouping', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].date).toBe(cardDateKey(first));
     expect(groups[0].cards.map(item => item.id)).toEqual(['b', 'a']);
+  });
+
+  it('includes comment text in keyword search', () => {
+    const now = Date.now();
+    const item: KnowledgeCard = {
+      ...card('with-comment', now),
+      contents: [{
+        id: 'text-1', kind: 'text', text: '正文', createdAt: now, updatedAt: now,
+        comments: [{ id: 'comment-1', text: '这里补充一个关键词', images: [], createdAt: now, updatedAt: now }],
+      }],
+    };
+    expect(cardSearchText(item)).toContain('这里补充一个关键词');
   });
 });

@@ -3,7 +3,13 @@ import type { KnowledgeCard, KnowledgeCardContent, KnowledgeCardLibrary } from '
 export const DEFAULT_AUDIO_EXPORT_PATH = 'Music/DailyNote';
 export const cardHasContent = (card: KnowledgeCard) => !!card.title.trim() || card.contents.some(item => item.kind === 'text' ? !!item.text.trim() : !!item.data);
 export function cardSearchText(card: KnowledgeCard): string {
-  return [card.title, ...card.contents.map(item => item.kind === 'text' ? item.text : item.kind === 'audio' ? item.fileName : '')].filter(Boolean).join(' ');
+  return [
+    card.title,
+    ...card.contents.flatMap(item => [
+      item.kind === 'text' ? item.text : item.kind === 'audio' ? item.fileName : '',
+      ...(item.comments ?? []).map(comment => comment.text),
+    ]),
+  ].filter(Boolean).join(' ');
 }
 export function upsertCardRecord(library: KnowledgeCardLibrary, card: KnowledgeCard): KnowledgeCardLibrary {
   const timestamp = Date.now();

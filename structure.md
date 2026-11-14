@@ -487,3 +487,9 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 - 卡片收集器用日期菜单切换有卡片的日期；同一天默认倒序，可切换升序；内部支持标题/文字/录音文件名关键词筛选。
 - `groupCardsByDate`、`dateGroupLabel` 位于 `utils/knowledgeCards.ts`，日期使用设备本地日历。
 - `DayNavigator` 的 `marks` 支持 `markTone`；反思页用绿色角标统计各日反思数，选中日期也保持绿色；收获页灵感沿用默认色。
+
+### 卡片内容评论（2026-11-14）
+
+- `KnowledgeComment { id, text, images, createdAt, updatedAt }` 挂在 `KnowledgeCardContent.comments`，不是卡片级；内容删除时评论自然级联删除。
+- `KnowledgeCardEditor` 在每条内容右下角渲染评论悬浮球，数字为评论数；`KnowledgeCardComments` 负责文字/图片发表、编辑、删除与图片全屏。
+- `cardSearchText` 同时匹配评论文字，收集器关键词筛选可以命中评论。
