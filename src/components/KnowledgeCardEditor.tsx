@@ -294,8 +294,8 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       <button type="button" className="kce-save" disabled={locked} onClick={() => void saveAndClose(true)}>{busy ? '处理中…' : '保存'}</button>
     </header>
     <div className="kce-meta">
-      <input ref={titleInput} aria-label="卡片名称" placeholder="卡片名称（保存时必填）" value={draft.title} disabled={locked} onChange={event => patch({ title: event.target.value })} />
-      <select aria-label="学习状态（可选）" value={draft.status ?? ''} disabled={locked} onChange={event => patch({ status: (event.target.value || undefined) as KnowledgeStatus | undefined })}>
+      <input ref={titleInput} aria-label="卡片名称" placeholder="卡片名称" value={draft.title} disabled={locked} onChange={event => patch({ title: event.target.value })} />
+      <select aria-label="学习状态" value={draft.status ?? ''} disabled={locked} onChange={event => patch({ status: (event.target.value || undefined) as KnowledgeStatus | undefined })}>
         <option value="">无状态</option><option value="todo">待学习</option><option value="debt">待补充</option><option value="learned">已掌握</option>
       </select>
     </div>
@@ -313,12 +313,12 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       const dx = end.clientX - start.x;
       if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(end.clientY - start.y) * 1.3) setIndex(value => Math.max(0, Math.min(draft.contents.length - 1, value + (dx < 0 ? 1 : -1))));
     }}>
-      {!current && <div className="kce-empty"><Plus size={32} /><p>点击下方 ＋ 添加文字</p><small>长按同一个 ＋ 开始录音，点击图片按钮添加图片</small></div>}
+      {!current && <div className="kce-empty"><Plus size={32} /></div>}
       {current?.kind === 'text' && <textarea key={current.id} ref={textInput} className="kce-text" aria-label={`第 ${index + 1} 条文字内容`} placeholder="写一点内容…" value={current.text} disabled={locked} onChange={event => {
         const text = event.target.value;
         patch({ contents: draftRef.current.contents.map(item => item.id === current.id && item.kind === 'text' ? { ...item, text, updatedAt: Date.now() } : item) });
       }} />}
-      {current?.kind === 'image' && <button type="button" className="kce-image" aria-label="全屏查看图片" onClick={() => setFullscreenImage(current.data)}><img src={current.data} alt={`卡片图片 ${index + 1}`} draggable={false} /><span>点击全屏查看</span></button>}
+      {current?.kind === 'image' && <button type="button" className="kce-image" aria-label="全屏查看图片" onClick={() => setFullscreenImage(current.data)}><img src={current.data} alt={`卡片图片 ${index + 1}`} draggable={false} /></button>}
       {current?.kind === 'audio' && <div className="kce-audio"><Mic size={36} /><strong>{current.fileName}</strong><audio key={current.id} controls preload="metadata" src={current.data} /><small>{Math.max(1, Math.round(current.durationMs / 1000))} 秒</small><button type="button" disabled={exporting} onClick={() => void exportAudio(current)}><Download size={17} />{exporting ? '正在导出…' : '导出录音'}</button></div>}
     </main>
     <nav className="kce-navigation" aria-label="内容翻页">

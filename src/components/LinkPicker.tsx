@@ -108,7 +108,7 @@ export default function LinkPicker({ open, links, onChange, onClose }: Props) {
             ) : week < 1 ? (
               <p className="lp-empty">还没开学，暂时没有可关联的课程</p>
             ) : validCourses.length === 0 ? (
-              <p className="lp-empty">本学期没有正在上的课（未开讲、已结课、单双周不在本周的都算无效）</p>
+              <p className="lp-empty">当前没有可关联课程</p>
             ) : (
               validCourses.map(c => {
                 const on = hasLink(links, courseLink(c));

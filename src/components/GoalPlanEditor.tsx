@@ -211,7 +211,7 @@ export default function GoalPlanEditor({ goal, onSave, onClose }: GoalPlanEditor
     <main className="gp-editor-body">
       <section className="gp-field"><label htmlFor="gp-goal-title">目标名称</label><input id="gp-goal-title" value={title} maxLength={200} placeholder="想实现什么？" onChange={event => setTitle(event.target.value)} /></section>
       <section className="gp-field"><span className="gp-label">目标内容</span><button type="button" className="gp-open-plan" onClick={() => setEditing(true)}><span>{nodes.length ? `${nodes.length} 个一级目标 · ${flatten(nodes).length} 个节点` : '添加计划'}</span><ChevronRight size={19} /></button></section>
-      <section className="gp-field gp-attachment"><label htmlFor="gp-attachment">附件（实现理想的线索）</label><textarea id="gp-attachment" value={description} placeholder="记录资源、灵感和可行动的线索" onChange={event => setDescription(event.target.value)} /></section>
+      <section className="gp-field gp-attachment"><label htmlFor="gp-attachment">附件线索</label><textarea id="gp-attachment" value={description} placeholder="记录资源、灵感和可行动的线索" onChange={event => setDescription(event.target.value)} /></section>
       {error && <p className="gp-error" role="alert">{error}</p>}
     </main>
     {editing && <ContentEditor initial={nodes} onBack={() => setEditing(false)} onDone={next => { setNodes(next); setEditing(false); setError(''); }} />}

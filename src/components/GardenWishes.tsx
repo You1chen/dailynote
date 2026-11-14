@@ -408,7 +408,7 @@ export default function GardenWishes() {
             </div>
 
             <div className="form-group">
-              <label className="label">为什么想要（可选）</label>
+              <label className="label">为什么想要</label>
               <textarea
                 className="input textarea"
                 value={wishDraft.why}
@@ -419,7 +419,7 @@ export default function GardenWishes() {
             </div>
 
             <div className="form-group">
-              <label className="label">期望完成（可选）</label>
+              <label className="label">期望完成</label>
               <input
                 className="input"
                 type="date"

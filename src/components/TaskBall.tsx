@@ -444,7 +444,7 @@ export default function TaskBall() {
                   <input
                     className="tb-input"
                     value={pending}
-                    placeholder="输入一行"
+                    placeholder="输入任务"
                     onFocus={() => setEditing(null)}
                     onChange={e => setPending(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitLine(); } }}

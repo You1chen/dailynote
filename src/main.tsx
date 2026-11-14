@@ -195,7 +195,7 @@ function Boot() {
         <span style={{ fontSize: 44 }}>🔓</span>
         <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>需要存储权限</h2>
         <p style={{ margin: 0, maxWidth: 420, lineHeight: 1.7 }}>
-          数据保存在公共 Documents 目录。Android 11+ 需授予「所有文件访问」权限才能读写（数据仅存手机本地，不会上传）。
+          数据保存在公共 Documents 目录，需要「所有文件访问」权限。数据仅存本机。
         </p>
         <p style={{ margin: 0, maxWidth: 420, lineHeight: 1.7, color: '#6b7280', fontSize: '0.8rem' }}>
           点击下方按钮去系统设置开启「允许管理所有文件」，返回后自动重新检测。

@@ -59,7 +59,7 @@ describe('CoursesPage — 学期展示', () => {
     const html = render([old, current], 'list');
     expect(html).toContain('历史课程');
     expect(html).toContain('当前课程');
-    expect(html).toContain('2026-02-23 开学（非当前）');
-    expect(html).toContain('2026-09-07 开学（当前）');
+    expect(html).toContain('2026-02-23 开学 · 非当前');
+    expect(html).toContain('2026-09-07 开学 · 当前');
   });
 });

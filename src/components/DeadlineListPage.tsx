@@ -588,7 +588,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
             <div className="ddl-field">
               <div className="ddl-field-head">
                 <label className="ddl-field-label">
-                  备注图片（{form.images.length}/{MAX_IMAGES}）
+                  备注图片 {form.images.length}/{MAX_IMAGES}
                 </label>
                 <button
                   className="ddl-ocr-btn"
@@ -720,7 +720,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
             </div>
 
             {conflictCount > 0 && (
-              <p className="ddl-hint">有 {conflictCount} 处与现有内容不同，已标注，默认保留原值。</p>
+              <p className="ddl-hint">{conflictCount} 处内容不同，已保留原值。</p>
             )}
 
             <div className="modal-actions">

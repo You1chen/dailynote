@@ -556,7 +556,7 @@ export default function DailyPlanPage() {
           {isToday && (
             <button
               className={`dp-tool ${prefs.futureOnly ? 'dp-tool--on' : ''}`}
-              title={prefs.futureOnly ? '显示全部时段' : '只看未来（折叠当前小时之前）'}
+              title={prefs.futureOnly ? '显示全部时段' : '只看未来'}
               aria-pressed={prefs.futureOnly}
               onClick={() => updatePrefs({ futureOnly: !prefs.futureOnly })}
             >
@@ -819,7 +819,7 @@ export default function DailyPlanPage() {
                   </div>
                 ) : (
                   <div className="form-group">
-                    <label className="label">预计时长（分钟）</label>
+                    <label className="label">预计时长</label>
                     <input
                       className="input"
                       type="text"
@@ -930,7 +930,7 @@ export default function DailyPlanPage() {
                     {/* 套用模板选择器（内联在 bs-sheet 内，层级高于 310） */}
                     {showTemplatePicker && (
                       <div className="bs-template-picker">
-                        <div className="bs-template-picker-title">选择模板（追加到当前清单）</div>
+                        <div className="bs-template-picker-title">选择模板</div>
                         {templateList.map(t => (
                           <button
                             key={t.id}
@@ -1013,7 +1013,7 @@ export default function DailyPlanPage() {
 
             <div className="bs-scores">
               <div className="form-group">
-                <label className="label">专注度 (0-10)</label>
+                <label className="label">专注度</label>
                 <input
                   className="input"
                   type="text"
@@ -1036,7 +1036,7 @@ export default function DailyPlanPage() {
                 />
               </div>
               <div className="form-group">
-                <label className="label">效率 (0-10)</label>
+                <label className="label">效率</label>
                 <input
                   className="input"
                   type="text"

@@ -142,9 +142,6 @@ export default function ReflectionPage() {
       ) : periodReflections.length === 0 ? (
         <div className="empty-state">
           <p>该时段还没有反思</p>
-          <p style={{ fontSize: 'var(--font-xs)', color: 'var(--color-text-muted)' }}>
-            发现问题 → 分析原因 → 得出改进方案
-          </p>
         </div>
       ) : (
         <div className="reflection-list">
@@ -154,7 +151,7 @@ export default function ReflectionPage() {
                 {/* 问题块 */}
                 <div className="ref-block ref-block--problem">
                   <span className="ref-block-label">🔍 问题</span>
-                  <p className="ref-block-text">{r.problem || '（未填写）'}</p>
+                  <p className="ref-block-text">{r.problem || '未填写'}</p>
                 </div>
 
                 {/* 原因块 */}
@@ -254,7 +251,7 @@ export default function ReflectionPage() {
 
               {/* 关联任务 */}
               <div className="ref-editor-section">
-                <label className="ref-editor-label">📋 关联任务（可选）</label>
+                <label className="ref-editor-label">关联任务</label>
                 {taskOptions.length > 0 ? (
                   <select className="input select" value={editTask} onChange={e => setEditTask(e.target.value)}>
                     <option value="">不关联</option>

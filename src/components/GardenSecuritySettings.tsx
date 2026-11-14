@@ -32,7 +32,7 @@ export default function GardenSecuritySettings() {
     <div className="card">
       <p className="settings-security-badge">{hasGardenVault() ? '已启用 · RSA-3072 + AES-256-GCM' : '等待首次加密设置'}</p>
       <p className="settings-field-hint">{hasGardenVault() ? '内容使用 AES-GCM 加密，RSA-OAEP 保护内容密钥。私钥由密码短语加密后随备份保存，解锁密钥仅留在内存。离开或切到后台将重新上锁。' : '进入秘密花园后，使用原来的数字密码完成加密迁移。以后仍可使用原密码，也可以在这里换成更强的文字短语。'}</p>
-      <p className="settings-field-hint">建议使用较长、独特的密码短语。忘记密码无法恢复；此前导出的旧备份仍需单独妥善保管。</p>
+      <p className="settings-field-hint">使用较长且独特的密码短语。忘记密码无法恢复。</p>
       {hasGardenVault() && <form onSubmit={e=>{e.preventDefault();void change();}}>
         <div className="settings-field"><label className="label" htmlFor="garden-current-phrase">当前口令</label><input id="garden-current-phrase" className="input" type="password" required disabled={busy} value={current} onChange={e=>setCurrent(e.target.value)} autoComplete="current-password"/></div>
         <div className="settings-field"><label className="label" htmlFor="garden-new-phrase">新口令</label><input id="garden-new-phrase" className="input" type="password" required minLength={4} disabled={busy} value={next} onChange={e=>setNext(e.target.value)} autoComplete="new-password"/></div>

@@ -91,7 +91,7 @@ export default function SettlementPage() {
         <summary>查看文字明细</summary>
         {data.sections.length ? data.sections.map(section => <section key={section.title}>
           <h2>{section.title}</h2>
-          <ul>{section.items.map((item, index) => <li key={index}>{item.label}：{item.value}{item.detail ? `（${item.detail}）` : ''}</li>)}</ul>
+          <ul>{section.items.map((item, index) => <li key={index}>{item.label}：{item.value}{item.detail ? ` · ${item.detail}` : ''}</li>)}</ul>
         </section>) : <p>所选日期暂无可确认的交互记录。</p>}
       </details>
     </div>

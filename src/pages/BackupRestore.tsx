@@ -65,7 +65,7 @@ export default function BackupRestorePage() {
       setNewPath('');
       setPersistError(getLastPersistError());
       if (result.recovered) {
-        showStatus(`✅ 已切换到 ${path}，恢复 ${result.count} 条记录（原位置数据保留）`);
+        showStatus(`✅ 已切换到 ${path}，恢复 ${result.count} 条记录，原位置数据保留`);
       } else {
         showStatus(`✅ 已切换到 ${path}，当前数据已保存到新位置`);
       }
@@ -116,7 +116,7 @@ export default function BackupRestorePage() {
         setStatus('目录里没有数据');
       } else {
         setStatusType('success');
-        setStatus(`已按磁盘重新读取（${count} 条记录）`);
+        setStatus(`已按磁盘重新读取，${count} 条记录`);
       }
     } catch {
       setStatusType('error');
@@ -183,13 +183,13 @@ export default function BackupRestorePage() {
           <div>
             <strong>更改存储位置</strong>
             <p className="backup-desc">
-              输入子目录名或完整路径。若该位置已有数据将恢复并继续编辑，原位置数据保留。
+              输入完整路径。已有数据会恢复。
             </p>
             <input
               className="input input-sm"
               value={newPath}
               onChange={e => { setNewPath(e.target.value); setPathError(''); }}
-              placeholder="存储目录（可选）"
+              placeholder="存储目录"
               style={{ marginTop: 8 }}
               onKeyDown={e => { if (e.key === 'Enter') handleChangePath(); }}
             />
@@ -220,7 +220,7 @@ export default function BackupRestorePage() {
                       style={{ justifyContent: 'flex-start', fontSize: '0.85rem' }}
                       onClick={() => pickDir('DailyNote')}
                     >
-                      <FolderOpen size={16} /> Documents/DailyNote/（默认）
+                      <FolderOpen size={16} /> Documents/DailyNote/
                     </button>
                     {subdirs.map(name => (
                       <button
@@ -286,9 +286,9 @@ export default function BackupRestorePage() {
         <ul className="backup-guide">
           <li>数据存放在设备公共 Documents 目录，不在应用沙箱内</li>
           <li>按日期与类型分文件存储：days/&lt;日期&gt;/{'{plan,reflections,harvests,tasks}.json'}，加上 goals.json、routines.json、templates.json、courses.json、semester.json、ddls.json、trash.json</li>
-          <li>每次修改只写被改到的文件，立即保存（无延迟）</li>
+          <li>每次修改只写被改到的文件，立即保存</li>
           <li>启动时从文件读取数据，确保卸载重装不丢失</li>
-          <li>重装后指定相同目录即可恢复全部数据（含回收站）</li>
+          <li>重装后指定相同目录即可恢复全部数据</li>
           <li>换手机时：旧手机导出 → 新手机导入</li>
         </ul>
       </div>

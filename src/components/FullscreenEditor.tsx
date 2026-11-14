@@ -22,7 +22,7 @@ export default function FullscreenEditor({
   titleValue, bodyValue,
   onTitleChange, onBodyChange,
   onSave, onCancel,
-  titlePlaceholder = '标题（可选）',
+  titlePlaceholder = '标题',
   bodyPlaceholder = '写下内容...',
   extra,
 }: FullscreenEditorProps) {

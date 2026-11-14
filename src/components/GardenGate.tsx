@@ -87,7 +87,7 @@ export default function GardenGate({ children }: { children: ReactNode }) {
       <span className="garden-gate-flower" aria-hidden="true">✿</span>
       <p className="garden-gate-kicker">秘密花园</p>
       <h1 id="garden-gate-title">{setup ? '为花园留一个约定' : '还记得我们的约定是？'}</h1>
-      <p>{setup ? hasGardenPassword() ? '输入原来的数字密码，完成加密迁移。之后可在花园设置中更改。' : '设置至少 4 个字符的口令。建议使用较长的文字口令。' : '输入口令，解开花园内容。'}</p>
+      <p>{setup ? hasGardenPassword() ? '输入原来的数字密码，完成加密迁移。之后可在花园设置中更改。' : '至少 4 个字符。' : '输入口令，解开花园内容。'}</p>
       {notice && <p className="garden-gate-notice" role="status">{notice}</p>}
       <label htmlFor="garden-passphrase">{setup ? '口令' : '花园口令'}</label>
       <input id="garden-passphrase" type="password" autoComplete={setup ? 'new-password' : 'current-password'} autoFocus value={passphrase} onChange={e => { setPassphrase(e.target.value); setError(''); }} />

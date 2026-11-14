@@ -83,14 +83,14 @@ export default function SetupPage({ onComplete }: Props) {
           <div className="setup-option-body">
             <strong>自定义子目录</strong>
             <span className="setup-option-hint">
-              输入子目录名（如 MyNotes）或完整路径 Documents/MyNotes。重装后输入相同目录即可恢复数据。
+              输入完整路径，或使用默认位置。重装后选择同一目录即可恢复。
             </span>
             <input
               className="input input-sm"
               value={customPath}
               onChange={e => { setCustomPath(e.target.value); setPathError(''); }}
               onClick={e => e.stopPropagation()}
-              placeholder="子文件夹名称（可选）"
+              placeholder="子文件夹名称"
               style={{ marginTop: 8 }}
               onKeyDown={e => {
                 if (e.key === 'Enter') handleUseCustom();
@@ -117,7 +117,7 @@ export default function SetupPage({ onComplete }: Props) {
                       style={{ justifyContent: 'flex-start' }}
                       onClick={() => pickDir('DailyNote')}
                     >
-                      <FolderOpen size={14} /> Documents/DailyNote/（默认）
+                      <FolderOpen size={14} /> Documents/DailyNote/
                     </button>
                     {subdirs.map(name => (
                       <button

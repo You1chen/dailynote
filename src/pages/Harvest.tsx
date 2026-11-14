@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Hash, Edit3, Lightbulb, X } from 'lucide-react';
+import { Plus, Trash2, Edit3, Lightbulb, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import FullscreenEditor from '../components/FullscreenEditor';
@@ -156,13 +156,8 @@ export default function HarvestPage() {
         onBodyChange={setBody}
         onSave={handleSave}
         onCancel={() => setEditorOpen(false)}
-        titlePlaceholder="一句话概括（可选）"
+        titlePlaceholder="一句话概括"
         bodyPlaceholder="写下今天学到了什么..."
-        extra={
-          <p style={{ fontSize: 'var(--font-xs)', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Hash size={12} /> #关键字 自动识别为标签
-          </p>
-        }
       />
     </div>
   );

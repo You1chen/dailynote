@@ -75,7 +75,7 @@ export function gridClickY(clientY: number, containerTop: number, scrollTop: num
  */
 export function sleepLabel(sleepStart: string, sleepEnd: string): string {
   return sleepCrossesMidnight(sleepStart, sleepEnd)
-    ? `${sleepStart} - ${sleepEnd}（次日）`
+    ? `次日 ${sleepStart} - ${sleepEnd}`
     : `${sleepStart} - ${sleepEnd}`;
 }
 

@@ -1139,10 +1139,10 @@ export async function importJSONIntoStore(json: string): Promise<number> {
   try {
     JSON.parse(trimmed);
   } catch {
-    throw new Error('文件内容不是有效的 JSON（可能已损坏或选错文件）');
+    throw new Error('文件内容不是有效的 JSON');
   }
   const data = parseStorageData(trimmed);
-  if (!data) throw new Error('不是 DailyNote 数据文件（缺少 version/dailyPlans 字段）');
+  if (!data) throw new Error('不是 DailyNote 数据文件');
   const referenced = [...data.longTermGoals.map(g => g.encrypted?.keyId), ...data.trashItems.map(t => t.originalData?.encrypted?.keyId), ...data.activityEvents.map(e => e.encrypted?.keyId)].filter(Boolean);
   for (const keyId of referenced) if (![...data.gardenKeys, ...store.gardenKeys].some(k => k.keyId === keyId)) throw new Error('备份缺少花园密钥，无法安全导入');
   const security = await import('./gardenSecurity'); security.lockGarden();

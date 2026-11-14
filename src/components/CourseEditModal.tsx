@@ -154,7 +154,7 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
           />
         </div>
         <div className="form-group">
-          <label className="label">星期（可多选）</label>
+          <label className="label">星期</label>
           <div className="settings-chip-row">
             {DAY_LABELS.map((label, dw) => {
               const active = form.dayOfWeek.includes(dw);
@@ -230,7 +230,7 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
           </div>
         </div>
         <div className="form-group">
-          <label className="label">周数范围（第 1 周起算）</label>
+          <label className="label">周数范围</label>
           <div className="courses-week-row">
             <span className="courses-week-label">从第</span>
             <input

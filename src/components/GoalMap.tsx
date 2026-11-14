@@ -70,7 +70,7 @@ export default function GoalMap({ goal, onToggleLeaf, onEdit, onDelete, onClose 
         </div>;
       })}</div> : <p className="gp-map-empty">{focus ? '此节点还没有子目标' : '尚未拆解目标'}</p>}
       </details>
-      {!focus && goal.description.trim() && <section className="gp-map-notes"><h3>附件（实现理想的线索）</h3><p>{goal.description}</p></section>}
+      {!focus && goal.description.trim() && <section className="gp-map-notes"><h3>附件线索</h3><p>{goal.description}</p></section>}
       {error && <p className="gp-error" role="alert">{error}</p>}
     </div>
   </div>;

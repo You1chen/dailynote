@@ -57,7 +57,7 @@ export default function GardenConfessionEditor({ entry, onSave, onSaved, onClose
       <p>不必想好开头，也不必给心事一个答案。</p>
     </div>
     <div className="garden-paper">
-      <label className="garden-sr-only" htmlFor="garden-letter-title">给这段话起个名字（可选）</label>
+      <label className="garden-sr-only" htmlFor="garden-letter-title">给这段话起个名字</label>
       <input id="garden-letter-title" className="garden-letter-title-input" value={title} onChange={e => setTitle(e.target.value)} disabled={busy} placeholder="给这段话起个名字，也可以不写" autoComplete="off" />
       <label className="garden-sr-only" htmlFor="garden-letter-body">想说的话</label>
       <textarea id="garden-letter-body" className="garden-letter-body-input" value={text} onChange={e => setText(e.target.value)} disabled={busy} placeholder="此刻，有什么想轻轻放下？" autoFocus spellCheck={false} />

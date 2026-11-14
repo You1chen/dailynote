@@ -192,7 +192,7 @@ export default function CoursesPage() {
             <div className="settings-field">
               <label className="label">🎒 开学时间</label>
               <p className="settings-field-hint" style={{ marginBottom: 8 }}>
-                开学时间所在周（周一对齐）为第 1 周。切换学期不会把已有课程转入新学期。
+                开学时间所在周为第 1 周。切换学期不迁移已有课程。
               </p>
               <input
                 className="input"
@@ -208,9 +208,9 @@ export default function CoursesPage() {
             </div>
 
             <div className="settings-field">
-              <label className="label">🎌 特殊日期（放假 / 补课）</label>
+              <label className="label">🎌 特殊日期</label>
               <p className="settings-field-hint" style={{ marginBottom: 8 }}>
-                法定节假日已内置（2026 精确，2027 部分推定）。手动补充：放假不显示课程，补课照常显示。
+                法定节假日已内置。放假不显示课程，补课照常显示。
               </p>
               <div className="courses-special-add">
                 <input
@@ -415,7 +415,7 @@ export default function CoursesPage() {
                           </span>
                           <span className="courses-card-meta">
                             {c.semesterStartDate
-                              ? `所属学期：${c.semesterStartDate} 开学${isCourseInSemester(c, semester) ? '（当前）' : '（非当前）'}`
+                              ? `所属学期：${c.semesterStartDate} 开学 · ${isCourseInSemester(c, semester) ? '当前' : '非当前'}`
                               : '所属学期：待设置开学时间'}
                           </span>
                           <button className="courses-map-link" onClick={e => { e.stopPropagation(); setKnowledgeCourse(c); }}><BookOpen size={14} /> 知识地图</button>
