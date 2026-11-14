@@ -103,7 +103,7 @@ src/
 
 ```
 android/app/src/main/java/com/dailynote/app/
-├── MainActivity.java            注册两个插件
+├── MainActivity.java            注册两个插件；Android 15+ 将 systemBars/displayCutout 内边距应用到内容根视图
 ├── DailyNoteStoragePlugin.java  「所有文件访问」权限桥
 └── MlkitOcrPlugin.java          中文 OCR
 ```
@@ -465,3 +465,10 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 - 知识笔记使用 `KnowledgeNote.blocks` 保存；行末三个或更多 ASCII 半角空格表示 checklist，文本不进入全局隐私内容之外的特殊表；方框正文被 `utils/search.ts` 索引，点击搜索结果带 `knowledgeCourse`/`knowledgeNode` 查询参数回课程面板。
 - `utils/knowledgeNoteRender.ts` 使用 KaTeX 阅读态渲染；用户原文仍保存，普通文本先 HTML 转义，公式失败时回退为转义原文。
 - 思维导图预览是知识树的具象化视图，叶节点笔记摘要挂在分支下；下载格式为包含层级与笔记的 Markdown，可用于其他文本/思维导图工具的再加工。
+
+## Android 系统栏安全区（2026-11-14）
+
+- `targetSdk 36` 下 Android 15+ 强制 edge-to-edge，WebView 会绘制到状态栏和导航栏下面。
+- `MainActivity` 在 `SDK_INT >= 35` 时监听内容根视图的 `systemBars()` 与 `displayCutout()` Insets，并把 left/top/right/bottom 设为根视图 padding；旧系统保持原有窗口布局，避免重复内缩。
+- 知识地图等 `position: fixed` 全屏面板同时使用 `env(safe-area-inset-top/bottom)`，兼顾 iOS 刘海与 Home Indicator。
+- 该处理是窗口级，不改变卡片内部布局；卡片页面仍固定视口、不产生纵向长页面。

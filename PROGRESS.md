@@ -128,3 +128,9 @@ DDL 有了一周内提醒，全局搜索只查自己填写的内容，并把结�
 - 固定视口中锁定 body 滚动，保持图片、文字和底部操作在屏幕内；全屏文字输入仍可单独打开。
 - 浏览器 390px 走通：下拉切卡、卡片滑动、图片滑动、滑到首尾添加图片、全屏文字输入、无横向溢出。
 
+## 2026-11-14 — 全屏知识卡片避开 Android 系统栏
+- **问题**：Android 15/16 强制 edge-to-edge 后，知识地图全屏面板覆盖到状态栏和底部导航栏，顶部课程名与底部操作被系统图标压住；CSS 的 `env(safe-area-inset-*)` 在 Android WebView 上拿不到系统栏高度。
+- **修复**：`MainActivity` 在 Android 15+ 监听根内容视图的 `systemBars` 与 `displayCutout` Insets，将 left/top/right/bottom 应用到内容 padding；旧 Android 保持原有窗口布局，避免重复内缩。知识面板补充 `env(safe-area-inset-top/bottom)`，兼顾 iOS。
+- **结果**：状态栏、导航栏不再覆盖卡片页；卡片仍保持固定视口和原有滑动区域，不改交互。
+- **验证**：`npm run build:apk` 通过（TypeScript、Vite、Capacitor sync、Gradle assembleDebug），APK 约 25.3 MB；本次改动为原生窗口层，未能在真机上复测，需在 Android 15/16 安装确认实际 Insets 效果。
+
