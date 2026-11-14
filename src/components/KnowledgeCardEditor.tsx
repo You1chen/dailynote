@@ -4,6 +4,7 @@ import type { KnowledgeCard, KnowledgeCardContent, KnowledgeStatus } from '../ty
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { DEFAULT_AUDIO_EXPORT_PATH, exportAudioBlob } from '../utils/knowledgeCards';
+import ConfirmDialog from './ConfirmDialog';
 import './KnowledgeCardEditor.css';
 
 export interface KnowledgeCardEditorProps {
@@ -43,6 +44,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   const phaseRef = useRef<RecordingPhase>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const mounted = useRef(true);
   const operation = useRef(false);
   const permissionToken = useRef(0);
@@ -236,12 +238,13 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   }
 
   useRegisterBackHandler(() => {
+    if (confirmDelete) { setConfirmDelete(false); return true; }
     if (fullscreenImage) setFullscreenImage(null);
     else if (phaseRef.current === 'permission') cancelPermission();
     else if (phaseRef.current !== 'idle') void stopRecording();
     else void saveAndClose(false);
     return true;
-  }, [fullscreenImage, onSave, onClose]);
+  }, [confirmDelete, fullscreenImage, onSave, onClose]);
 
   function addText() {
     if (operation.current || phaseRef.current !== 'idle') return;
@@ -325,10 +328,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       <button type="button" disabled={locked || index <= 0} onClick={() => setIndex(value => Math.max(0, value - 1))} aria-label="上一条"><ChevronLeft size={22} /></button>
       <span aria-live="polite">{draft.contents.length ? `${index + 1} / ${draft.contents.length}` : '暂无内容'}</span>
       <button type="button" disabled={locked || index >= draft.contents.length - 1} onClick={() => setIndex(value => Math.min(draft.contents.length - 1, value + 1))} aria-label="下一条"><ChevronRight size={22} /></button>
-      <button type="button" className="kce-delete" aria-label="删除当前内容" disabled={locked || !current} onClick={() => {
-        patch({ contents: draftRef.current.contents.filter(item => item.id !== current?.id) });
-        setIndex(value => Math.max(0, value - 1));
-      }}><Trash2 size={17} /></button>
+      <button type="button" className="kce-delete" aria-label="删除当前内容" disabled={locked || !current} onClick={() => setConfirmDelete(true)}><Trash2 size={17} /></button>
     </nav>
     {error && <p className="kce-message kce-error" role="alert">{error}</p>}
     {notice && <p className="kce-message" role="status">{notice}</p>}
@@ -360,6 +360,14 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       </div>
     </div>}
     {fullscreenImage && <div className="kce-fullscreen" role="dialog" aria-modal="true" aria-label="全屏图片"><button type="button" onClick={() => setFullscreenImage(null)} aria-label="关闭全屏图片"><X size={25} /></button><img src={fullscreenImage} alt="卡片图片全屏预览" /></div>}
+    <ConfirmDialog open={confirmDelete} message="删除这条内容？" confirmText="删除" onCancel={() => setConfirmDelete(false)} onConfirm={() => {
+      const target = current;
+      if (!target) { setConfirmDelete(false); return; }
+      const remaining = draftRef.current.contents.filter(item => item.id !== target.id);
+      patch({ contents: remaining });
+      setIndex(value => Math.min(value, Math.max(0, remaining.length - 1)));
+      setConfirmDelete(false);
+    }} />
   </section>;
 }
 

@@ -133,4 +133,4 @@
 }
 
 .cal-day-mark--green { background: #2f9e63; }
-.cal-day-mark--green.cal-day-mark--sel { background: #fff; color: #2f9e63; }
+.cal-day-mark--green.cal-day-mark--sel { background: #2f9e63; color: #fff; box-shadow: 0 0 0 1px #fff; }

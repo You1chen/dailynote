@@ -484,7 +484,6 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 2026-11-14 收集器列表规则
 
-- 卡片收集器按 `createdAt` 的本地日期分组；组内默认倒序，顶部可切换升序。
+- 卡片收集器用日期菜单切换有卡片的日期；同一天默认倒序，可切换升序；内部支持标题/文字/录音文件名关键词筛选。
 - `groupCardsByDate`、`dateGroupLabel` 位于 `utils/knowledgeCards.ts`，日期使用设备本地日历。
-- `DayNavigator` 的 `marks` 支持 `markTone`；反思页用绿色角标统计各日反思数，收获页灵感沿用默认色。
-
+- `DayNavigator` 的 `marks` 支持 `markTone`；反思页用绿色角标统计各日反思数，选中日期也保持绿色；收获页灵感沿用默认色。
