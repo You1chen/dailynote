@@ -7,7 +7,7 @@
   overscroll-behavior-x: none;
   background: var(--color-bg, #f7f8fa);
   color: var(--color-text, #20242c);
-  padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
+  padding: var(--safe-top) max(16px, var(--safe-right)) var(--safe-bottom) max(16px, var(--safe-left));
 }
 
 .knowledge-panel.knowledge-card-page {
