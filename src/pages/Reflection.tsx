@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, X, Save, Trash2, Edit3, CheckCircle2, Circle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import KnowledgeCardCollector from '../components/KnowledgeCardCollector';
 import { useReflections } from '../hooks/useReflections';
+import { getAllReflections } from '../db';
 import { useDailyPlan } from '../hooks/useDailyPlan';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { PERIODS, type Period, todayStr } from '../types';
@@ -22,6 +23,14 @@ export default function ReflectionPage() {
   const { plan } = useDailyPlan(date);
   const [activePeriod, setActivePeriod] = useState<Period>('morning');
   const [collectorOpen, setCollectorOpen] = useState(false);
+  const [allReflections, setAllReflections] = useState<Reflection[]>([]);
+  const refreshAll = useCallback(async () => { setAllReflections(await getAllReflections()); }, []);
+  useEffect(() => { void refreshAll(); }, [refreshAll]);
+  const reflectionMarks = useMemo(() => {
+    const marks: Record<string, number> = {};
+    for (const item of allReflections) marks[item.date] = (marks[item.date] ?? 0) + 1;
+    return marks;
+  }, [allReflections]);
 
   // 当前时段的反思列表
   const periodReflections = reflections
@@ -85,18 +94,21 @@ export default function ReflectionPage() {
       if (existing) r.resolved = existing.resolved;
     }
     await addOrUpdate(r);
+    await refreshAll();
     setEditorOpen(false);
   };
 
   const handleDelete = async () => {
     if (editingId) {
       await remove(editingId);
+      await refreshAll();
       setEditorOpen(false);
     }
   };
 
   const toggleResolved = async (r: Reflection) => {
     await addOrUpdate({ ...r, resolved: !r.resolved });
+    await refreshAll();
   };
 
   // 当天所有有执行记录的任务列表（供关联）
@@ -107,7 +119,7 @@ export default function ReflectionPage() {
 
   return (
     <div className="app-container">
-      <DayNavigator date={date} onDateChange={setDate} />
+      <DayNavigator date={date} onDateChange={setDate} marks={reflectionMarks} markTone="green" />
 
       {/* 时段切换 */}
       <div className="period-tabs">

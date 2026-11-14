@@ -41,6 +41,32 @@ export async function exportAudioBlob(dataUrl: string, folder: string, filename:
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return { native: false };
 }
+export function cardDateKey(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+export function dateGroupLabel(dateKey: string): string {
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const todayKey = cardDateKey(today.getTime());
+  const yesterdayKey = cardDateKey(yesterday.getTime());
+  if (dateKey === todayKey) return '今天';
+  if (dateKey === yesterdayKey) return '昨天';
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return year === today.getFullYear() ? `${month} 月 ${day} 日` : `${year} 年 ${month} 月 ${day} 日`;
+}
+
+export function groupCardsByDate(cards: KnowledgeCard[], ascending = false): { date: string; cards: KnowledgeCard[] }[] {
+  const ordered = [...cards].sort((a, b) => ascending ? a.createdAt - b.createdAt : b.createdAt - a.createdAt);
+  const groups = new Map<string, KnowledgeCard[]>();
+  for (const card of ordered) {
+    const key = cardDateKey(card.createdAt);
+    groups.set(key, [...(groups.get(key) ?? []), card]);
+  }
+  return [...groups.entries()].map(([date, items]) => ({ date, cards: items }));
+}
+
 export function describeContent(content: KnowledgeCardContent): { kind: KnowledgeCardContent['kind']; label: string } {
   if (content.kind === 'text') return { kind: content.kind, label: content.text.slice(0, 80) || '文字内容' };
   if (content.kind === 'image') return { kind: content.kind, label: '图片' };

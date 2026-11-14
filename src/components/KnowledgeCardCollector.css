@@ -15,3 +15,9 @@
 [data-theme='dark'] .collector-card { background: #202923; border-color: #3b4a3e; }
 [data-theme='dark'] .collector-card-main strong { color: #e1e8de; }
 [data-theme='dark'] .collector-summary input, [data-theme='dark'] .collector-path input { background: #171e19; color: #e1e8de; border-color: #3b4a3e; }
+.collector-sort { display:inline-flex; align-items:center; gap:4px; border:1px solid #d6dce4; border-radius:14px; padding:5px 9px; background:#fff; color:#5964c9; font:inherit; font-size:11px; }
+.collector-day { display:grid; gap:8px; }
+.collector-day + .collector-day { margin-top:10px; }
+.collector-date { display:flex; align-items:center; gap:7px; margin:8px 0 2px; color:#6d7580; font-size:12px; font-weight:600; }
+.collector-date span { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#2f9e63; color:#fff; font-size:10px; font-weight:500; }
+[data-theme='dark'] .collector-sort { background:#202923; border-color:#3b4a3e; color:#aab6ff; }

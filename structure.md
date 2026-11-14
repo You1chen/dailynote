@@ -482,3 +482,9 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 - 卡片编辑器（`KnowledgeCardEditor`）单页只显示一条内容，左右滑动或箭头切换；`+` 点击添加文字，长按开始录音，图片按钮走压缩上传。录音使用 MediaRecorder，导出由 `utils/knowledgeCards.ts` 写入 `Music/DailyNote`（Android ExternalStorage，失败回退 Documents；Web 下载），目录可在收集器调整。
 - 知识树编辑器仍保留节点重命名、长按/更多菜单、多选、删除、复制、合并、移动；合并与移动按 `cardIds` 处理引用顺序。
 
+## 2026-11-14 收集器列表规则
+
+- 卡片收集器按 `createdAt` 的本地日期分组；组内默认倒序，顶部可切换升序。
+- `groupCardsByDate`、`dateGroupLabel` 位于 `utils/knowledgeCards.ts`，日期使用设备本地日历。
+- `DayNavigator` 的 `marks` 支持 `markTone`；反思页用绿色角标统计各日反思数，收获页灵感沿用默认色。
+
