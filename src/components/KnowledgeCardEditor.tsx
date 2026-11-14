@@ -339,7 +339,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
         longPressed.current = false;
         event.currentTarget.setPointerCapture(event.pointerId);
         pressTimer.current = setTimeout(() => { longPressed.current = true; pressTimer.current = null; void startRecording(); }, 500);
-      }} onPointerUp={clearPress} onPointerCancel={() => { clearPress(); longPressed.current = true; if (phaseRef.current === 'permission') cancelPermission(); }} onLostPointerCapture={clearPress} onClick={() => {
+      }} onPointerUp={clearPress} onPointerCancel={() => { clearPress(); longPressed.current = true; }} onLostPointerCapture={clearPress} onClick={() => {
         if (longPressed.current) { longPressed.current = false; return; }
         addText();
       }}><Plus size={25} /><span>文字</span></button>
