@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import AppRoot from './App';
 import SetupPage from './pages/SetupPage';
 import {
@@ -13,6 +14,16 @@ import {
   requestAllFilesAccess,
   INIT_STORAGE_BLOCKED,
 } from './services/storage';
+
+// Android 15+ applies window insets to the native content root. Keep the CSS
+// safe-area variables at zero there so the two layers do not double-pad.
+if (Capacitor.getPlatform() === 'android') {
+  const root = document.documentElement;
+  root.style.setProperty('--safe-top', '0px');
+  root.style.setProperty('--safe-right', '0px');
+  root.style.setProperty('--safe-bottom', '0px');
+  root.style.setProperty('--safe-left', '0px');
+}
 
 const bootCenter: React.CSSProperties = {
   minHeight: '100dvh',
