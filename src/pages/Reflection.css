@@ -174,3 +174,7 @@
   padding: 12px 20px;
   border-top: 1px solid var(--color-border);
 }
+
+.reflection-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+.reflection-actions .reflection-add-btn { flex: 1; margin-bottom: 0; }
+.reflection-collector-btn { flex: 0 0 auto; white-space: nowrap; }

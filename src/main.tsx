@@ -92,6 +92,9 @@ function Boot() {
         return;
       }
       if (count > 0) {
+        // Move any legacy embedded cards into the independent collector before rendering.
+        const { initializeKnowledgeCards } = await import('./db/knowledgeCards');
+        await initializeKnowledgeCards();
         setStatusMsg(`已从 ${getDisplayPath()} 恢复 ${count} 条记录`);
       } else if (count === -1) {
         setStatusMsg('首次使用，数据将在保存时创建');

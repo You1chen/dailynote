@@ -11,17 +11,18 @@ export interface CategoryTableMeta {
 
 export const CATEGORY_TABLES = [
   { table: 'gardenKeys', file: 'garden-keys.json', numericId: true, writeOrder: 3 },
-  { table: 'knowledgeMaps', file: 'knowledge-maps.json', numericId: true, writeOrder: 4 },
-  { table: 'longTermGoals', file: 'goals.json', numericId: true, writeOrder: 5 },
-  { table: 'fixedRoutines', file: 'routines.json', numericId: true, writeOrder: 6 },
-  { table: 'taskTemplates', file: 'templates.json', numericId: true, writeOrder: 7 },
-  { table: 'courses', file: 'courses.json', numericId: true, writeOrder: 8 },
-  { table: 'semester', file: 'semester.json', numericId: true, writeOrder: 9 },
-  { table: 'ddls', file: 'ddls.json', numericId: true, writeOrder: 10 },
-  { table: 'important', file: 'important.json', numericId: true, writeOrder: 11 },
-  { table: 'backlog', file: 'backlog.json', numericId: true, writeOrder: 12 },
-  { table: 'ideas', file: 'ideas.json', numericId: true, writeOrder: 13 },
-  { table: 'taskBoard', file: 'taskboard.json', numericId: true, writeOrder: 14 },
+  { table: 'knowledgeCards', file: 'knowledge-cards.json', numericId: true, writeOrder: 4 },
+  { table: 'knowledgeMaps', file: 'knowledge-maps.json', numericId: true, writeOrder: 5 },
+  { table: 'longTermGoals', file: 'goals.json', numericId: true, writeOrder: 6 },
+  { table: 'fixedRoutines', file: 'routines.json', numericId: true, writeOrder: 7 },
+  { table: 'taskTemplates', file: 'templates.json', numericId: true, writeOrder: 8 },
+  { table: 'courses', file: 'courses.json', numericId: true, writeOrder: 9 },
+  { table: 'semester', file: 'semester.json', numericId: true, writeOrder: 10 },
+  { table: 'ddls', file: 'ddls.json', numericId: true, writeOrder: 11 },
+  { table: 'important', file: 'important.json', numericId: true, writeOrder: 12 },
+  { table: 'backlog', file: 'backlog.json', numericId: true, writeOrder: 13 },
+  { table: 'ideas', file: 'ideas.json', numericId: true, writeOrder: 14 },
+  { table: 'taskBoard', file: 'taskboard.json', numericId: true, writeOrder: 15 },
   { table: 'linkGroups', file: 'linkGroups.json', numericId: true, writeOrder: 15 },
   { table: 'trashItems', file: 'trash.json', numericId: true, writeOrder: 16 },
 
@@ -41,13 +42,13 @@ export const DEFAULT_WRITE_ORDER: AnyStoreTable[] = [
 export const NUMERIC_TABLES: NumericTable[] = [
   'dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines',
   'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls', 'important',
-  'backlog', 'ideas', 'taskBoard', 'linkGroups', 'gardenKeys', 'knowledgeMaps',
+  'backlog', 'ideas', 'taskBoard', 'linkGroups', 'gardenKeys', 'knowledgeMaps', 'knowledgeCards',
 ];
 
 export const EMPTY_STORE: StoreShape = {
   dailyPlans: [], longTermGoals: [], reflections: [], harvests: [], fixedRoutines: [],
   taskItems: [], taskTemplates: [], trashItems: [], courses: [], semester: [],
-  ddls: [], important: [], backlog: [], ideas: [], taskBoard: [], linkGroups: [], activityEvents: [], gardenKeys: [], knowledgeMaps: [],
+  ddls: [], important: [], backlog: [], ideas: [], taskBoard: [], linkGroups: [], activityEvents: [], gardenKeys: [], knowledgeMaps: [], knowledgeCards: [],
 };
 
 export function emptyStore(): StoreShape {

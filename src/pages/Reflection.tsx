@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Save, Trash2, Edit3, CheckCircle2, Circle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
+import KnowledgeCardCollector from '../components/KnowledgeCardCollector';
 import { useReflections } from '../hooks/useReflections';
 import { useDailyPlan } from '../hooks/useDailyPlan';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
@@ -20,6 +21,7 @@ export default function ReflectionPage() {
   const { reflections, loading, addOrUpdate, remove } = useReflections(date);
   const { plan } = useDailyPlan(date);
   const [activePeriod, setActivePeriod] = useState<Period>('morning');
+  const [collectorOpen, setCollectorOpen] = useState(false);
 
   // 当前时段的反思列表
   const periodReflections = reflections
@@ -36,12 +38,16 @@ export default function ReflectionPage() {
 
   // 返回键：关闭全屏编辑器
   useRegisterBackHandler(() => {
+    if (collectorOpen) {
+      setCollectorOpen(false);
+      return true;
+    }
     if (editorOpen) {
       setEditorOpen(false);
       return true;
     }
     return false;
-  }, [editorOpen]);
+  }, [editorOpen, collectorOpen]);
 
   const openNew = useCallback(() => {
     setEditingId(null);
@@ -121,9 +127,14 @@ export default function ReflectionPage() {
       </div>
 
       {/* 添加按钮 */}
-      <button className="btn btn-primary reflection-add-btn" onClick={openNew}>
-        <Edit3 size={18} /> 添加{PERIODS.find(p => p.value === activePeriod)?.label}反思
-      </button>
+      <div className="reflection-actions">
+        <button className="btn btn-primary reflection-add-btn" onClick={openNew}>
+          <Edit3 size={18} /> 添加{PERIODS.find(p => p.value === activePeriod)?.label}反思
+        </button>
+        <button className="btn btn-outline reflection-collector-btn" onClick={() => setCollectorOpen(true)}>
+          卡片收集器
+        </button>
+      </div>
 
       {/* 反思条目列表 */}
       {loading ? (
@@ -186,6 +197,8 @@ export default function ReflectionPage() {
           ))}
         </div>
       )}
+
+      {collectorOpen && <KnowledgeCardCollector onClose={() => setCollectorOpen(false)} />}
 
       {/* 全屏编辑器 */}
       {editorOpen && (

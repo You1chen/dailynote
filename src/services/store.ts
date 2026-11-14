@@ -412,6 +412,7 @@ function parseStorageData(text: string): StorageData | null {
       activityEvents: Array.isArray(data.activityEvents) ? data.activityEvents : [],
       gardenKeys: Array.isArray(data.gardenKeys) ? data.gardenKeys : [],
       knowledgeMaps: Array.isArray(data.knowledgeMaps) ? data.knowledgeMaps : [],
+      knowledgeCards: Array.isArray(data.knowledgeCards) ? data.knowledgeCards : [],
     };
   } catch {
     return null;
@@ -482,7 +483,8 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const taskBoard = await readCategory<TaskBoard>(dir, CATEGORY_FILES.taskBoard);
   const linkGroups = await readCategory<LinkGroup>(dir, CATEGORY_FILES.linkGroups);
   const knowledgeMaps = await readCategory<KnowledgeMap>(dir, CATEGORY_FILES.knowledgeMaps);
-  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !ideas && !taskBoard && !linkGroups && !knowledgeMaps) return null;
+  const knowledgeCards = await readCategory<any>(dir, CATEGORY_FILES.knowledgeCards);
+  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !ideas && !taskBoard && !linkGroups && !knowledgeMaps && !knowledgeCards) return null;
   return {
     version: 1,
     savedAt: 0,
@@ -505,6 +507,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     activityEvents,
     gardenKeys: (await readCategory<any>(dir, CATEGORY_FILES.gardenKeys)) ?? [],
     knowledgeMaps: knowledgeMaps ?? [],
+    knowledgeCards: knowledgeCards ?? [],
   };
 }
 
@@ -748,6 +751,7 @@ interface Fp {
   trashItems: string;
   gardenKeys: string;
   knowledgeMaps: string;
+  knowledgeCards: string;
 }
 
 function fingerprint(): Fp {
@@ -783,6 +787,7 @@ function fingerprint(): Fp {
     trashItems: JSON.stringify(store.trashItems),
     gardenKeys: JSON.stringify(store.gardenKeys),
     knowledgeMaps: JSON.stringify(store.knowledgeMaps),
+    knowledgeCards: JSON.stringify(store.knowledgeCards),
   };
 }
 
@@ -921,6 +926,7 @@ function mergeIntoStore(data: StorageData): number {
     { key: 'linkGroups', items: data.linkGroups, numeric: true },
     { key: 'trashItems', items: data.trashItems, numeric: true },
     { key: 'knowledgeMaps', items: data.knowledgeMaps, numeric: true },
+
   ];
   for (const { key, items, numeric } of tables) {
     for (const rec of items) {
@@ -934,6 +940,14 @@ function mergeIntoStore(data: StorageData): number {
       }
       count++;
     }
+  }
+
+  if (data.knowledgeCards?.length) {
+    const imported = data.knowledgeCards[0];
+    const existing = store.knowledgeCards[0];
+    if (!existing || (imported.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) store.knowledgeCards = [{ ...imported, id: 1 }];
+    else store.knowledgeCards = [{ ...existing, id: 1 }];
+    count += 1;
   }
 
   for (const envelope of data.gardenKeys) {
@@ -1014,6 +1028,7 @@ function liveArr(table: string): any[] {
     case 'taskBoard': return store.taskBoard;
     case 'linkGroups': return store.linkGroups;
     case 'knowledgeMaps': return store.knowledgeMaps;
+    case 'knowledgeCards': return store.knowledgeCards;
     default: return [];
   }
 }

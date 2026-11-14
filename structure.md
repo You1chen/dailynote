@@ -473,3 +473,12 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 - CSS 统一使用 `--safe-top/right/bottom/left` 变量（默认取 `env(safe-area-inset-*)`，兼顾 iOS 与 Web）；Android 原生 inset 生效时由 `main.tsx` 将四个变量置 0，避免原生 padding 与 CSS env 双层留白。
 - 该处理是窗口级，只保留一层系统栏留白；卡片页面仍固定视口、不产生纵向长页面。
 
+## 2026-11-14 卡片收集器与知识树引用
+
+- 卡片本体独立于知识树：`knowledge-cards.json` 是单例卡片库（`KnowledgeCardLibrary.records`），每张卡片的内容是有序的 `KnowledgeCardContent[]`，类型只有文字、图片、录音三种，不再有独立备注字段。
+- 反思页提供「卡片收集器」入口；先在收集器创建、编辑卡片，再把卡片关联到某个课程知识树的末端节点。知识节点只保存 `cardIds: string[]`，因此移动卡片只改知识树引用，不会移动或复制卡片内容。
+- 卡片在收集器中可再次「关联 / 移动」到其他末端节点；一个卡片可被多个节点引用，删除节点只删除引用，删除卡片才删除本体并清理全部引用。
+- 旧数据迁移：启动时 `initializeKnowledgeCards()` 把旧 `node.cards`、`node.note.blocks` 转为独立卡片记录（图片在前、旧文字在后，勾选标记保留为文字），成功写盘后才移除旧字段；纯迁移函数见 `utils/knowledgeMigration.ts`。
+- 卡片编辑器（`KnowledgeCardEditor`）单页只显示一条内容，左右滑动或箭头切换；`+` 点击添加文字，长按开始录音，图片按钮走压缩上传。录音使用 MediaRecorder，导出由 `utils/knowledgeCards.ts` 写入 `Music/DailyNote`（Android ExternalStorage，失败回退 Documents；Web 下载），目录可在收集器调整。
+- 知识树编辑器仍保留节点重命名、长按/更多菜单、多选、删除、复制、合并、移动；合并与移动按 `cardIds` 处理引用顺序。
+

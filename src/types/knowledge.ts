@@ -1,24 +1,30 @@
 export type KnowledgeStatus = 'todo' | 'debt' | 'learned';
 
-export interface KnowledgeNoteBlock {
-  id: string;
-  text: string;
-  checklist: boolean;
-  checked?: boolean;
-}
-
-export interface KnowledgeNote {
-  blocks: KnowledgeNoteBlock[];
-  updatedAt: number;
-}
+export type KnowledgeCardContent =
+  | { id: string; kind: 'text'; text: string; createdAt: number; updatedAt: number }
+  | { id: string; kind: 'image'; data: string; createdAt: number; updatedAt: number }
+  | { id: string; kind: 'audio'; data: string; mimeType: string; durationMs: number; fileName: string; createdAt: number; updatedAt: number };
 
 export interface KnowledgeCard {
   id: string;
   title: string;
   status?: KnowledgeStatus;
-  images: string[];
-  text: string;
+  contents: KnowledgeCardContent[];
   createdAt: number;
+  updatedAt: number;
+}
+
+export interface KnowledgeCardRecord {
+  id: string;
+  card: KnowledgeCard;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface KnowledgeCardLibrary {
+  id: number;
+  records: KnowledgeCardRecord[];
+  audioExportPath: string;
   updatedAt: number;
 }
 
@@ -30,8 +36,7 @@ export interface KnowledgeNode {
   depth: number;
   status: KnowledgeStatus;
   children: string[];
-  note?: KnowledgeNote;
-  cards?: KnowledgeCard[];
+  cardIds: string[];
 }
 
 export interface KnowledgeMap {

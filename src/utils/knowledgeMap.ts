@@ -1,5 +1,5 @@
 import { genId } from '../types';
-import type { KnowledgeMap, KnowledgeNode, KnowledgeNote, KnowledgeNoteBlock, KnowledgeStatus } from '../types/knowledge';
+import type { KnowledgeMap, KnowledgeNode, KnowledgeStatus } from '../types/knowledge';
 
 export interface ParsedKnowledgeLine { depth: number; title: string; page?: string; }
 
@@ -33,8 +33,12 @@ export function parseKnowledgeMarkdown(source: string): { lines: ParsedKnowledge
 }
 
 function matchOldNode(old: KnowledgeNode[], title: string, parentId: string | undefined, depth: number, used: Set<string>): KnowledgeNode | undefined {
-  return old.find(node => !used.has(node.id) && node.title === title && node.parentId === parentId)
+  const exact = old.find(node => !used.has(node.id) && node.title === title && node.parentId === parentId)
     ?? old.find(node => !used.has(node.id) && node.title === title && node.depth === depth);
+  if (exact) return exact;
+  // A single node at the same position is a rename: keep its collector card references.
+  const candidates = old.filter(node => !used.has(node.id) && node.depth === depth && node.parentId === parentId);
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 export function buildKnowledgeNodes(source: string, oldNodes: KnowledgeNode[] = []): { nodes: KnowledgeNode[]; error?: string } {
@@ -49,7 +53,7 @@ export function buildKnowledgeNodes(source: string, oldNodes: KnowledgeNode[] = 
     const old = matchOldNode(oldNodes, item.title, parent?.id, item.depth, used);
     const node: KnowledgeNode = {
       id: old?.id ?? genId(), parentId: parent?.id, title: item.title, page: item.page,
-      depth: item.depth, status: old?.status ?? 'todo', children: [], note: old?.note,
+      depth: item.depth, status: old?.status ?? 'todo', children: [], cardIds: old?.cardIds ? [...old.cardIds] : [],
     };
     used.add(node.id);
     if (parent) parent.children.push(node.id);
@@ -69,29 +73,11 @@ export function nodesToMarkdown(nodes: KnowledgeNode[], includeNotes = true): st
   const visit = (parent: string | undefined, depth: number) => {
     for (const node of byParent.get(parent) ?? []) {
       out.push(`${'  '.repeat(depth)}- ${node.title}`);
-      if (includeNotes && node.note?.blocks.length) for (const block of node.note.blocks) out.push(`${'  '.repeat(depth + 1)}  ${block.checklist ? '[ ] ' : ''}${block.text}`);
       visit(node.id, depth + 1);
     }
   };
   visit(undefined, 0);
   return out.join('\n');
-}
-
-export function parseNoteBlocks(text: string, old: KnowledgeNote | undefined): KnowledgeNote {
-  const oldByText = new Map((old?.blocks ?? []).map(block => [`${block.checklist}|${block.text}`, block]));
-  const blocks: KnowledgeNoteBlock[] = text.replace(/\r\n?/g, '\n').split('\n').filter((line, i, all) => line || i < all.length - 1).map(line => {
-    const spaces = /[ ]+$/.exec(line)?.[0] ?? '';
-    const checklist = spaces.length >= 3;
-    const value = checklist ? line.slice(0, -spaces.length) : line;
-    const key = `${checklist}|${value}`;
-    const previous = oldByText.get(key);
-    return { id: previous?.id ?? genId(), text: value, checklist, checked: checklist ? previous?.checked ?? false : undefined };
-  });
-  return { blocks, updatedAt: Date.now() };
-}
-
-export function noteToText(note?: KnowledgeNote): string {
-  return note?.blocks.map(block => block.text).join('\n') ?? '';
 }
 
 export const KNOWLEDGE_STATUS_LABEL: Record<KnowledgeStatus, string> = { todo: '待学', debt: '负债', learned: '已学' };

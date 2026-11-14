@@ -7,7 +7,6 @@
 
 import type { StoreShape } from '../types/storage';
 import { effectiveNodes } from './goalTree';
-import { noteToText } from './knowledgeMap';
 
 export interface SearchHit {
   key: string;
@@ -178,26 +177,24 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     ));
   }
 
-  // ---- 知识地图笔记方框项 ----
-  for (const map of data.knowledgeMaps ?? []) {
-    const course = data.courses.find(item => item.id === map.courseId);
-    for (const node of map.nodes) {
-      const checklist = node.note?.blocks.filter(block => block.checklist) ?? [];
-      if (checklist.length) push(makeHit(
+  // ---- 知识卡片（卡片库归属反思页，节点只引用卡片 ID） ----
+  const cardLibrary = data.knowledgeCards?.[0];
+  if (cardLibrary) {
+    for (const record of cardLibrary.records) {
+      const owner = (data.knowledgeMaps ?? []).find(map => map.nodes.some(node => node.cardIds?.includes(record.id)));
+      const node = owner?.nodes.find(item => item.cardIds?.includes(record.id));
+      const textParts = record.card.contents.flatMap(content =>
+        content.kind === 'text' ? [content.text] : content.kind === 'audio' ? [content.fileName] : [],
+      );
+      push(makeHit(
         q,
-        `knowledge-check:${map.courseId}:${node.id}`,
-        checklist.find(block => block.text.toLowerCase().includes(q))?.text || node.title,
-        checklist.map(block => `${block.checked ? '[已完成] ' : '[待办] '}${block.text}`),
-        `知识地图 · ${course?.name ?? map.courseName} · ${node.title}`,
-        `/courses?knowledgeCourse=${map.courseId}&knowledgeNode=${node.id}`,
-      ));
-      for (const card of node.cards ?? []) push(makeHit(
-        q,
-        `knowledge-card:${map.courseId}:${node.id}:${card.id}`,
-        card.title || node.title,
-        [card.title, card.text],
-        `知识卡片 · ${course?.name ?? map.courseName} · ${node.title}`,
-        `/courses?knowledgeCourse=${map.courseId}&knowledgeNode=${node.id}`,
+        `knowledge-card:${record.id}`,
+        record.card.title || '未命名卡片',
+        [record.card.title, ...textParts],
+        owner && node
+          ? `知识卡片 · ${owner.courseName} · ${node.title}`
+          : '知识卡片 · 反思收集器',
+        owner ? `/courses?knowledgeCourse=${owner.courseId}&knowledgeNode=${node?.id ?? ''}` : '/reflection',
       ));
     }
   }

@@ -7,7 +7,7 @@
  */
 
 import type {
-  KnowledgeMap, KnowledgeNode, KnowledgeNote, KnowledgeStatus,
+  KnowledgeMap, KnowledgeNode, KnowledgeStatus, KnowledgeCardLibrary,
  DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, bindLegacyCourses, type AnyStoreTable } from '../services/store';
@@ -258,6 +258,24 @@ export async function saveCourse(course: Course): Promise<number> {
     store.courses.push({ ...clean, semesterStartDate: clean.semesterStartDate ?? store.semester[0]?.startDate ?? undefined, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
   });
   return resultId;
+}
+
+export async function getKnowledgeCardLibrary(): Promise<import('../types/knowledge').KnowledgeCardLibrary | undefined> {
+  const library = store.knowledgeCards.find(item => item.id === 1) ?? store.knowledgeCards[0];
+  return library ? deepClone(library) : undefined;
+}
+
+export async function saveKnowledgeCardLibrary(library: import('../types/knowledge').KnowledgeCardLibrary): Promise<number> {
+  const clean = deepClone(library);
+  const id = 1;
+  await mutate(() => {
+    store.knowledgeCards = [{ ...clean, id, updatedAt: Date.now() }];
+  });
+  return id;
+}
+
+export async function saveKnowledgeCardRecords(library: import('../types/knowledge').KnowledgeCardLibrary): Promise<void> {
+  await mutate(() => { store.knowledgeCards = [deepClone({ ...library, id: 1, updatedAt: Date.now() })]; });
 }
 
 export async function getKnowledgeMap(courseId: number): Promise<KnowledgeMap | undefined> {

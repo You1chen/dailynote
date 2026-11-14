@@ -23,28 +23,21 @@ describe('knowledge map parser', () => {
     expect(parseKnowledgeMarkdown('- a\ntext').error).toContain('不是无序列表');
   });
 
-  it('preserves IDs, status and notes on matching reparse', () => {
+  it('preserves IDs, status and collector links on matching reparse', () => {
     const first = buildKnowledgeNodes('- A\n  - B').nodes;
     first[1].status = 'learned';
-    first[1].note = { blocks: [{ id: 'note', text: 'x', checklist: false }], updatedAt: 1 };
+    first[1].cardIds = ['card-b'];
     const next = buildKnowledgeNodes('- A renamed\n  - B', first).nodes.find(node => node.title === 'B');
     expect(next?.id).toBe(first[1].id);
     expect(next?.status).toBe('learned');
-    expect(next?.note?.blocks[0].text).toBe('x');
+    expect(next?.cardIds).toEqual(['card-b']);
   });
 
-  it('uses three or more trailing ASCII spaces as a checklist marker', () => {
-    const note = parseNoteBlocks('zero\none \ntwo  \nthree   \nwide　');
-    expect(note.blocks.map(block => block.checklist)).toEqual([false, false, false, true, false]);
-    expect(note.blocks[3].text).toBe('three');
-    expect(parseNoteBlocks('three   ', note).blocks[0].checked).toBe(false);
-  });
-
-  it('keeps a parent note when a child is later added', () => {
+  it('keeps collector card references when reparsing the tree', () => {
     const old = buildKnowledgeNodes('- Chapter').nodes;
-    old[0].note = { updatedAt: 1, blocks: [{ id: 'n', text: 'parent note', checklist: false }] };
-    const next = buildKnowledgeNodes('- Chapter\n  - Child', old).nodes;
-    expect(next.find((node: KnowledgeNode) => node.title === 'Chapter')?.note?.blocks[0].text).toBe('parent note');
+    old[0].cardIds = ['card-1'];
+    const next = buildKnowledgeNodes('- Chapter renamed', old).nodes;
+    expect(next[0].cardIds).toEqual(['card-1']);
   });
 
   it('roundtrips tree markdown and renders LaTeX safely', () => {
