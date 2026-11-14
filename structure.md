@@ -470,5 +470,6 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 - `targetSdk 36` 下 Android 15+ 强制 edge-to-edge，WebView 会绘制到状态栏和导航栏下面。
 - `MainActivity` 在 `SDK_INT >= 35` 时监听内容根视图的 `systemBars()` 与 `displayCutout()` Insets，并把 left/top/right/bottom 设为根视图 padding；旧系统保持原有窗口布局，避免重复内缩。
-- 知识地图等 `position: fixed` 全屏面板同时使用 `env(safe-area-inset-top/bottom)`，兼顾 iOS 刘海与 Home Indicator。
-- 该处理是窗口级，不改变卡片内部布局；卡片页面仍固定视口、不产生纵向长页面。
+- CSS 统一使用 `--safe-top/right/bottom/left` 变量（默认取 `env(safe-area-inset-*)`，兼顾 iOS 与 Web）；Android 原生 inset 生效时由 `main.tsx` 将四个变量置 0，避免原生 padding 与 CSS env 双层留白。
+- 该处理是窗口级，只保留一层系统栏留白；卡片页面仍固定视口、不产生纵向长页面。
+

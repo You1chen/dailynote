@@ -7,7 +7,7 @@
   --garden-card: #fffdf8;
   min-height: 100dvh;
   width: 100%;
-  padding: max(18px, env(safe-area-inset-top)) 24px max(32px, env(safe-area-inset-bottom));
+  padding: max(18px, var(--safe-top)) 24px max(32px, var(--safe-bottom));
   background: radial-gradient(ellipse at 90% 4%, #dae3d14d, transparent 52%), var(--garden-paper);
   color: var(--garden-ink);
   font-family: inherit;

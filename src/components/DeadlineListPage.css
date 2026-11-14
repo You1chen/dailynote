@@ -211,7 +211,7 @@
 .modal {
   background: var(--color-surface);
   border-radius: 20px 20px 0 0;
-  padding: 20px 18px calc(22px + env(safe-area-inset-bottom, 0px));
+  padding: 20px 18px calc(22px + var(--safe-bottom));
   width: 100%;
   max-width: 480px;
   max-height: 82vh;
