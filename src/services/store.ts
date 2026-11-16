@@ -36,7 +36,7 @@ import { CATEGORY_FILES, CATEGORY_NAMES, CATEGORY_TABLES, DEFAULT_WRITE_ORDER, N
 export type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { readLegacyTables, deleteLegacyDB } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
-import { readSnapshot, writeSnapshot, clearSnapshot, sameNames } from './snapshot';
+import { readSnapshot, writeSnapshot, clearSnapshot, sameNames, filesCover } from './snapshot';
 import type { ActivityEvent, ActivityOptions } from '../types/settlement';
 import type { KnowledgeMap } from '../types/knowledge';
 import { detectActivity, recoverTimestampedActivity } from '../utils/settlement';
@@ -576,8 +576,11 @@ function namesFromData(data: StorageData): { dates: string[]; files: string[] } 
 }
 
 /** 落一份快照（失败不影响主流程） */
+function dataHasPendingGardenEncryption(data: Pick<StoreShape, 'longTermGoals' | 'trashItems' | 'activityEvents'>): boolean {
+  return data.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) || data.trashItems.some(t => t.originalTable === 'longTermGoals' && t.originalData?.kind === 'wish' && !t.originalData?.encrypted) || (data.activityEvents ?? []).some(e => e.category === 'wish-milestone' && !e.encrypted);
+}
 function pendingGardenEncryption(): boolean {
-  return store.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) || store.trashItems.some(t => t.originalTable === 'longTermGoals' && t.originalData?.kind === 'wish' && !t.originalData?.encrypted) || store.activityEvents.some(e => e.category === 'wish-milestone' && !e.encrypted);
+  return dataHasPendingGardenEncryption(store);
 }
 function saveSnapshot(): Promise<void> {
   if (pendingGardenEncryption()) return clearSnapshot();
@@ -619,8 +622,15 @@ async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boo
   // （只比日期集合：分类文件由本应用自己维护，外部改动靠「重新扫描」）
   if (!old) {
     const names = await listBackendNames(dir);
-    const snap = await readSnapshot(dir);
-    if (snap && sameNames(snap.dates, names.dates) && sameNames(snap.files, names.files)) {
+    let snap = await readSnapshot(dir);
+    if (snap && dataHasPendingGardenEncryption(snap.data)) {
+      await clearSnapshot();
+      snap = null;
+    }
+    // 快照写入时可能列出全部类别文件，而某些类别文件尚未创建；只看磁盘上实际存在的文件是否都被快照覆盖。
+    const knownCategoryFiles = new Set<string>(Object.values(CATEGORY_FILES));
+    const diskCategoryFiles = names.files.filter(file => knownCategoryFiles.has(file));
+    if (snap && sameNames(snap.dates, names.dates) && filesCover(snap.files, diskCategoryFiles)) {
       return { data: snap.data, oldFormat: false };
     }
   }
@@ -1074,8 +1084,6 @@ export async function initStore(): Promise<number> {
   // 权限被阻塞时不动内存 store：既不能把磁盘数据误判为空，更不能把空数组写回覆盖磁盘
   if (await storageAccessBlocked()) return INIT_STORAGE_BLOCKED;
 
-  const cached = await readSnapshot(getStoragePath());
-  if (cached && (cached.data.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) || cached.data.trashItems.some(t => t.originalData?.kind === 'wish' && !t.originalData?.encrypted) || cached.data.activityEvents?.some(e => e.category === 'wish-milestone' && !e.encrypted))) await clearSnapshot();
   const { data: backend, oldFormat } = await readBackend();
   const legacy = await readLegacyTablesSafe();
 

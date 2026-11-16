@@ -35,6 +35,11 @@ async function transaction(change: () => void): Promise<void> {
 
 /** Persist migrated records before removing the legacy source fields on disk. */
 export function initializeKnowledgeCards(): Promise<void> {
+  const hasLegacy = store.knowledgeMaps.some(map => map.nodes.some(node => {
+    const legacy = node as typeof node & { cards?: unknown; note?: unknown };
+    return 'cards' in legacy || 'note' in legacy;
+  }));
+  if (!hasLegacy) return Promise.resolve();
   return serialized(() => transaction(() => {
     const normalized = normalizeKnowledgeData(store);
     for (const map of normalized.knowledgeMaps) {

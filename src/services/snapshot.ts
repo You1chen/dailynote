@@ -81,6 +81,15 @@ export async function clearSnapshot(): Promise<void> {
   }
 }
 
+/** 快照里的文件集合是否覆盖磁盘现有文件。
+ * 快照写入时可能列出全部类别文件，而某类文件尚未创建；
+ * 只要磁盘上的文件都在快照里，就可复用。
+ */
+export function filesCover(snapshotFiles: string[], diskFiles: string[]): boolean {
+  const known = new Set(snapshotFiles);
+  return diskFiles.every(file => known.has(file));
+}
+
 /** 两个名字集合是否一致（顺序无关） */
 export function sameNames(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;

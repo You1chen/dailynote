@@ -21,7 +21,7 @@ const memStore: Record<string, string> = {};
 
 import { _resetForTest, initStore, rescanFromDisk, flush, getStore } from '../../src/services/store';
 import * as db from '../../src/db';
-import { readSnapshot, clearSnapshot, sameNames } from '../../src/services/snapshot';
+import { readSnapshot, clearSnapshot, sameNames, filesCover } from '../../src/services/snapshot';
 
 /** 直接往 KV 里写一条（模拟外部改动） */
 async function kvPut(key: string, value: string): Promise<void> {
@@ -72,6 +72,25 @@ describe('启动快照', () => {
     expect((getStore().dailyPlans[0] as any).injected).toBeUndefined();
     await rescanFromDisk();
     expect((getStore().dailyPlans[0] as any).injected).toBe(true);
+  });
+
+  it('快照列出未创建的分类文件时仍能命中', async () => {
+    await db.savePlan({ date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0 } as any);
+    await flush();
+    await initStore();
+    // 再次写入会让快照带上全部类别文件名，而磁盘上仍只有 plan.json。
+    await db.savePlan({ date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0 } as any);
+    await flush();
+    await kvPut('days/2026-03-01/plan.json', JSON.stringify({
+      date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0, injected: true,
+    }));
+    await initStore();
+    expect((getStore().dailyPlans[0] as any).injected).toBeUndefined();
+  });
+
+  it('filesCover 允许快照多列尚未创建的分类文件', () => {
+    expect(filesCover(['plan.json', 'goals.json'], ['plan.json'])).toBe(true);
+    expect(filesCover(['plan.json'], ['plan.json', 'goals.json'])).toBe(false);
   });
 
   it('新增日期目录 → 快照失效 → 全量读能看到新数据', async () => {

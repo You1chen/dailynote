@@ -493,3 +493,9 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 - `KnowledgeComment { id, text, images, createdAt, updatedAt }` 挂在 `KnowledgeCardContent.comments`，不是卡片级；内容删除时评论自然级联删除。
 - `KnowledgeCardEditor` 在每条内容右下角渲染评论悬浮球，数字为评论数；`KnowledgeCardComments` 负责文字/图片发表、编辑、删除与图片全屏。
 - `cardSearchText` 同时匹配评论文字，收集器关键词筛选可以命中评论。
+
+## 2026-11-16 启动快照匹配
+
+- 快照 `files` 可能是全部类别文件名，而磁盘只存在实际写过的文件；匹配时只要求磁盘现有类别文件被快照覆盖，`filesCover` 负责这一判断。
+- 启动只读一次快照；花园明文检查在快照读取后做，发现明文即丢弃快照并全量读。
+- 写入仍由 `mutate` 指纹差异决定，只写变脏文件；启动读取与写入增量是两条独立路径。

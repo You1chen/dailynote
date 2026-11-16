@@ -100,8 +100,7 @@ function Boot() {
         setStatusMsg('首次使用，数据将在保存时创建');
       }
 
-      // 短暂显示状态信息后进入应用
-      await new Promise(r => setTimeout(r, count > 0 ? 800 : 200));
+      // 数据就绪就直接进入应用；启动快照命中时不再人为等待。
       setPhase('ready');
     } finally {
       busyRef.current = false;
