@@ -1,12 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Calendar, BookOpen, Lightbulb, Sparkles } from 'lucide-react';
+import { Calendar, BookOpen, Lightbulb } from 'lucide-react';
 import './TabBar.css';
 
 const tabs = [
   { to: '/', icon: Calendar, label: '计划' },
   { to: '/reflection', icon: BookOpen, label: '反思' },
   { to: '/harvest', icon: Lightbulb, label: '收获' },
-  { to: '/wander', icon: Sparkles, label: '漫步' },
 ];
 
 export default function TabBar() {

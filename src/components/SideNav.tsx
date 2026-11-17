@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Search, CalendarClock, CalendarDays, CalendarRange,
-  Target, Archive, Trash2, Database, Settings, Star, Sparkles, type LucideIcon,
+  Target, Archive, Trash2, Database, Settings, Star, type LucideIcon,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SearchOverlay from './SearchOverlay';
@@ -38,7 +38,6 @@ export default function SideNav({ badge = 0, ddlBadge = 0, importantBadge = 0 }:
     ],
     [
       { to: '/goals', icon: Target, label: '目标' },
-      { to: '/wander', icon: Sparkles, label: '漫步' },
       { to: '/backlog', icon: Archive, label: '遗留', count: badge },
     ],
     [
