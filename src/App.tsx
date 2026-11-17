@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Suspense, lazy as ReactLazy, useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
 import TabBar from './components/TabBar';
 import TaskBall from './components/TaskBall';
@@ -36,9 +36,11 @@ function applyTheme(theme: ThemeMode) {
   }
 }
 
+const Walk = ReactLazy(() => import('./pages/Walk'));
 function AppShell() {
   const location = useLocation();
   const inGarden = location.pathname === '/garden' || location.pathname.startsWith('/garden/');
+  const immersive = inGarden || location.pathname === '/wander';
   const { prefs } = usePreferences();
   const backlogBadge = useBacklogBadge();
   const ddlBadge = useDdlBadge();
@@ -60,10 +62,11 @@ function AppShell() {
 
   return (
     <>
-      {!inGarden && <SideNav badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />}
+      {!immersive && <SideNav badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />}
 
       <div className={inGarden ? "app-main app-main--garden" : "app-main"}>
         <Routes>
+          <Route path="/wander" element={<Suspense fallback={null}><Walk /></Suspense>} />
           <Route path="/" element={<DailyPlanPage />} />
           <Route path="/goals" element={<LongTermGoalsPage />} />
           <Route path="/garden/*" element={<GardenGate><GardenPage /></GardenGate>} />
@@ -80,7 +83,7 @@ function AppShell() {
           <Route path="/settlement" element={<SettlementPage />} />
         </Routes>
       </div>
-      {!inGarden && <><TabBar /><TaskBall /></>}
+      {!immersive && <><TabBar /><TaskBall /></>}
 
       {updateReady && (
         <div className="app-update-bar" role="status">
