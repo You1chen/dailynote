@@ -43,5 +43,9 @@
     "vite": "^5.4.0",
     "vite-plugin-pwa": "^0.20.0",
     "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
   }
 }

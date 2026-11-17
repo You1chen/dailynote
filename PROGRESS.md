@@ -79,3 +79,12 @@ DDL 有了一周内提醒，全局搜索只查自己填写的内容，并把结�
 - 修正：快照文件匹配改为「磁盘上实际存在的类别文件都被快照覆盖」；启动只读一次快照；移除固定等待；旧内嵌卡片迁移只在确实存在旧字段时执行。
 - 边界：启动仍会把快照整份装回内存，图片/录音很多时内存重建仍随数据量增长；目前没有做到按记录懒加载。写入本来就只写变脏的文件，不是每次重写全部数据。
 - 验证：53 个测试文件 / 823 个用例通过，新增「分类文件未创建仍命中快照」与 `filesCover` 测试。
+
+## 2026-11-17 — 可移植性审计与源码包
+- 移除 `android/gradle.properties` 中写死的本机 JDK 路径，改为只依赖 `JAVA_HOME` / PATH 或 Android Studio 的 Gradle JDK。
+- 移除 `.idea/` 的本机设备与 IDE 配置；`.gitignore` 增加 `.idea/`、`.claude/`、`.vscode/`。
+- `scripts/setup-keystore.sh` 不再硬编码密码和本机 keytool 路径，改为环境变量或交互输入；密钥文件继续被忽略。
+- 新增 `android/local.properties.example`、macOS/Linux 的 `scripts/build-apk.sh`、`MODELS.md`，并重写 README 的环境、构建、签名、模型与打包说明。
+- OCR 小模型确认是 ML Kit `text-recognition-chinese:16.0.1` AAR 内的 assets，构建时自动进 APK；源码包保留依赖声明，不单独放模型二进制。
+- 验证：53 个测试文件 / 823 个用例通过；移除本机 JDK 配置后 APK 仍构建成功；APK 内检查到 25 个 `assets/mlkit-google-ocr-models/` 模型文件。
+
