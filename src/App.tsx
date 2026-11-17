@@ -18,6 +18,7 @@ import DdlPage from './pages/DdlPage';
 import ImportantPage from './pages/ImportantPage';
 import BacklogPage from './pages/BacklogPage';
 import SettlementPage from './pages/Settlement';
+import WanderPage from './pages/Wander';
 import { BackButtonProvider } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import { useBacklogBadge } from './hooks/useBacklog';
@@ -39,6 +40,8 @@ function applyTheme(theme: ThemeMode) {
 function AppShell() {
   const location = useLocation();
   const inGarden = location.pathname === '/garden' || location.pathname.startsWith('/garden/');
+  const inWander = location.pathname === '/wander';
+  const immersive = inGarden || inWander;
   const { prefs } = usePreferences();
   const backlogBadge = useBacklogBadge();
   const ddlBadge = useDdlBadge();
@@ -60,7 +63,7 @@ function AppShell() {
 
   return (
     <>
-      {!inGarden && <SideNav badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />}
+      {!immersive && <SideNav badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />}
 
       <div className={inGarden ? "app-main app-main--garden" : "app-main"}>
         <Routes>
@@ -78,9 +81,10 @@ function AppShell() {
           <Route path="/ddl" element={<DdlPage />} />
           <Route path="/important" element={<ImportantPage />} />
           <Route path="/settlement" element={<SettlementPage />} />
+          <Route path="/wander" element={<WanderPage />} />
         </Routes>
       </div>
-      {!inGarden && <><TabBar /><TaskBall /></>}
+      {!immersive && <><TabBar /><TaskBall /></>}
 
       {updateReady && (
         <div className="app-update-bar" role="status">
