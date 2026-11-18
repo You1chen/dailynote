@@ -184,7 +184,7 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
         const data = await new Promise<string>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(blob); });
         const seconds = Math.max(1, Math.round((now() - recordStarted.current) / 1000));
         const base = cardDraft ?? activeCard ?? newCard();
-        const item: KnowledgeCardContent = { id: `audio-${now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, kind: 'audio', data, mimeType: blob.type || 'audio/webm', durationMs: seconds * 1000, fileName: `${cardNode?.title ?? '知识卡片'}-${new Date().toLocaleString('zh-CN')}.webm`, createdAt: now(), updatedAt: now() };
+        const item: KnowledgeCardContent = { id: `audio-${now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, kind: 'audio', data, mimeType: blob.type || 'audio/webm', durationMs: seconds * 1000, fileName: `${cardNode?.title ?? '卡片'}-${new Date().toLocaleString('zh-CN')}.webm`, createdAt: now(), updatedAt: now() };
         setCardDraft({ ...base, contents: [...base.contents, item], updatedAt: now() });
         setContentIndex(base.contents.length);
         stream.getTracks().forEach(track => track.stop());

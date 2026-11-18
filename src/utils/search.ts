@@ -177,7 +177,7 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     ));
   }
 
-  // ---- 知识卡片（卡片库归属反思页，节点只引用卡片 ID） ----
+  // ---- 卡片（卡片库归属反思页，节点只引用卡片 ID） ----
   const cardLibrary = data.knowledgeCards?.[0];
   if (cardLibrary) {
     for (const record of cardLibrary.records) {
@@ -192,8 +192,8 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
         record.card.title || '未命名卡片',
         [record.card.title, ...textParts],
         owner && node
-          ? `知识卡片 · ${owner.courseName} · ${node.title}`
-          : '知识卡片 · 反思收集器',
+          ? `卡片 · ${owner.courseName} · ${node.title}`
+          : '卡片 · 反思收集器',
         owner ? `/courses?knowledgeCourse=${owner.courseId}&knowledgeNode=${node?.id ?? ''}` : '/reflection',
       ));
     }

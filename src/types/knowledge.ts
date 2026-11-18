@@ -16,6 +16,7 @@ export type KnowledgeCardContent =
 export interface KnowledgeCard {
   id: string;
   title: string;
+  type?: string;
   status?: KnowledgeStatus;
   contents: KnowledgeCardContent[];
   createdAt: number;
@@ -33,6 +34,7 @@ export interface KnowledgeCardLibrary {
   id: number;
   records: KnowledgeCardRecord[];
   audioExportPath: string;
+  customTypes?: string[];
   updatedAt: number;
 }
 

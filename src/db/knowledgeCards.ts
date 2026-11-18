@@ -78,6 +78,31 @@ export function saveCard(card: KnowledgeCard): Promise<string> {
   });
 }
 
+export const DEFAULT_CARD_TYPES = ['知识', '顿悟', '鉴赏', '疑问'] as const;
+
+export async function getCustomCardTypes(): Promise<string[]> {
+  await pending;
+  return [...new Set(library().customTypes ?? [])];
+}
+
+export function addCustomCardType(value: string): Promise<void> {
+  return serialized(() => transaction(() => {
+    const label = value.trim();
+    if (!label) throw new Error('请输入类型名称');
+    if (label.length > 24) throw new Error('类型名称最多 24 字');
+    const current = library();
+    const customTypes = [...new Set([...(current.customTypes ?? []), label])].filter(type => !DEFAULT_CARD_TYPES.some(item => item === type));
+    store.knowledgeCards = [{ ...current, id: 1, customTypes, updatedAt: Date.now() }];
+  }));
+}
+
+export function removeCustomCardType(value: string): Promise<void> {
+  return serialized(() => transaction(() => {
+    const current = library();
+    store.knowledgeCards = [{ ...current, id: 1, customTypes: (current.customTypes ?? []).filter(type => type !== value), updatedAt: Date.now() }];
+  }));
+}
+
 export function deleteCard(id: string): Promise<void> {
   return serialized(() => transaction(() => {
     const current = deepClone(library());

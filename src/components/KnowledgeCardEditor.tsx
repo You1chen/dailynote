@@ -5,6 +5,7 @@ import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { DEFAULT_AUDIO_EXPORT_PATH, exportAudioBlob } from '../utils/knowledgeCards';
 import ConfirmDialog from './ConfirmDialog';
+import CardTypeMenu from './CardTypeMenu';
 import KnowledgeCardComments from './KnowledgeCardComments';
 import './KnowledgeCardEditor.css';
 
@@ -46,6 +47,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   const [elapsed, setElapsed] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [typeOpen, setTypeOpen] = useState(false);
   const [commentContentId, setCommentContentId] = useState<string | null>(null);
   const mounted = useRef(true);
   const operation = useRef(false);
@@ -241,14 +243,14 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   }
 
   useRegisterBackHandler(() => {
-    if (commentContentId) { setCommentContentId(null); return true; }
+    if (commentContentId || typeOpen) return false;
     if (confirmDelete) { setConfirmDelete(false); return true; }
     if (fullscreenImage) setFullscreenImage(null);
     else if (phaseRef.current === 'permission') cancelPermission();
     else if (phaseRef.current !== 'idle') void stopRecording();
     else void saveAndClose(false);
     return true;
-  }, [commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
+  }, [typeOpen, commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
 
   function addText() {
     if (operation.current || phaseRef.current !== 'idle') return;
@@ -294,11 +296,11 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   }
 
   const locked = busy || phase !== 'idle';
-  return <section className="kce" role="dialog" aria-modal="true" aria-label="编辑知识卡片" aria-busy={busy}>
+  return <section className="kce" role="dialog" aria-modal="true" aria-label="编辑卡片" aria-busy={busy}>
     <header className="kce-header">
       <button type="button" onClick={() => void saveAndClose(false)} disabled={busy} aria-label="保存草稿并返回"><ArrowLeft size={21} /></button>
-      <span>知识卡片</span>
-      <button type="button" className="kce-save" disabled={locked} onClick={() => void saveAndClose(true)}>{busy ? '处理中…' : '保存'}</button>
+      <span>卡片</span>
+      <div className="kce-header-actions"><button type="button" className="kce-type" aria-label="设置卡片类型" disabled={locked} onClick={() => setTypeOpen(true)}>{draft.type || '知识'}</button><button type="button" className="kce-save" disabled={locked} onClick={() => void saveAndClose(true)}>{busy ? '处理中…' : '保存'}</button></div>
     </header>
     <div className="kce-meta">
       <input ref={titleInput} aria-label="卡片名称" placeholder="卡片名称" value={draft.title} disabled={locked} onChange={event => patch({ title: event.target.value })} />
@@ -364,6 +366,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
         {phase === 'recording' && <button type="button" className="kce-stop" onClick={() => void stopRecording()}><Square size={18} />结束录音</button>}
       </div>
     </div>}
+    {typeOpen && <CardTypeMenu value={draft.type || '知识'} onSelect={type => patch({ type })} onClose={() => setTypeOpen(false)} />}
     {commentContent && <KnowledgeCardComments content={commentContent} onUpdate={comments => patch({ contents: draftRef.current.contents.map(item => item.id === commentContent.id ? { ...item, comments, updatedAt: Date.now() } : item) })} onClose={() => setCommentContentId(null)} />}
     {fullscreenImage && <div className="kce-fullscreen" role="dialog" aria-modal="true" aria-label="全屏图片"><button type="button" onClick={() => setFullscreenImage(null)} aria-label="关闭全屏图片"><X size={25} /></button><img src={fullscreenImage} alt="卡片图片全屏预览" /></div>}
     <ConfirmDialog open={confirmDelete} message="删除这条内容？" confirmText="删除" onCancel={() => setConfirmDelete(false)} onConfirm={() => {

@@ -1,0 +1,9 @@
+.kce-comment-timestamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 7px;
+  color: var(--color-text-muted, #8a8a83);
+  font-size: 11px;
+  line-height: 1.5;
+}

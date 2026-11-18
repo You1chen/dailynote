@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function WalkEdit({ memory, onClose, onSaved }: Props) {
-  if (memory.kind === '知识卡片') {
+  if (memory.kind === '卡片') {
     return <KnowledgeCardEditor
       card={memory.card}
       onSave={async card => { await saveCard(card); onSaved(collectMemories([card], [])[0]); }}

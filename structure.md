@@ -508,3 +508,6 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 - `Walk` 的详情 `<dialog>` 上再点一次正文或点铅笔，打开 `WalkEdit` 全屏层并清空详情。
 - 知识卡片直接复用 `KnowledgeCardEditor`；灵感由 `WalkEdit` 内部表单编辑标题/正文，保存后写回 `saveIdea`。
 - `WalkEdit`/卡片编辑器注册返回键；关闭编辑层后仍停留在 `/wander` 的当前卡堆。
+
+## 卡片类型
+KnowledgeCard.type 缺省按知识展示；KnowledgeCardLibrary.customTypes 保存自定义词条。CardTypeMenu 通过串行事务增删词条，删除词条不更改卡片。评论确认与时间戳由 KnowledgeCardComments 管理。

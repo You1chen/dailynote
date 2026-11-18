@@ -2,7 +2,9 @@ import { useRef, useState } from 'react';
 import { Image as ImageIcon, Pencil, Trash2, X } from 'lucide-react';
 import type { KnowledgeCardContent, KnowledgeComment } from '../types/knowledge';
 import { fileToCompressedDataURL } from '../utils/avatarCrop';
+import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import ConfirmDialog from './ConfirmDialog';
+import './KnowledgeCardComments.css';
 
 interface Props {
   content: KnowledgeCardContent;
@@ -19,10 +21,23 @@ export default function KnowledgeCardComments({ content, onUpdate, onClose }: Pr
   const [images, setImages] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [confirmSave, setConfirmSave] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  function closeTopLayer() {
+    if (confirmSave) setConfirmSave(false);
+    else if (deleteId) setDeleteId(null);
+    else if (lightbox) setLightbox(null);
+    else onClose();
+  }
+
+  useRegisterBackHandler(() => {
+    closeTopLayer();
+    return true;
+  }, [confirmSave, deleteId, lightbox, onClose]);
 
   function publish(next: KnowledgeComment[]) {
     setComments(next);
@@ -58,17 +73,24 @@ export default function KnowledgeCardComments({ content, onUpdate, onClose }: Pr
       setBusy(false);
     }
   }
-  function save() {
-    const clean = text.trim();
-    if (!clean && !images.length) {
+  function requestSave() {
+    if (busy) return;
+    if (!text.trim() && !images.length) {
       setError('写点内容或加张图片。');
       return;
     }
+    setError('');
+    setConfirmSave(true);
+  }
+  function save() {
+    const clean = text.trim();
+    const now = Date.now();
     if (editingId) {
-      publish(comments.map(comment => comment.id === editingId ? { ...comment, text: clean, images, updatedAt: Date.now() } : comment));
+      publish(comments.map(comment => comment.id === editingId ? { ...comment, text: clean, images, updatedAt: now } : comment));
     } else {
-      publish([...comments, { id: makeId(), text: clean, images, createdAt: Date.now(), updatedAt: Date.now() }]);
+      publish([...comments, { id: makeId(), text: clean, images, createdAt: now, updatedAt: now }]);
     }
+    setConfirmSave(false);
     resetForm();
   }
   function remove(id: string) {
@@ -81,12 +103,16 @@ export default function KnowledgeCardComments({ content, onUpdate, onClose }: Pr
     <section className="kce-comments-sheet">
       <header className="kce-comments-header">
         <div><span>评论</span><strong>{comments.length}</strong></div>
-        <button type="button" onClick={onClose} aria-label="关闭评论"><X size={20} /></button>
+        <button type="button" onClick={closeTopLayer} aria-label="关闭评论"><X size={20} /></button>
       </header>
       <div className="kce-comments-list">
         {!comments.length && <p className="kce-comments-empty">还没有评论</p>}
         {[...comments].sort((a, b) => b.createdAt - a.createdAt).map(comment => <article key={comment.id} className="kce-comment">
           <p>{comment.text}</p>
+          <div className="kce-comment-timestamps">
+            <time dateTime={new Date(comment.createdAt).toISOString()}>创建于 {new Date(comment.createdAt).toLocaleString('zh-CN', { hour12: false })}</time>
+            {comment.updatedAt !== comment.createdAt && <time dateTime={new Date(comment.updatedAt).toISOString()}>编辑于 {new Date(comment.updatedAt).toLocaleString('zh-CN', { hour12: false })}</time>}
+          </div>
           {!!comment.images.length && <div className="kce-comment-images">{comment.images.map((image, index) => <button type="button" key={index} onClick={() => setLightbox(image)} aria-label={`查看评论图片 ${index + 1}`}><img src={image} alt={`评论图片 ${index + 1}`} /></button>)}</div>}
           <div className="kce-comment-actions">
             <button type="button" onClick={() => startEdit(comment)} aria-label="编辑评论"><Pencil size={14} /> 编辑</button>
@@ -106,11 +132,12 @@ export default function KnowledgeCardComments({ content, onUpdate, onClose }: Pr
             event.currentTarget.value = '';
             void addImages(files);
           }} />
-          <button type="button" className="kce-comment-send" disabled={busy} onClick={save}>{editingId ? '保存修改' : '发表评论'}</button>
+          <button type="button" className="kce-comment-send" disabled={busy} onClick={requestSave}>{editingId ? '保存修改' : '发表评论'}</button>
         </div>
       </div>
     </section>
     {lightbox && <div className="kce-fullscreen" role="dialog" aria-modal="true" aria-label="评论图片"><button type="button" onClick={() => setLightbox(null)} aria-label="关闭图片"><X size={25} /></button><img src={lightbox} alt="评论图片全屏预览" /></div>}
+    <ConfirmDialog open={confirmSave} message={editingId ? '保存这条评论的修改？' : '发表这条评论？'} confirmText={editingId ? '保存修改' : '发表'} onCancel={() => setConfirmSave(false)} onConfirm={save} />
     <ConfirmDialog open={!!deleteId} message="删除这条评论？" confirmText="删除" onCancel={() => setDeleteId(null)} onConfirm={() => deleteId && remove(deleteId)} />
   </div>;
 }

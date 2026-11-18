@@ -12,7 +12,7 @@ vi.mock('../src/services/store', () => ({
   deepClone: <T>(value: T): T => structuredClone(value),
   mutate: storage.mutate,
 }));
-import { deleteCard, getCards, initializeKnowledgeCards, linkCard, saveCard } from '../src/db/knowledgeCards';
+import { addCustomCardType, getCustomCardTypes, removeCustomCardType, deleteCard, getCards, initializeKnowledgeCards, linkCard, saveCard } from '../src/db/knowledgeCards';
 
 function legacyMap(courseId = 12): KnowledgeMap {
   return {
@@ -127,5 +127,25 @@ describe('knowledge card transactions', () => {
     await deleteCard('a');
     expect(await getCards()).toEqual([]);
     expect(storage.store.knowledgeMaps.flatMap(map => map.nodes.flatMap(node => node.cardIds))).toEqual(['other-card']);
+  });
+});
+
+
+describe('custom card types', () => {
+  it('persists deduplicated terms without removing types from existing cards', async () => {
+    await saveCard({ ...card('c'), type: '随想' });
+    await addCustomCardType(' 随想 ');
+    await addCustomCardType('随想');
+    await addCustomCardType('知识');
+    expect(await getCustomCardTypes()).toEqual(['随想']);
+    await removeCustomCardType('随想');
+    expect(await getCustomCardTypes()).toEqual([]);
+    expect((await getCards())[0].type).toBe('随想');
+  });
+  it('rolls back vocabulary when persistence fails', async () => {
+    await addCustomCardType('随想');
+    storage.fail = true;
+    await expect(removeCustomCardType('随想')).rejects.toThrow();
+    expect(await getCustomCardTypes()).toEqual(['随想']);
   });
 });
