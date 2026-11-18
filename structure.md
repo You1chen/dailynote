@@ -511,3 +511,6 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 卡片类型
 KnowledgeCard.type 缺省按知识展示；KnowledgeCardLibrary.customTypes 保存自定义词条。CardTypeMenu 通过串行事务增删词条，删除词条不更改卡片。评论确认与时间戳由 KnowledgeCardComments 管理。
+
+## 反思入口收束
+Reflection 仅包含日期导航、灵感与卡片收集器；MindSheet 承载灵感增删改、标签与返回；useIdeas 提供计数广播。Harvest 页面已删除，旧路由只重定向；reflections/harvests 表保留导入导出兼容。

@@ -1,6 +1,6 @@
 # DailyNote
 
-本地优先的个人日程与复盘系统：计划、反思、卡片、课程、截止事项和秘密花园，全部存在你自己的目录里，不联网、不要账号。
+本地优先的个人日程与复盘系统：计划、反思灵感、卡片、课程、截止事项和秘密花园，全部存在你自己的目录里，不联网、不要账号。
 
 Web/PWA 与 Android APK 共用同一份代码，数据格式互通。
 
@@ -22,7 +22,7 @@ Web/PWA 与 Android APK 共用同一份代码，数据格式互通。
 ```bash
 npm ci
 npm run dev       # Vite 开发服务器
-npm test          # Vitest，53 个文件 / 823 个用例
+npm test          # Vitest，54 个文件 / 829 个用例
 npm run build     # 类型检查 + 生产构建，输出 dist/
 npm run preview   # 预览生产构建
 ```

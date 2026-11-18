@@ -1,5 +1,5 @@
 import { Suspense, lazy as ReactLazy, useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import TabBar from './components/TabBar';
 import TaskBall from './components/TaskBall';
 import SideNav from './components/SideNav';
@@ -8,7 +8,6 @@ import LongTermGoalsPage from './pages/LongTermGoals';
 import GardenGate from './components/GardenGate';
 import GardenPage from './pages/GardenPage';
 import ReflectionPage from './pages/Reflection';
-import HarvestPage from './pages/Harvest';
 import TrashPage from './pages/Trash';
 import BackupRestorePage from './pages/BackupRestore';
 import SettingsPage from './pages/SettingsPage';
@@ -72,7 +71,7 @@ function AppShell() {
           <Route path="/garden/*" element={<GardenGate><GardenPage /></GardenGate>} />
           <Route path="/backlog" element={<BacklogPage />} />
           <Route path="/reflection" element={<ReflectionPage />} />
-          <Route path="/harvest" element={<HarvestPage />} />
+          <Route path="/harvest" element={<Navigate to={`/reflection${location.search}`} replace />} />
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/backup" element={<BackupRestorePage />} />
           <Route path="/settings" element={<SettingsPage />} />

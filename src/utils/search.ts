@@ -84,29 +84,7 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     }
   }
 
-  // ---- 反思 ----
-  for (const r of data.reflections) {
-    push(makeHit(
-      q,
-      `ref:${r.id}`,
-      r.problem || '(反思)',
-      [r.problem, r.cause, r.solution, r.relatedTaskTitle],
-      `反思 · ${shortDate(r.date)}`,
-      `/reflection?date=${r.date}`,
-    ));
-  }
-
-  // ---- 收获 ----
-  for (const h of data.harvests) {
-    push(makeHit(
-      q,
-      `harv:${h.id}`,
-      h.subject || '(收获)',
-      [h.subject, h.content],
-      `收获 · ${shortDate(h.date)}`,
-      `/harvest?date=${h.date}`,
-    ));
-  }
+  // Legacy reflections/harvests remain in storage and backups; their retired pages no longer produce search links.
 
   // ---- 大愿望 / 长期目标 ----
   for (const g of data.longTermGoals) {
@@ -175,6 +153,11 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
       '课程表',
       '/courses',
     ));
+  }
+
+  for (const idea of data.ideas ?? []) {
+    if (idea.kind && idea.kind !== 'idea') continue;
+    push(makeHit(q, `idea:${idea.id}`, idea.title || '灵感', [idea.title ?? '', idea.text, ...(idea.tags ?? [])], `灵感 · ${shortDate(idea.date)}`, `/reflection?date=${idea.date}&ideas=1`));
   }
 
   // ---- 卡片（卡片库归属反思页，节点只引用卡片 ID） ----

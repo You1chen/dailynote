@@ -496,7 +496,7 @@ export default function TaskBall() {
       {mindOpen && (
         <MindSheet
           onClose={() => setMindOpen(false)}
-          onBrowseDates={() => { setMindOpen(false); navigate('/harvest'); }}
+          onBrowseDates={() => { setMindOpen(false); navigate('/reflection'); }}
         />
       )}
       {/* 全部完成：自动跳出庆祝 */}

@@ -13,6 +13,12 @@ it('finds collector card text and routes to its course map node', () => {
   expect(hit.route).toBe('/courses?knowledgeCourse=7&knowledgeNode=n');
 });
 
+it('routes inspiration search to the moved date-specific panel', () => {
+  const store = emptyStore();
+  store.ideas = [{ id: 1, kind: 'idea', title: '迁移灵感', text: '正文', date: '2026-11-01', createdAt: 1, updatedAt: 1 }];
+  expect(searchStore(store, '迁移灵感')[0].route).toBe('/reflection?date=2026-11-01&ideas=1');
+});
+
 it('finds unlinked collector cards and routes to reflection', () => {
   const store = emptyStore() as StoreShape;
   store.knowledgeCards = [{ id: 1, audioExportPath: 'Music/DailyNote', updatedAt: 1, records: [{ id: 'c2', createdAt: 1, updatedAt: 1, card: { id: 'c2', title: '收集器里的卡片', contents: [], createdAt: 1, updatedAt: 1 } }] }];

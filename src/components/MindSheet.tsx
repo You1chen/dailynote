@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { X, Sparkles, Star, ListChecks, Plus, Trash2, Hash, Check, ArrowLeft } from 'lucide-react';
 import { useIdeas } from '../hooks/useIdeas';
 import { playChime } from '../utils/sound';
@@ -50,6 +51,12 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
   const [itemDetail, setItemDetail] = useState('');
   const [itemTags, setItemTags] = useState<string[]>([]);
   const [itemTagDraft, setItemTagDraft] = useState('');
+
+  useRegisterBackHandler(() => {
+    if (editingIdea) setEditingIdea(null);
+    else onClose();
+    return true;
+  }, [editingIdea, onClose]);
 
   const active = KINDS.find(k => k.key === kind) ?? KINDS[0];
   const ActiveIcon = active.icon;
