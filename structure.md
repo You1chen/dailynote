@@ -502,3 +502,9 @@ UI → hooks → db/index.ts（内存 CRUD）→ mutate → store.ts → 文件 
 
 ## 漫步
 /wander 为只读回顾页。wanderDeck 整理卡片与灵感、洗牌和日期筛选；Walk 管理筛选与原文对话框；WalkMotion 用稳定卡位与连续位移处理手势。
+
+### 漫步的编辑层（2026-11-18）
+
+- `Walk` 的详情 `<dialog>` 上再点一次正文或点铅笔，打开 `WalkEdit` 全屏层并清空详情。
+- 知识卡片直接复用 `KnowledgeCardEditor`；灵感由 `WalkEdit` 内部表单编辑标题/正文，保存后写回 `saveIdea`。
+- `WalkEdit`/卡片编辑器注册返回键；关闭编辑层后仍停留在 `/wander` 的当前卡堆。

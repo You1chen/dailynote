@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Memory } from '../utils/wanderDeck';
 import { age } from '../utils/wanderDeck';
-import { Headphones, Image as Picture, ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
+import { Headphones, Image as Picture, Shuffle } from 'lucide-react';
 
 const mod = (n: number, length: number) => (n % length + length) % length;
 function Preview({ item }: {item: Memory}) {
@@ -22,7 +22,8 @@ export default function WalkMotion({ items, open, reshuffle, paused }: {items: M
       const d = Number(el.dataset.slot)-v, a=Math.abs(d), bias=Math.sign(d);
       const x = bias*(Math.min(a,1)*(d<0?17:98) + Math.max(0,a-1)*(d<0?10:78));
       el.style.transform=`translate(-50%,-50%) translate3d(${x}%,${Math.min(a,2)*2}%,0) scale(${1-Math.min(a,2)*.105})`;
-      el.style.opacity=String(Math.max(0,1-Math.min(a,1)*.44-Math.max(0,a-1)*.55));
+      el.style.opacity=String(a > 1.55 ? Math.max(0,1-(a-1.55)*1.5) : 1);
+      el.style.filter=`brightness(${1-Math.min(a,1)*.52})`;
       el.style.zIndex=String(100-Math.round(a*20));
     });
   },[]);
@@ -51,5 +52,5 @@ export default function WalkMotion({ items, open, reshuffle, paused }: {items: M
   return <><div className="walk-age" aria-live="polite">{age(cur.day)}</div><div className="walk-stage" ref={stage} onPointerDown={down} onPointerMove={move} onPointerUp={e=>end(e)} onPointerCancel={e=>end(e,true)} onPointerLeave={()=>{if(!drag.current?.moved)drag.current=null;}}>
     {(count===1?[0]:[-2,-1,0,1,2]).map(off=>{const slot=anchor+off,item=items[mod(slot,count)];return <div className="walk-slot" key={slot} data-slot={slot}><div className="walk-float"><button className="walk-paper" type="button" tabIndex={off===0?0:-1} aria-label={off===0?`阅读：${item.title}`:off<0?'翻到上一张':'翻到下一张'} onClick={e=>{if((e.detail!==0 && blockClick.current)||moving.current)return;if(!off)open(item);else step(Math.sign(off));}}>
     <strong>{item.title}</strong><div className="walk-excerpt"><Preview item={item}/></div><time>{item.day.split('-').join('/')}</time></button></div></div>;})}</div>
-    <footer className="walk-foot"><button aria-label="上一张" disabled={count<2} onClick={()=>step(-1)}><ChevronLeft/></button><button className="walk-random" onClick={reshuffle}><Shuffle size={16}/>随机回顾时光</button><button aria-label="下一张" disabled={count<2} onClick={()=>step(1)}><ChevronRight/></button></footer></>;
+    <footer className="walk-foot"><button className="walk-random" aria-label="随机回顾时光，重新排列" onClick={reshuffle}><Shuffle size={16}/>随机回顾时光</button></footer></>;
 }
