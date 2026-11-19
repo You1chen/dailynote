@@ -60,7 +60,7 @@ if (-not $SyncOnly) {
     Write-Host "      DONE" -ForegroundColor Green
     Write-Host ""
 
-    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\debug\app-debug.apk"
+    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\debug\dailynote.apk"
     if (Test-Path $apkPath) {
         $size = (Get-Item $apkPath).Length / 1MB
         Write-Host "========================================" -ForegroundColor Green

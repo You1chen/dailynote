@@ -13,7 +13,7 @@ npx vite build
 npx cap sync android
 ./android/gradlew -p android --no-daemon assembleDebug
 
-APK="android/app/build/outputs/apk/debug/app-debug.apk"
+APK="android/app/build/outputs/apk/debug/dailynote.apk"
 if [ ! -f "$APK" ]; then
   echo "APK not found: $APK" >&2
   exit 1

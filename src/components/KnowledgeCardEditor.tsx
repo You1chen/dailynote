@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, Eye, Image as ImageIcon, MessageCircle, Mic, Plus, RefreshCw, Square, Trash2, X } from 'lucide-react';
 import type { KnowledgeCard, KnowledgeCardContent, KnowledgeStatus } from '../types/knowledge';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
@@ -51,6 +52,10 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   const [commentContentId, setCommentContentId] = useState<string | null>(null);
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [exportingCard, setExportingCard] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportKind, setExportKind] = useState<'card' | 'image'>('card');
+  const [exportPath, setExportPath] = useState('DailyNote/cards');
+  const [exportError, setExportError] = useState('');
   const imagePressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imagePressStart = useRef<{ x: number; y: number } | null>(null);
   const imageLongPressed = useRef(false);
@@ -280,12 +285,20 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     imagePressTimer.current = setTimeout(() => {
       imageLongPressed.current = true;
       imagePressTimer.current = null;
-      setImageMenuOpen(true);
     }, 500);
   }
   function moveImagePress(event: React.PointerEvent<HTMLButtonElement>) {
     const start = imagePressStart.current;
     if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) clearImagePress();
+  }
+  function endImagePress() {
+    const pressedLong = imageLongPressed.current;
+    clearImagePress();
+    if (pressedLong) setImageMenuOpen(true);
+  }
+  function cancelImagePress() {
+    if (imageLongPressed.current) setImageMenuOpen(true);
+    clearImagePress();
   }
   function openImage() {
     if (imageLongPressed.current) {
@@ -294,16 +307,32 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     }
     if (current?.kind === 'image') setFullscreenImage(current.data);
   }
-  async function saveImage() {
-    if (current?.kind !== 'image') return;
+  function openExport(kind: 'card' | 'image') {
     setImageMenuOpen(false);
-    setError('');
-    setNotice('');
+    setExportKind(kind);
+    setExportPath(kind === 'image' ? 'Pictures/DailyNote' : 'DailyNote/cards');
+    setExportError('');
+    setExportOpen(true);
+  }
+  async function confirmExport() {
+    const folder = exportPath.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    if (!folder) { setExportError('请填写保存位置'); return; }
+    if (folder.split('/').some(part => part === '..' || part === '.')) { setExportError('保存位置不能包含 .. 或 .'); return; }
+    if (Capacitor.isNativePlatform() && /^[A-Za-z]:/.test(folder)) { setExportError('请填写公共存储下的相对路径'); return; }
+    setExportingCard(true);
+    setExportError('');
     try {
-      const result = await exportImageBlob(current.data, 'Pictures/DailyNote', `${draftRef.current.title || '卡片'}-${index + 1}`);
-      if (mounted.current) setNotice(result.path ? `图片已保存至 ${result.path}` : '已开始下载图片');
+      const result = exportKind === 'image' && current?.kind === 'image'
+        ? await exportImageBlob(current.data, folder, `${draftRef.current.title || '卡片'}-${index + 1}`)
+        : await exportCardData(draftRef.current, folder);
+      if (mounted.current) {
+        setExportOpen(false);
+        setNotice(result.path ? `已导出至 ${result.path}` : '已打开浏览器保存位置');
+      }
     } catch (cause) {
-      if (mounted.current) setError(`保存图片失败：${errorText(cause)}`);
+      if (mounted.current) setExportError(`导出失败：${errorText(cause)}`);
+    } finally {
+      if (mounted.current) setExportingCard(false);
     }
   }
   async function copyImage() {
@@ -335,20 +364,6 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       if (mounted.current) setBusy(false);
     }
   }
-  async function exportCard() {
-    setExportingCard(true);
-    setError('');
-    setNotice('');
-    try {
-      const result = await exportCardData(draftRef.current);
-      if (mounted.current) setNotice(result.path ? `卡片数据已导出至 ${result.path}` : '已开始下载卡片数据');
-    } catch (cause) {
-      if (mounted.current) setError(`导出卡片失败：${errorText(cause)}`);
-    } finally {
-      if (mounted.current) setExportingCard(false);
-    }
-  }
-
   function addText() {
     if (operation.current || phaseRef.current !== 'idle') return;
     const now = Date.now();
@@ -397,7 +412,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     <header className="kce-header">
       <button type="button" onClick={() => void saveAndClose(false)} disabled={busy} aria-label="保存草稿并返回"><ArrowLeft size={21} /></button>
       <span>卡片</span>
-      <div className="kce-header-actions"><button type="button" className="kce-type" aria-label="设置卡片类型" disabled={locked} onClick={() => setTypeOpen(true)}>{draft.type || '知识'}</button><button type="button" className="kce-export-card" aria-label="导出卡片数据" title="导出卡片数据" disabled={locked || exportingCard} onClick={() => void exportCard()}><Download size={17} /></button><button type="button" className="kce-save" disabled={locked} onClick={() => void saveAndClose(true)}>{busy ? '处理中…' : '保存'}</button></div>
+      <div className="kce-header-actions"><button type="button" className="kce-type" aria-label="设置卡片类型" disabled={locked} onClick={() => setTypeOpen(true)}>{draft.type || '知识'}</button><button type="button" className="kce-export-card" aria-label="导出卡片数据" title="导出卡片数据" disabled={locked || exportingCard} onClick={() => openExport('card')}><Download size={17} /></button><button type="button" className="kce-save" disabled={locked} onClick={() => void saveAndClose(true)}>{busy ? '处理中…' : '保存'}</button></div>
     </header>
     <div className="kce-meta">
       <input ref={titleInput} aria-label="卡片名称" placeholder="卡片名称" value={draft.title} disabled={locked} onChange={event => patch({ title: event.target.value })} />
@@ -424,7 +439,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
         const text = event.target.value;
         patch({ contents: draftRef.current.contents.map(item => item.id === current.id && item.kind === 'text' ? { ...item, text, updatedAt: Date.now() } : item) });
       }} />}
-      {current?.kind === 'image' && <button type="button" className="kce-image" aria-label="查看图片，长按更多操作" onClick={openImage} onContextMenu={event => { event.preventDefault(); clearImagePress(); setImageMenuOpen(true); }} onPointerDown={beginImagePress} onPointerMove={moveImagePress} onPointerUp={clearImagePress} onPointerCancel={clearImagePress} onPointerLeave={clearImagePress}><img src={current.data} alt={`卡片图片 ${index + 1}`} draggable={false} /></button>}
+      {current?.kind === 'image' && <button type="button" className="kce-image" aria-label="查看图片，长按更多操作" onClick={openImage} onContextMenu={event => { event.preventDefault(); clearImagePress(); setImageMenuOpen(true); }} onPointerDown={beginImagePress} onPointerMove={moveImagePress} onPointerUp={endImagePress} onPointerCancel={cancelImagePress} onPointerLeave={event => { if (event.pointerType === 'mouse') clearImagePress(); }}><img src={current.data} alt={`卡片图片 ${index + 1}`} draggable={false} /></button>}
       {current && <button type="button" className="kce-comments-bubble" aria-label={`评论 ${current.comments?.length ?? 0}`} onClick={() => setCommentContentId(current.id)}><MessageCircle size={17} /><span>{current.comments?.length ?? 0}</span></button>}
       {current?.kind === 'audio' && <div className="kce-audio"><Mic size={36} /><strong>{current.fileName}</strong><audio key={current.id} controls preload="metadata" src={current.data} /><small>{Math.max(1, Math.round(current.durationMs / 1000))} 秒</small><button type="button" disabled={exporting} onClick={() => void exportAudio(current)}><Download size={17} />{exporting ? '正在导出…' : '导出录音'}</button></div>}
     </main>
@@ -464,10 +479,19 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       </div>
     </div>}
     <input ref={replaceImageInput} className="kce-file" type="file" accept="image/*" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ''; void replaceImage(files); }} />
-    {imageMenuOpen && current?.kind === 'image' && <div className="kce-image-menu-backdrop" onClick={() => setImageMenuOpen(false)}><section className="kce-image-menu" role="dialog" aria-modal="true" aria-label="图片操作" onClick={event => event.stopPropagation()}><header><span>图片</span><button type="button" onClick={() => setImageMenuOpen(false)} aria-label="关闭图片操作"><X size={19} /></button></header><button type="button" onClick={() => { setImageMenuOpen(false); setFullscreenImage(current.data); }}><Eye size={17} /> 查看大图</button><button type="button" onClick={() => void saveImage()}><Download size={17} /> 保存图片</button><button type="button" onClick={() => replaceImageInput.current?.click()}><RefreshCw size={17} /> 替换图片</button><button type="button" onClick={() => void copyImage()}><Copy size={17} /> 复制图片</button><button type="button" className="is-danger" onClick={() => { setImageMenuOpen(false); setConfirmDelete(true); }}><Trash2 size={17} /> 删除图片</button></section></div>}
+    {imageMenuOpen && current?.kind === 'image' && <div className="kce-image-menu-backdrop" onClick={() => setImageMenuOpen(false)}><section className="kce-image-menu" role="dialog" aria-modal="true" aria-label="图片操作" onClick={event => event.stopPropagation()}><header><span>图片</span><button type="button" onClick={() => setImageMenuOpen(false)} aria-label="关闭图片操作"><X size={19} /></button></header><button type="button" onClick={() => { setImageMenuOpen(false); setFullscreenImage(current.data); }}><Eye size={17} /> 查看大图</button><button type="button" onClick={() => openExport('image')}><Download size={17} /> 保存图片</button><button type="button" onClick={() => replaceImageInput.current?.click()}><RefreshCw size={17} /> 替换图片</button><button type="button" onClick={() => void copyImage()}><Copy size={17} /> 复制图片</button><button type="button" className="is-danger" onClick={() => { setImageMenuOpen(false); setConfirmDelete(true); }}><Trash2 size={17} /> 删除图片</button></section></div>}
     {typeOpen && <CardTypeMenu value={draft.type || '知识'} onSelect={type => patch({ type })} onClose={() => setTypeOpen(false)} />}
     {commentContent && <KnowledgeCardComments content={commentContent} onUpdate={comments => patch({ contents: draftRef.current.contents.map(item => item.id === commentContent.id ? { ...item, comments, updatedAt: Date.now() } : item) })} onClose={() => setCommentContentId(null)} />}
     {fullscreenImage && <div className="kce-fullscreen" role="dialog" aria-modal="true" aria-label="全屏图片"><button type="button" onClick={() => setFullscreenImage(null)} aria-label="关闭全屏图片"><X size={25} /></button><img src={fullscreenImage} alt="卡片图片全屏预览" /></div>}
+    {exportOpen && <div className="kce-export-backdrop" onClick={() => setExportOpen(false)}><section className="kce-export-dialog" role="dialog" aria-modal="true" aria-label={exportKind === 'image' ? '保存图片' : '导出卡片'} onClick={event => event.stopPropagation()}>
+      <h3>{exportKind === 'image' ? '保存图片' : '导出卡片'}</h3>
+      <p>{exportKind === 'image' ? '图片会保存为单独文件。' : '完整卡片数据会导出为 JSON，包含文字、图片、录音和评论。'}</p>
+      {Capacitor.isNativePlatform()
+        ? <label>保存位置<input value={exportPath} onChange={event => { setExportPath(event.target.value); setExportError(''); }} placeholder="例如 DailyNote/cards" autoFocus /></label>
+        : <small>确认后选择保存位置；浏览器不支持选择器时会下载到默认目录。</small>}
+      {exportError && <p className="kce-error" role="alert">{exportError}</p>}
+      <div className="kce-export-actions"><button type="button" onClick={() => setExportOpen(false)}>取消</button><button type="button" className="kce-primary" disabled={exportingCard} onClick={() => void confirmExport()}>{exportingCard ? '导出中…' : '确认导出'}</button></div>
+    </section></div>}
     <ConfirmDialog open={confirmDelete} message="删除这条内容？" confirmText="删除" onCancel={() => setConfirmDelete(false)} onConfirm={() => {
       const target = current;
       if (!target) { setConfirmDelete(false); return; }

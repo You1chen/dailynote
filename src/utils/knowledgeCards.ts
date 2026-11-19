@@ -92,7 +92,16 @@ export async function exportCardData(card: KnowledgeCard, folder = 'DailyNote/ca
     await Filesystem.writeFile({ path: `${cleanFolder}/${safeName}`, data: json, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
     return { native: true, path: `${folder}/${safeName}` };
   }
-  const url = URL.createObjectURL(new Blob([json], { type: 'application/json;charset=utf-8' }));
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const picker = (window as unknown as { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable: () => Promise<{ write: (value: Blob) => Promise<void>; close: () => Promise<void> }>; name: string }> }).showSaveFilePicker;
+  if (picker) {
+    const handle = await picker({ suggestedName: safeName, types: [{ description: 'DailyNote 卡片数据', accept: { 'application/json': ['.json'] } }] });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return { native: false, path: handle.name };
+  }
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = safeName;
@@ -115,7 +124,16 @@ export async function exportImageBlob(dataUrl: string, folder = 'Pictures/DailyN
     });
     return { native: true, path: `${folder}/${safeName}` };
   }
-  const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
+  const blob = dataUrlToBlob(dataUrl);
+  const picker = (window as unknown as { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable: () => Promise<{ write: (value: Blob) => Promise<void>; close: () => Promise<void> }>; name: string }> }).showSaveFilePicker;
+  if (picker) {
+    const handle = await picker({ suggestedName: safeName, types: [{ description: '图片', accept: { [blob.type]: [`.${extension}`] } }] });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return { native: false, path: handle.name };
+  }
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = safeName;

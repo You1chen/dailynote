@@ -43,7 +43,7 @@ npm run build:apk
 bash scripts/build-apk.sh
 ```
 
-APK 输出：`android/app/build/outputs/apk/debug/app-debug.apk`
+APK 输出：`android/app/build/outputs/apk/debug/dailynote.apk`
 
 只做 Web 构建并同步到 Android、不跑 Gradle：
 
