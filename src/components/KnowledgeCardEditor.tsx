@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Image as ImageIcon, MessageCircle, Mic, Plus, Square, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, Eye, Image as ImageIcon, MessageCircle, Mic, Plus, RefreshCw, Square, Trash2, X } from 'lucide-react';
 import type { KnowledgeCard, KnowledgeCardContent, KnowledgeStatus } from '../types/knowledge';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { fileToCompressedDataURL } from '../utils/avatarCrop';
-import { DEFAULT_AUDIO_EXPORT_PATH, exportAudioBlob } from '../utils/knowledgeCards';
+import { DEFAULT_AUDIO_EXPORT_PATH, copyImageBlob, exportAudioBlob, exportCardData, exportImageBlob } from '../utils/knowledgeCards';
 import ConfirmDialog from './ConfirmDialog';
 import CardTypeMenu from './CardTypeMenu';
 import KnowledgeCardComments from './KnowledgeCardComments';
@@ -49,6 +49,12 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
   const [commentContentId, setCommentContentId] = useState<string | null>(null);
+  const [imageMenuOpen, setImageMenuOpen] = useState(false);
+  const [exportingCard, setExportingCard] = useState(false);
+  const imagePressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imagePressStart = useRef<{ x: number; y: number } | null>(null);
+  const imageLongPressed = useRef(false);
+  const replaceImageInput = useRef<HTMLInputElement>(null);
   const mounted = useRef(true);
   const operation = useRef(false);
   const permissionToken = useRef(0);
@@ -243,6 +249,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   }
 
   useRegisterBackHandler(() => {
+    if (imageMenuOpen) { setImageMenuOpen(false); return true; }
     if (commentContentId || typeOpen) return false;
     if (confirmDelete) { setConfirmDelete(false); return true; }
     if (fullscreenImage) setFullscreenImage(null);
@@ -250,7 +257,89 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     else if (phaseRef.current !== 'idle') void stopRecording();
     else void saveAndClose(false);
     return true;
-  }, [typeOpen, commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
+  }, [imageMenuOpen, typeOpen, commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
+
+  function clearImagePress() {
+    if (imagePressTimer.current) clearTimeout(imagePressTimer.current);
+    imagePressTimer.current = null;
+    imagePressStart.current = null;
+  }
+  function beginImagePress(event: React.PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0 || locked) return;
+    clearImagePress();
+    imageLongPressed.current = false;
+    imagePressStart.current = { x: event.clientX, y: event.clientY };
+    imagePressTimer.current = setTimeout(() => {
+      imageLongPressed.current = true;
+      imagePressTimer.current = null;
+      setImageMenuOpen(true);
+    }, 500);
+  }
+  function moveImagePress(event: React.PointerEvent<HTMLButtonElement>) {
+    const start = imagePressStart.current;
+    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) clearImagePress();
+  }
+  function openImage() {
+    if (imageLongPressed.current) {
+      imageLongPressed.current = false;
+      return;
+    }
+    if (current?.kind === 'image') setFullscreenImage(current.data);
+  }
+  async function saveImage() {
+    if (current?.kind !== 'image') return;
+    setImageMenuOpen(false);
+    setError('');
+    setNotice('');
+    try {
+      const result = await exportImageBlob(current.data, 'Pictures/DailyNote', `${draftRef.current.title || '卡片'}-${index + 1}`);
+      if (mounted.current) setNotice(result.path ? `图片已保存至 ${result.path}` : '已开始下载图片');
+    } catch (cause) {
+      if (mounted.current) setError(`保存图片失败：${errorText(cause)}`);
+    }
+  }
+  async function copyImage() {
+    if (current?.kind !== 'image') return;
+    setImageMenuOpen(false);
+    setError('');
+    setNotice('');
+    try {
+      await copyImageBlob(current.data);
+      if (mounted.current) setNotice('图片已复制');
+    } catch (cause) {
+      if (mounted.current) setError(`复制图片失败：${errorText(cause)}`);
+    }
+  }
+  async function replaceImage(files: File[]) {
+    const file = files[0];
+    if (!file || !current || current.kind !== 'image') return;
+    setImageMenuOpen(false);
+    setBusy(true);
+    setError('');
+    try {
+      if (!file.type.startsWith('image/')) throw new Error('请选择图片文件。');
+      const data = await fileToCompressedDataURL(file, 1600, 0.82);
+      if (!data) throw new Error('图片压缩失败，请重试。');
+      patch({ contents: draftRef.current.contents.map(item => item.id === current.id ? { ...item, data, updatedAt: Date.now() } : item) });
+    } catch (cause) {
+      if (mounted.current) setError(`替换图片失败：${errorText(cause)}`);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+  async function exportCard() {
+    setExportingCard(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await exportCardData(draftRef.current);
+      if (mounted.current) setNotice(result.path ? `卡片数据已导出至 ${result.path}` : '已开始下载卡片数据');
+    } catch (cause) {
+      if (mounted.current) setError(`导出卡片失败：${errorText(cause)}`);
+    } finally {
+      if (mounted.current) setExportingCard(false);
+    }
+  }
 
   function addText() {
     if (operation.current || phaseRef.current !== 'idle') return;
@@ -300,7 +389,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     <header className="kce-header">
       <button type="button" onClick={() => void saveAndClose(false)} disabled={busy} aria-label="保存草稿并返回"><ArrowLeft size={21} /></button>
       <span>卡片</span>
-      <div className="kce-header-actions"><button type="button" className="kce-type" aria-label="设置卡片类型" disabled={locked} onClick={() => setTypeOpen(true)}>{draft.type || '知识'}</button><button type="button" className="kce-save" disabled={locked} onClick={() => void saveAndClose(true)}>{busy ? '处理中…' : '保存'}</button></div>
+      <div className="kce-header-actions"><button type="button" className="kce-type" aria-label="设置卡片类型" disabled={locked} onClick={() => setTypeOpen(true)}>{draft.type || '知识'}</button><button type="button" className="kce-export-card" aria-label="导出卡片数据" title="导出卡片数据" disabled={locked || exportingCard} onClick={() => void exportCard()}><Download size={17} /></button><button type="button" className="kce-save" disabled={locked} onClick={() => void saveAndClose(true)}>{busy ? '处理中…' : '保存'}</button></div>
     </header>
     <div className="kce-meta">
       <input ref={titleInput} aria-label="卡片名称" placeholder="卡片名称" value={draft.title} disabled={locked} onChange={event => patch({ title: event.target.value })} />
@@ -327,7 +416,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
         const text = event.target.value;
         patch({ contents: draftRef.current.contents.map(item => item.id === current.id && item.kind === 'text' ? { ...item, text, updatedAt: Date.now() } : item) });
       }} />}
-      {current?.kind === 'image' && <button type="button" className="kce-image" aria-label="全屏查看图片" onClick={() => setFullscreenImage(current.data)}><img src={current.data} alt={`卡片图片 ${index + 1}`} draggable={false} /></button>}
+      {current?.kind === 'image' && <button type="button" className="kce-image" aria-label="查看图片，长按更多操作" onClick={openImage} onContextMenu={event => { event.preventDefault(); clearImagePress(); setImageMenuOpen(true); }} onPointerDown={beginImagePress} onPointerMove={moveImagePress} onPointerUp={clearImagePress} onPointerCancel={clearImagePress} onPointerLeave={clearImagePress}><img src={current.data} alt={`卡片图片 ${index + 1}`} draggable={false} /></button>}
       {current && <button type="button" className="kce-comments-bubble" aria-label={`评论 ${current.comments?.length ?? 0}`} onClick={() => setCommentContentId(current.id)}><MessageCircle size={17} /><span>{current.comments?.length ?? 0}</span></button>}
       {current?.kind === 'audio' && <div className="kce-audio"><Mic size={36} /><strong>{current.fileName}</strong><audio key={current.id} controls preload="metadata" src={current.data} /><small>{Math.max(1, Math.round(current.durationMs / 1000))} 秒</small><button type="button" disabled={exporting} onClick={() => void exportAudio(current)}><Download size={17} />{exporting ? '正在导出…' : '导出录音'}</button></div>}
     </main>
@@ -366,6 +455,8 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
         {phase === 'recording' && <button type="button" className="kce-stop" onClick={() => void stopRecording()}><Square size={18} />结束录音</button>}
       </div>
     </div>}
+    <input ref={replaceImageInput} className="kce-file" type="file" accept="image/*" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ''; void replaceImage(files); }} />
+    {imageMenuOpen && current?.kind === 'image' && <div className="kce-image-menu-backdrop" onClick={() => setImageMenuOpen(false)}><section className="kce-image-menu" role="dialog" aria-modal="true" aria-label="图片操作" onClick={event => event.stopPropagation()}><header><span>图片</span><button type="button" onClick={() => setImageMenuOpen(false)} aria-label="关闭图片操作"><X size={19} /></button></header><button type="button" onClick={() => { setImageMenuOpen(false); setFullscreenImage(current.data); }}><Eye size={17} /> 查看大图</button><button type="button" onClick={() => void saveImage()}><Download size={17} /> 保存图片</button><button type="button" onClick={() => replaceImageInput.current?.click()}><RefreshCw size={17} /> 替换图片</button><button type="button" onClick={() => void copyImage()}><Copy size={17} /> 复制图片</button><button type="button" className="is-danger" onClick={() => { setImageMenuOpen(false); setConfirmDelete(true); }}><Trash2 size={17} /> 删除图片</button></section></div>}
     {typeOpen && <CardTypeMenu value={draft.type || '知识'} onSelect={type => patch({ type })} onClose={() => setTypeOpen(false)} />}
     {commentContent && <KnowledgeCardComments content={commentContent} onUpdate={comments => patch({ contents: draftRef.current.contents.map(item => item.id === commentContent.id ? { ...item, comments, updatedAt: Date.now() } : item) })} onClose={() => setCommentContentId(null)} />}
     {fullscreenImage && <div className="kce-fullscreen" role="dialog" aria-modal="true" aria-label="全屏图片"><button type="button" onClick={() => setFullscreenImage(null)} aria-label="关闭全屏图片"><X size={25} /></button><img src={fullscreenImage} alt="卡片图片全屏预览" /></div>}

@@ -124,3 +124,13 @@
 .kce-comments .kce-error { padding: 4px 0; }
 [data-theme='dark'] .kce-comments-sheet, [data-theme='dark'] .kce-comment-form { background: #202923; }
 [data-theme='dark'] .kce-comment-form textarea, [data-theme='dark'] .kce-comment-tools .kce-comment-image { background: #171d18; color: #e1e8de; border-color: #3b4a3e; }
+.kce .kce-export-card { min-width: 34px; padding: 0 6px; color: var(--color-text-muted, #8a8a83); }
+.kce-image-menu-backdrop { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; background: #0006; }
+.kce-image-menu { box-sizing: border-box; width: 100%; padding: 10px 12px calc(14px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); border-radius: 16px 16px 0 0; background: var(--color-surface, #fff); }
+.kce-image-menu header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 5px; color: var(--color-text, #292927); font-size: 14px; font-weight: 600; }
+.kce-image-menu header button { min-width: 32px; min-height: 32px; padding: 0; color: var(--color-text-muted, #8a8a83); }
+.kce-image-menu > button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 42px; padding: 0 5px; border: 0; border-bottom: 1px solid var(--color-border, #e5e4df); border-radius: 0; background: transparent; color: var(--color-text, #292927); font: inherit; font-size: 14px; text-align: left; }
+.kce-image-menu > button:active { background: var(--color-bg, #faf9f6); }
+.kce-image-menu > button.is-danger { color: #bc4944; }
+[data-theme='dark'] .kce-image-menu { background: #202923; }
+[data-theme='dark'] .kce-image-menu > button { color: #e1e8de; border-color: #3b4a3e; }

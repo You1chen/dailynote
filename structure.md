@@ -514,3 +514,7 @@ KnowledgeCard.type 缺省按知识展示；KnowledgeCardLibrary.customTypes 保�
 
 ## 反思入口收束
 Reflection 仅包含日期导航、灵感与卡片收集器；MindSheet 承载灵感增删改、标签与返回；useIdeas 提供计数广播。Harvest 页面已删除，旧路由只重定向；reflections/harvests 表保留导入导出兼容。
+
+## 卡片图片操作（2026-11-19）
+- `KnowledgeCardEditor` 为图片内容提供 500ms 长按/右键菜单；替换只改当前 `data`，保留内容 id 与评论。
+- `utils/knowledgeCards.ts` 的 `exportImageBlob` 保存图片文件，`exportCardData`/`cardDataJSON` 导出含图片 data URL 的完整卡片 JSON。

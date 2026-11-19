@@ -73,6 +73,62 @@ export function groupCardsByDate(cards: KnowledgeCard[], ascending = false): { d
   return [...groups.entries()].map(([date, items]) => ({ date, cards: items }));
 }
 
+export function cardDataJSON(card: KnowledgeCard): string {
+  return JSON.stringify({
+    format: 'dailynote-card',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    card,
+  }, null, 2);
+}
+
+/** Export a complete card as a portable JSON file. Image content stays inside `contents[].data`. */
+export async function exportCardData(card: KnowledgeCard, folder = 'DailyNote/cards'): Promise<{ native: boolean; path?: string }> {
+  const safeName = `${(card.title.trim() || '未命名卡片').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80)}-${cardDateKey(card.createdAt)}.json`;
+  const json = cardDataJSON(card);
+  if (Capacitor.isNativePlatform()) {
+    const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+    const cleanFolder = folder.replace(/^Documents[\\/]/, '').replace(/\/+$/, '');
+    await Filesystem.writeFile({ path: `${cleanFolder}/${safeName}`, data: json, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
+    return { native: true, path: `${folder}/${safeName}` };
+  }
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = safeName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { native: false };
+}
+
+export async function exportImageBlob(dataUrl: string, folder = 'Pictures/DailyNote', filename = 'card-image'): Promise<{ native: boolean; path?: string }> {
+  const mime = /data:([^;]+)/.exec(dataUrl)?.[1] ?? 'image/jpeg';
+  const extension = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+  const safeName = `${filename.replace(/[\\/:*?"<>|]/g, '_').slice(0, 90) || 'card-image'}.${extension}`;
+  if (Capacitor.isNativePlatform()) {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    await Filesystem.writeFile({
+      path: `${folder.replace(/\/+$/g, '')}/${safeName}`,
+      data: dataUrl.split(',')[1] ?? '',
+      directory: Directory.ExternalStorage,
+      recursive: true,
+    });
+    return { native: true, path: `${folder}/${safeName}` };
+  }
+  const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = safeName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { native: false };
+}
+
+export async function copyImageBlob(dataUrl: string): Promise<void> {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('当前环境不支持复制图片');
+  await navigator.clipboard.write([new ClipboardItem({ [dataUrlToBlob(dataUrl).type]: dataUrlToBlob(dataUrl) })]);
+}
+
 export function describeContent(content: KnowledgeCardContent): { kind: KnowledgeCardContent['kind']; label: string } {
   if (content.kind === 'text') return { kind: content.kind, label: content.text.slice(0, 80) || '文字内容' };
   if (content.kind === 'image') return { kind: content.kind, label: '图片' };

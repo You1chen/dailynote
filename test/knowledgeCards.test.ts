@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KnowledgeCard } from '../src/types/knowledge';
-import { cardDateKey, cardSearchText, groupCardsByDate } from '../src/utils/knowledgeCards';
+import { cardDataJSON, cardDateKey, cardSearchText, groupCardsByDate } from '../src/utils/knowledgeCards';
 
 const card = (id: string, createdAt: number): KnowledgeCard => ({ id, title: id, contents: [], createdAt, updatedAt: createdAt });
 
@@ -32,5 +32,16 @@ describe('collector date grouping', () => {
       }],
     };
     expect(cardSearchText(item)).toContain('这里补充一个关键词');
+  });
+
+  it('exports a complete card document including image payloads', () => {
+    const now = Date.now();
+    const image = 'data:image/png;base64,abc123';
+    const payload = JSON.parse(cardDataJSON({
+      ...card('with-image', now),
+      contents: [{ id: 'image-1', kind: 'image', data: image, createdAt: now, updatedAt: now }],
+    }));
+    expect(payload).toMatchObject({ format: 'dailynote-card', version: 1, card: { id: 'with-image' } });
+    expect(payload.card.contents[0]).toMatchObject({ kind: 'image', data: image });
   });
 });

@@ -22,7 +22,7 @@ Web/PWA 与 Android APK 共用同一份代码，数据格式互通。
 ```bash
 npm ci
 npm run dev       # Vite 开发服务器
-npm test          # Vitest，54 个文件 / 829 个用例
+npm test          # Vitest，54 个文件 / 830 个用例
 npm run build     # 类型检查 + 生产构建，输出 dist/
 npm run preview   # 预览生产构建
 ```
