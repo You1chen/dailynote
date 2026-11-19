@@ -521,6 +521,6 @@ Reflection 仅包含日期导航、灵感与卡片收集器；MindSheet 承载�
 
 ## 问题反馈修复（2026-11-19）
 - `hooks/useSheetDrag.ts` 提供底部弹层下拉关闭；TaskBall、DailyPlan、PreferencePanel、MindSheet 已接入。
-- TaskBall 层级编辑在缩进/缩退/删除后重新聚焦当前输入；按钮文案改为「进一层/退一层」。
+- TaskBall 进入层级编辑时自动聚焦最后一行；底部输入与缩进/缩退/删除按钮已移除。长按行横向拖动跟手改层级，松手吸附；长按不动打开编辑/搁置/删除菜单。
 - `AppShell` 在页面没有返回处理时回到 `/`；知识卡片显式保存不关闭编辑页。
 - `utils/timetableImport.ts` 解析粘贴课表文本；CoursesPage 学期设置可收起，课表块使用课程色。

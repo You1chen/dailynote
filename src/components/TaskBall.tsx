@@ -15,6 +15,7 @@ import {
   linesToTree,
   parseTaskText,
   insertTaskLineAfter,
+  leafKey,
   withoutBlankTaskLines,
   treeToLines,
   pruneDoneLeaves,
@@ -54,9 +55,11 @@ export default function TaskBall() {
   const [mode, setMode] = useState<'lines' | 'text'>('lines');
   const [lines, setLines] = useState<TaskLine[]>([]);
   const [text, setText] = useState('');
-  const [pending, setPending] = useState('');
-  const [level, setLevel] = useState(0);
   const [editing, setEditing] = useState<{ index: number; title: string } | null>(null);
+  const [lineMenu, setLineMenu] = useState<number | null>(null);
+  const [lineDrag, setLineDrag] = useState<{ index: number; dx: number } | null>(null);
+  const linePress = useRef<{ index: number; x: number; y: number; pressed: boolean; timer: ReturnType<typeof setTimeout> | null; pointerId: number; target: HTMLElement } | null>(null);
+  const suppressLineClick = useRef(false);
   const [chain, setChain] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -121,92 +124,135 @@ export default function TaskBall() {
     if (hasDone) void saveTree(cleanNodes);
 
     const ls = treeToLines(cleanNodes);
-    setLines(ls);
+    const initial = ls.length ? ls : [{ title: '', level: 0 }];
+    setLines(initial);
     setText(treeToText(cleanNodes));
     setMode('lines');
-    setPending('');
-    setEditing(null);
-    setLevel(ls.length ? ls[ls.length - 1].level : 0);
+    setEditing({ index: initial.length - 1, title: initial[initial.length - 1].title });
     setPanel('editor');
   }
 
-  const lastLevel = lines.length ? lines[lines.length - 1].level : -1;
-
-  /** 提交底部输入框里的新行 */
-  function commitLine() {
-    const title = pending.trim();
-    if (!title) return;
-    const lv = Math.max(0, Math.min(level, lastLevel + 1));
-    setLines([...lines, { title, level: lv }]);
-    setPending('');
-    setLevel(lv);
+  /** 当前编辑中的标题先写回行数组。 */
+  function committedLines(): TaskLine[] {
+    if (!editing) return lines;
+    return lines.map((line, index) => index === editing.index ? { ...line, title: editing.title } : line);
   }
 
-  /** 提交正在就地编辑的那一行 */
+  /** 提交正在就地编辑的那一行。 */
   function commitEdit() {
     if (!editing) return;
     const title = editing.title.trim();
     const idx = editing.index;
-    // blur 先于工具栏 click；保留当前行选择，让随后换行/缩进仍作用于该行。
     setLines(ls => ls.map((l, i) => (i === idx ? { ...l, title } : l)));
   }
 
-  /** 就地换行：提交当前标题，在它正下方插入同缩进的可编辑空行。 */
+  /** 换行：在编辑行后插入同层空行。 */
   function newLine() {
-    if (!editing) { commitLine(); return; }
-    const index = editing.index;
-    const current = lines.map((line, i) => i === index ? { ...line, title: editing.title.trim() } : line);
-    setLines(insertTaskLineAfter(current, index));
-    setEditing({ index: index + 1, title: '' });
+    const current = committedLines();
+    const index = editing?.index ?? current.length - 1;
+    if (index < 0) {
+      setLines([{ title: '', level: 0 }]);
+      setEditing({ index: 0, title: '' });
+    } else {
+      setLines(insertTaskLineAfter(current, index));
+      setEditing({ index: index + 1, title: '' });
+    }
     focusEditInput();
   }
 
-  function indent() {
-    if (editing) {
-      const idx = editing.index;
-      setLines(ls => ls.map((l, i) => {
-        if (i !== idx) return l;
-        const max = i === 0 ? 0 : ls[i - 1].level + 1;
-        return { ...l, level: Math.min(l.level + 1, max) };
-      }));
-      focusEditInput();
-      return;
-    }
-    if (lines.length === 0) return;
-    setLevel(v => Math.min(v + 1, lastLevel + 1));
-  }
-
-  function outdent() {
-    if (editing) {
-      const idx = editing.index;
-      setLines(ls => ls.map((l, i) => (i === idx ? { ...l, level: Math.max(0, l.level - 1) } : l)));
-      focusEditInput();
-      return;
-    }
-    if (lines.length === 0) return; // 没有上一行：不处理，不提示
-    setLevel(v => Math.max(0, v - 1));
-  }
-
-  function deleteLine() {
-    if (editing) {
-      const idx = editing.index;
-      const next = lines.filter((_, i) => i !== idx);
-      if (!next.length) {
-        setEditing(null);
-        setLines([]);
-        return;
+  function lineChain(index: number, source = committedLines()): string[] | null {
+    if (index < 0 || index >= source.length) return null;
+    const chain = [source[index].title];
+    let level = source[index].level;
+    for (let i = index - 1; i >= 0 && level > 0; i--) {
+      if (source[i].level === level - 1) {
+        chain.unshift(source[i].title);
+        level--;
       }
-      const nextIndex = Math.min(idx, next.length - 1);
-      setLines(next);
-      setEditing({ index: nextIndex, title: next[nextIndex].title });
-      focusEditInput();
+    }
+    return chain;
+  }
+
+  function adjustLineLevel(index: number, delta: number) {
+    setLines(ls => ls.map((line, i) => {
+      if (i !== index) return line;
+      const max = i === 0 ? 0 : ls[i - 1].level + 1;
+      return { ...line, level: delta > 0 ? Math.min(line.level + 1, max) : Math.max(0, line.level - 1) };
+    }));
+  }
+
+  function clearLinePress() {
+    if (linePress.current?.timer) clearTimeout(linePress.current.timer);
+    linePress.current = null;
+  }
+  function beginLinePress(event: React.PointerEvent<HTMLDivElement>, index: number) {
+    if (event.button !== 0 || editing?.index === index || busy) return;
+    const target = event.currentTarget;
+    clearLinePress();
+    linePress.current = {
+      index, x: event.clientX, y: event.clientY, pressed: false, pointerId: event.pointerId, target,
+      timer: setTimeout(() => {
+        const current = linePress.current;
+        if (!current) return;
+        current.pressed = true;
+        setLineDrag({ index, dx: 0 });
+        try { target.setPointerCapture(event.pointerId); } catch { /* WebView may not support capture */ }
+      }, 450),
+    };
+  }
+  function moveLinePress(event: React.PointerEvent<HTMLDivElement>) {
+    const current = linePress.current;
+    if (!current) return;
+    if (!current.pressed) {
+      if (Math.hypot(event.clientX - current.x, event.clientY - current.y) > 8) clearLinePress();
       return;
     }
-    if (pending) { setPending(''); return; }
-    if (lines.length === 0) return;
-    const next = lines.slice(0, -1);
-    setLines(next);
-    setLevel(next.length ? next[next.length - 1].level : 0);
+    event.preventDefault();
+    setLineDrag({ index: current.index, dx: event.clientX - current.x });
+  }
+  function endLinePress(event: React.PointerEvent<HTMLDivElement>) {
+    const current = linePress.current;
+    if (!current) return;
+    const dx = event.clientX - current.x;
+    const pressed = current.pressed;
+    clearLinePress();
+    if (!pressed) return;
+    setLineDrag(null);
+    suppressLineClick.current = true;
+    if (Math.abs(dx) >= 18) adjustLineLevel(current.index, dx > 0 ? 1 : -1);
+    else setLineMenu(current.index);
+    window.setTimeout(() => { suppressLineClick.current = false; }, 0);
+  }
+  function cancelLinePress() {
+    clearLinePress();
+    setLineDrag(null);
+  }
+
+  function removeLine(index: number) {
+    const source = committedLines();
+    let end = index + 1;
+    while (end < source.length && source[end].level > source[index].level) end++;
+    setLines(source.filter((_, i) => i < index || i >= end));
+    setEditing(null);
+    setLineMenu(null);
+  }
+
+  async function shelveLine(index: number) {
+    const source = committedLines();
+    const chain = lineChain(index, source);
+    if (!chain) return;
+    const key = leafKey(chain);
+    if (source[index + 1]?.level > source[index].level) return;
+    setLineMenu(null);
+    setBusy(true);
+    try {
+      await saveTree(linesToTree(source, nodes));
+      await shelve(key, true);
+      setLines(source.filter((_, i) => i !== index));
+      setEditing(null);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function switchMode(next: 'lines' | 'text') {
@@ -220,20 +266,9 @@ export default function TaskBall() {
   }
 
   async function finish() {
-    // 输入框里还有没提交的内容：先当成新的一行收下，再完成
-    const pendingText = pending.trim();
-    const baseLines = editing
-      ? lines.map((l, i) => (i === editing.index ? { ...l, title: editing.title.trim() } : l))
-      : lines;
-    const withPending = pendingText
-      ? [...baseLines, { title: pendingText, level: Math.max(0, Math.min(level, (baseLines.length ? baseLines[baseLines.length - 1].level : -1) + 1)) }]
-      : baseLines;
-
+    const baseLines = committedLines();
     setEditing(null);
-    setPending('');
-    if (pendingText) setLines(withPending);
-
-    const finalLines = mode === 'text' ? parseTaskText(text) : withoutBlankTaskLines(withPending);
+    const finalLines = mode === 'text' ? parseTaskText(text) : withoutBlankTaskLines(baseLines);
     if (finalLines.length === 0) { setPanel('list'); return; }
     setBusy(true);
     try {
@@ -291,7 +326,6 @@ export default function TaskBall() {
     return () => window.clearInterval(id);
   }, [hasRecentDone]);
 
-  const shownLevel = editing ? (lines[editing.index]?.level ?? 0) : level;
 
   /** 勾掉最后一条未完成的 → 立刻庆祝 */
   async function toggleLeaf(leaf: TaskLeaf) {
@@ -418,15 +452,25 @@ export default function TaskBall() {
             {mode === 'lines' ? (
               <>
                 <div className="tb-lines">
-                  {lines.length === 0 && !editing && <div className="tb-empty">在下面输入第一行</div>}
+                  {lines.length === 0 && <div className="tb-empty">输入第一行</div>}
                   {lines.map((l, i) => {
                     const isEditing = editing?.index === i;
+                    const dragging = lineDrag?.index === i;
+                    const hasChildren = lines[i + 1]?.level > l.level;
                     return (
                       <div
                         key={i}
-                        className={`tb-line ${isEditing ? 'tb-line--cur' : ''}`}
-                        style={{ paddingLeft: l.level * 18 }}
-                        onClick={() => { if (!isEditing) setEditing({ index: i, title: l.title }); }}
+                        className={`tb-line ${isEditing ? 'tb-line--cur' : ''} ${dragging ? 'tb-line--dragging' : ''}`}
+                        style={{ paddingLeft: l.level * 18 + (dragging ? lineDrag!.dx : 0), touchAction: 'pan-y' }}
+                        onPointerDown={event => beginLinePress(event, i)}
+                        onPointerMove={moveLinePress}
+                        onPointerUp={endLinePress}
+                        onPointerCancel={cancelLinePress}
+                        onContextMenu={event => { event.preventDefault(); setLineMenu(i); }}
+                        onClick={() => {
+                          if (suppressLineClick.current) { suppressLineClick.current = false; return; }
+                          if (!isEditing) setEditing({ index: i, title: l.title });
+                        }}
                       >
                         {isEditing ? (
                           <input
@@ -443,35 +487,12 @@ export default function TaskBall() {
                             }}
                           />
                         ) : (
-                          <span className="tb-line-text">{l.title}</span>
+                          <span className="tb-line-text">{l.title || '未命名'}</span>
                         )}
+                        {hasChildren && <span className="tb-line-branch">↳</span>}
                       </div>
                     );
                   })}
-                  {!editing && pending && (
-                    <div className="tb-line tb-line--cur" style={{ paddingLeft: level * 18 }}>
-                      <span className="tb-line-text">{pending}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="tb-input-row">
-                  <span className="tb-lvl">第 {shownLevel + 1} 层</span>
-                  <input
-                    className="tb-input"
-                    value={pending}
-                    placeholder="输入任务"
-                    onFocus={() => setEditing(null)}
-                    onChange={e => setPending(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitLine(); } }}
-                  />
-                </div>
-
-                <div className="tb-keys">
-                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={newLine}>换行</button>
-                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={indent}>进一层</button>
-                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={outdent}>退一层</button>
-                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={deleteLine}>删除</button>
                 </div>
               </>
             ) : (
@@ -489,6 +510,8 @@ export default function TaskBall() {
                 </div>
               </div>
             )}
+
+            {lineMenu !== null && lines[lineMenu] && <div className="tb-line-menu-mask" onClick={() => setLineMenu(null)}><section className="tb-line-menu" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="任务行操作"><header><span>{lines[lineMenu].title || '未命名'}</span><button onClick={() => setLineMenu(null)} aria-label="关闭">×</button></header><button onClick={() => { setEditing({ index: lineMenu, title: lines[lineMenu].title }); setLineMenu(null); focusEditInput(); }}>编辑</button><button disabled={lines[lineMenu + 1]?.level > lines[lineMenu].level} onClick={() => void shelveLine(lineMenu)}>搁置</button><button className="is-danger" onClick={() => removeLine(lineMenu)}>删除</button></section></div>}
 
             <button className="tb-done" onClick={finish} disabled={busy}>
               {busy ? '保存中...' : '完成'}
