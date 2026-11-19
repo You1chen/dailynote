@@ -113,3 +113,19 @@ artifacts/  .git/  .idea/
 ```
 
 这些已在 `.gitignore` 中；打包脚本会再次排除本机配置和签名文件。
+
+## 为什么源码包只有几 MB
+
+项目文件夹看起来很大，主要来自可重新生成的内容，不是源码。以本次打包的机器为例：
+
+| 内容 | 约占用 |
+| --- | ---: |
+| `node_modules/` | 688.5 MB / 64,173 个文件 |
+| `android/app/build/` | 84.6 MB |
+| `.git/` | 8.0 MB |
+| `dist/`、`artifacts/`、`android/.gradle/` | 6.5 MB |
+| `src/` + `test/` 源码 | 约 1.3 MB |
+
+源码 zip 约 3.2 MB，包含约 4.8 MB 的未压缩项目文件和 `package-lock.json`。朋友解压后执行 `npm ci` 会重新安装依赖；Android 构建会重新生成 `android/app/build/`。因此源码包不带这些目录是正常且更合适的，既避免 700 MB 传输，也避免把本机路径、签名和缓存带给别人。
+
+APK 是单独的可安装产物，约 25 MB；APK 里的 ML Kit OCR 模型不需要再放进源码包。
