@@ -56,7 +56,8 @@
 .kce-empty p { margin: 0; font-size: 15px; }
 .kce-empty small { max-width: 270px; line-height: 1.7; font-size: 12px; }
 .kce .kce-image { position: relative; display: flex; width: 100%; height: 100%; min-height: 0; border-radius: 0; padding: 0; overflow: hidden; touch-action: pan-y; }
-.kce-image img { width: 100%; height: 100%; object-fit: contain; }
+.kce .kce-image { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.kce-image img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
 .kce-image span { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); padding: 4px 9px; border-radius: 20px; background: #0009; color: #fff; font-size: 11px; white-space: nowrap; pointer-events: none; }
 .kce-audio { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 12px; overflow: auto; }
 .kce-audio strong { max-width: 100%; overflow-wrap: anywhere; text-align: center; font-size: 15px; }

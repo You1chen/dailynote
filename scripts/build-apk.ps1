@@ -1,17 +1,23 @@
 # DailyNote APK Build Script (PowerShell)
 # Usage: .\scripts\build-apk.ps1            -> Full build (web + sync + APK)
 #        .\scripts\build-apk.ps1 -SyncOnly  -> Web build + sync only (no APK)
+#        .\scripts\build-apk.ps1 -Release   -> Signed release APK
 #        npm run build:apk
+#        npm run build:release
 #        npm run build:android
 
 param (
-    [switch] $SyncOnly
+    [switch] $SyncOnly,
+    [switch] $Release
 )
 
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $AndroidDir = Join-Path $ProjectRoot "android"
+if ($Release -and -not $SyncOnly -and -not (Test-Path (Join-Path $AndroidDir 'keystore.properties') -PathType Leaf)) {
+    throw 'A release build requires android/keystore.properties with your signing configuration.'
+}
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  DailyNote APK Build" -ForegroundColor Cyan
@@ -51,7 +57,8 @@ if (-not $SyncOnly) {
 
     Push-Location $AndroidDir
     try {
-        & .\gradlew.bat --no-daemon assembleDebug
+        $gradleTask = if ($Release) { "assembleRelease" } else { "assembleDebug" }
+        & .\gradlew.bat --no-daemon $gradleTask
         if ($LASTEXITCODE -ne 0) { throw "Gradle build failed" }
     }
     finally {
@@ -60,7 +67,8 @@ if (-not $SyncOnly) {
     Write-Host "      DONE" -ForegroundColor Green
     Write-Host ""
 
-    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\debug\dailynote.apk"
+    $buildType = if ($Release) { "release" } else { "debug" }
+    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\$buildType\dailynote.apk"
     if (Test-Path $apkPath) {
         $size = (Get-Item $apkPath).Length / 1MB
         Write-Host "========================================" -ForegroundColor Green

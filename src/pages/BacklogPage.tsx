@@ -11,6 +11,8 @@ import {
 } from '../utils/backlog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import './BacklogPage.css';
+import { useSheetDrag } from '../hooks/useSheetDrag';
+import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 
 type Filter = 'all' | 'blocked' | 'resolved';
 
@@ -41,6 +43,12 @@ export default function BacklogPage() {
   const [busy, setBusy] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const sheetDrag = useSheetDrag(() => { if (!busy) setSheetOpen(false); }, sheetOpen && !busy);
+  useRegisterBackHandler(() => {
+    if (askDelete) { setAskDelete(false); return true; }
+    if (sheetOpen) { if (!busy) setSheetOpen(false); return true; }
+    return false;
+  }, [askDelete, sheetOpen, busy]);
 
   const blocked = useMemo(
     () => sortBacklog(items.filter(i => i.status === 'blocked')),
@@ -249,8 +257,8 @@ export default function BacklogPage() {
 
       {sheetOpen && (
         <div className="bk-overlay" onClick={() => setSheetOpen(false)}>
-          <div className="bk-sheet" onClick={e => e.stopPropagation()}>
-            <div className="bk-grip" />
+          <div className="bk-sheet" style={sheetDrag.style} onClick={e => e.stopPropagation()}>
+            <div className="bk-grip" {...sheetDrag.handlers} />
 
             <div className="bk-field">
               <label className="bk-label">事项</label>

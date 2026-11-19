@@ -45,6 +45,14 @@ beforeEach(async () => {
 });
 
 describe('启动快照', () => {
+  it('写入同一个任务文件后立即重新启动也能读到最新任务', async () => {
+    const node = { id: 'a', title: 'old', done: false, children: [] };
+    await db.saveTaskBoard({ nodes: [node], order: [] });
+    await flush();
+    await db.saveTaskBoard({ nodes: [{ ...node, title: 'new' }], order: [] });
+    await initStore();
+    expect((await db.getTaskBoard()).nodes[0].title).toBe('new');
+  });
   it('首次启动写快照，目录结构不变时复用快照', async () => {
     await db.savePlan({ date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0 } as any);
     await flush();

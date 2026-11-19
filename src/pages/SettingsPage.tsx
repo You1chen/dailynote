@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetNotice, setResetNotice] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const back = () => { if (cropperFile) setCropperFile(null); else if (confirmReset) setConfirmReset(false); else if (section) setParams({}); else navigate(-1); };
+  const back = () => { if (cropperFile) setCropperFile(null); else if (confirmReset) setConfirmReset(false); else if (section) setParams({}); else navigate('/'); };
   useRegisterBackHandler(() => { back(); return true; }, [section?.id, cropperFile, confirmReset, navigate]);
   const toggle = (label: string, hint: string, checked: boolean, onChange: (value: boolean) => void) => <div className="settings-field settings-toggle-row"><div><span>{label}</span><p className="settings-field-hint">{hint}</p></div><label className="settings-switch"><input aria-label={label} type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/><span className="settings-switch-slider"/></label></div>;
   return <div className="app-container settings-page">

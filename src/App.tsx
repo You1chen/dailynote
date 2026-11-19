@@ -43,9 +43,9 @@ function AppShell() {
   const immersive = inGarden || location.pathname === '/wander';
   useRegisterBackHandler(() => {
     if (location.pathname === '/') return false;
-    navigate('/');
+    navigate('/', { replace: true });
     return true;
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate], true);
   const { prefs } = usePreferences();
   const backlogBadge = useBacklogBadge();
   const ddlBadge = useDdlBadge();

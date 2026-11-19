@@ -262,6 +262,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   }
 
   useRegisterBackHandler(() => {
+    if (exportOpen) { if (!exportingCard) setExportOpen(false); return true; }
     if (imageMenuOpen) { setImageMenuOpen(false); return true; }
     if (commentContentId || typeOpen) return false;
     if (confirmDelete) { setConfirmDelete(false); return true; }
@@ -270,7 +271,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     else if (phaseRef.current !== 'idle') void stopRecording();
     else void saveAndClose(false);
     return true;
-  }, [imageMenuOpen, typeOpen, commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
+  }, [exportOpen, exportingCard, imageMenuOpen, typeOpen, commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
 
   function clearImagePress() {
     if (imagePressTimer.current) clearTimeout(imagePressTimer.current);
@@ -289,7 +290,10 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
   }
   function moveImagePress(event: React.PointerEvent<HTMLButtonElement>) {
     const start = imagePressStart.current;
-    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) clearImagePress();
+    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) {
+      imageLongPressed.current = false;
+      clearImagePress();
+    }
   }
   function endImagePress() {
     const pressedLong = imageLongPressed.current;
@@ -297,7 +301,7 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     if (pressedLong) setImageMenuOpen(true);
   }
   function cancelImagePress() {
-    if (imageLongPressed.current) setImageMenuOpen(true);
+    imageLongPressed.current = false;
     clearImagePress();
   }
   function openImage() {

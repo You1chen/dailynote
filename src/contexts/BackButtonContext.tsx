@@ -3,7 +3,7 @@ import { App } from '@capacitor/app';
 
 interface BackButtonContextType {
   /** 注册一个返回键处理器，返回一个取消注册的函数 */
-  registerHandler: (handler: () => boolean | void) => () => void;
+  registerHandler: (handler: () => boolean | void, fallback?: boolean) => () => void;
 }
 
 const BackButtonContext = createContext<BackButtonContextType>({
@@ -26,13 +26,14 @@ export function useBackButton() {
 export function useRegisterBackHandler(
   handler: () => boolean | void,
   deps: React.DependencyList = [],
+  fallback = false,
 ) {
   const { registerHandler } = useBackButton();
 
   useEffect(() => {
     // 先注册闭包，让 handler 读取最新值
     const handlerRef = { current: handler };
-    const unregister = registerHandler(() => handlerRef.current());
+    const unregister = registerHandler(() => handlerRef.current(), fallback);
 
     // 当 deps 变化时更新 ref，但不要重新注册
     // 我们用一个小技巧：在 deps 变化时更新 ref
@@ -48,8 +49,9 @@ export function useRegisterBackHandler(
 export function BackButtonProvider({ children }: { children: React.ReactNode }) {
   const handlerStackRef = useRef<Array<() => boolean | void>>([]);
 
-  const registerHandler = useCallback((handler: () => boolean | void) => {
-    handlerStackRef.current.push(handler);
+  const registerHandler = useCallback((handler: () => boolean | void, fallback = false) => {
+    if (fallback) handlerStackRef.current.unshift(handler);
+    else handlerStackRef.current.push(handler);
     return () => {
       handlerStackRef.current = handlerStackRef.current.filter(h => h !== handler);
     };

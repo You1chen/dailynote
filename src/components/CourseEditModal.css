@@ -40,6 +40,10 @@
   padding-top: 8px;
 }
 
+.cem-actions { flex-wrap: wrap; }
+.cem-course-actions { display: flex; align-items: center; gap: 4px; margin-right: auto; }
+.cem-course-actions .cem-delete { color: var(--color-danger); }
+
 /* 周数范围输入行 */
 .courses-week-row {
   display: flex;

@@ -340,9 +340,9 @@ export default function KnowledgeMapPanel({ course, onClose, initialNodeId }: Pr
           await saveCollectedCard(card);
           await linkCard(card.id, course.id!, cardNode.id);
           setLibrary(await getKnowledgeCardLibrary() ?? null);
-          setCardDraft(null);
+          setCardDraft(card);
         }}
-        onClose={() => setCardDraft(null)}
+        onClose={() => { setCardDraft(null); setCardNodeId(null); }}
       /> : <button className="knowledge-card-empty" onClick={() => setCardDraft(createCollectedCard())}><Plus size={44} /><span>这张卡片还没关联内容</span></button>}
     </div>;
   }

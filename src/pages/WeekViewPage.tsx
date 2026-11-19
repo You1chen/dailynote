@@ -39,9 +39,9 @@ export default function WeekViewPage() {
   }, []);
 
   useRegisterBackHandler(() => {
-    navigate(-1);
+    navigate('/');
     return true;
-  }, []);
+  }, [navigate]);
 
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekDateStrs = useMemo(() => weekDates.map(d => format(d, 'yyyy-MM-dd')), [weekDates]);
@@ -103,7 +103,7 @@ export default function WeekViewPage() {
     <div className="app-container app-container--week">
       {/* 页面标题 */}
       <div className="page-header">
-        <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)}>
+        <button className="btn btn-ghost btn-icon" onClick={() => navigate('/')}>
           <ArrowLeft size={22} />
         </button>
         <h1 className="page-title">周视图</h1>

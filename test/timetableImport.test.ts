@@ -11,9 +11,9 @@ describe('timetable paste import', () => {
     ]);
   });
 
-  it('reports incomplete lines without adding partial courses', () => {
-    const result = parseTimetableText('周一 高等数学\n08:00-09:40 没有星期\n周二 10:00-11:00 线性代数');
+  it('reports incomplete or invalid lines without adding partial courses', () => {
+    const result = parseTimetableText('周一 高等数学\n08:00-09:40 没有星期\n周二 25:00-26:00 线性代数\n周三 10:00-09:00 倒序\n周四 10:00-11:00 正常课');
     expect(result.rows).toHaveLength(1);
-    expect(result.errors).toHaveLength(2);
+    expect(result.errors).toHaveLength(4);
   });
 });

@@ -139,9 +139,9 @@ export default function DeadlineListPage<T extends DeadlineBase>({
     if (viewer) { setViewer(null); return true; }
     if (recog) { setRecog(null); return true; }
     if (editing !== undefined) { closeModal(); return true; }
-    navigate(-1);
+    navigate('/');
     return true;
-  }, [editing, closeModal, viewer, recog]);
+  }, [editing, closeModal, viewer, recog, navigate]);
 
   const openCreate = () => {
     setForm({ name: '', deadlineDate: '', deadlineTime: '', location: '', notes: '', images: [], links: [] });
@@ -422,7 +422,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   return (
     <div className="app-container">
       <div className="page-header">
-        <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)}>
+        <button className="btn btn-ghost btn-icon" onClick={() => navigate('/')}>
           <ArrowLeft size={22} />
         </button>
         <h1 className="page-title">{title}</h1>

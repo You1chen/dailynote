@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { getSemester, saveCourse } from '../db';
+import type { CourseSlot } from '../utils/courseTimetable';
 import { isValidCourseTime, loadCourseTimeCombinations } from '../utils/courseTimeCombinations';
 import type { Course } from '../types';
 // settings-chip / settings-time-row / settings-field-hint 等表单样式复用设置页
@@ -51,10 +53,13 @@ interface Props {
   course: Course | null;
   onClose: () => void;
   onSaved: () => void;
+  initialSlot?: CourseSlot;
+  onDelete?: () => void;
+  onKnowledgeMap?: () => void;
 }
 
 /** 课程新建/编辑弹窗（课程表页与周视图共用） */
-export default function CourseEditModal({ course, onClose, onSaved }: Props) {
+export default function CourseEditModal({ course, onClose, onSaved, initialSlot, onDelete, onKnowledgeMap }: Props) {
   const [form, setForm] = useState<CourseFormState>(
     course
       ? {
@@ -70,7 +75,7 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
           weekCount: course.weekCount,
           createdAt: course.createdAt,
         }
-      : DEFAULT_FORM,
+      : { ...DEFAULT_FORM, ...initialSlot },
   );
   const [formError, setFormError] = useState('');
   const combinations = loadCourseTimeCombinations();
@@ -254,7 +259,13 @@ export default function CourseEditModal({ course, onClose, onSaved }: Props) {
           </div>
         </div>
         {formError && <p className="cem-error">{formError}</p>}
-        <div className="modal-actions">
+        <div className="modal-actions cem-actions">
+          {course && (onDelete || onKnowledgeMap) && (
+            <div className="cem-course-actions">
+              {onDelete && <button type="button" className="btn btn-ghost btn-icon cem-delete" aria-label="删除课程" title="删除课程" onClick={onDelete}><Trash2 size={17} aria-hidden="true" /></button>}
+              {onKnowledgeMap && <button type="button" className="btn btn-ghost btn-sm" onClick={onKnowledgeMap}>知识地图</button>}
+            </div>
+          )}
           <button className="btn btn-ghost" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={handleSave}>保存</button>
         </div>

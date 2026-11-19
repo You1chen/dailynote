@@ -590,11 +590,15 @@ function saveSnapshot(): Promise<void> {
 
 /** 快照防抖：连续写操作只落一次 */
 let snapTimer: ReturnType<typeof setTimeout> | null = null;
+let snapshotWrite = Promise.resolve();
 function scheduleSnapshot(): void {
   if (snapTimer) clearTimeout(snapTimer);
   snapTimer = setTimeout(() => {
     snapTimer = null;
-    saveSnapshot();
+    const writesAtSchedule = persistQueue;
+    void writesAtSchedule.then(() => {
+      if (writesAtSchedule === persistQueue) snapshotWrite = saveSnapshot().catch(() => {});
+    });
   }, 400);
 }
 
@@ -682,6 +686,13 @@ function enqueue(build: () => { writes: FileWrite[]; deletes: string[] }, cleanO
   const dir = getStoragePath();
   const { writes, deletes } = build();
   const job = persistQueue.then(async () => {
+    if (writes.length || deletes.length || cleanOrphans) {
+      // A reload can interrupt the debounced refresh. Invalidate the old snapshot
+      // before changing any backing file, even if the file names do not change.
+      if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+      await snapshotWrite;
+      await clearSnapshot();
+    }
     // 只清理由应用管理的日期 JSON，不碰备份、自定义文件或其他目录。
     if (cleanOrphans) {
       const wanted = new Set(writes.map(w => w.relPath));

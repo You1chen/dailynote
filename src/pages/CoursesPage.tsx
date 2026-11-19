@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type PointerEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import KnowledgeMapPanel from '../components/KnowledgeMapPanel';
 import { getAllCourses, deleteCourse, getSemester, saveSemester, saveCourse } from '../db';
 import type { Course, SemesterRecord } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { usePreferences } from '../hooks/usePreferences';
-import { blockRenderRect, foldedGrid } from '../utils/time';
 import { isCourseInSemester } from '../utils/courseSchedule';
-import { parseTimetableText } from '../utils/timetableImport';
+import { createTimetable, timetableDayBlocks, timetableSlot, timetableTime, TIMETABLE_FULL_WEEK, TIMETABLE_WEEKDAYS, type CourseSlot } from '../utils/courseTimetable';
+import { parseTimetableText, type ImportedCourseRow } from '../utils/timetableImport';
 import CourseEditModal, { DAY_LABELS, WEEK_TYPE_LABELS } from '../components/CourseEditModal';
 // settings-section / settings-field / settings-chip 等通用表单样式复用设置页
 import './SettingsPage.css';
@@ -27,18 +27,10 @@ function weekRangeText(c: Course): string {
   return `第${c.startWeek}-${c.startWeek + c.weekCount - 1}周`;
 }
 
-// 课程表视图网格几何（与周视图/日视图同一套几何：全 0-24h、无睡眠折叠）
-const TIME_COL_W = 44;
-const COL_W = 52;
-const GRID_HEADER_H = 34;
+const DRAG_THRESHOLD = 6;
 
-// 不重要时段折叠（课程表视图专属，整点对齐；展开时走 blockRenderRect 全 0-24h 路径）
-const UNIMPORTANT_FOLDS = [
-  { start: '00:00', end: '07:00', label: '凌晨' },
-  { start: '12:00', end: '13:00', label: '午休' },
-  { start: '22:00', end: '24:00', label: '深夜' },
-];
-const FOLD_BAR_H = 24;
+type GridGesture = { pointerId: number; day: number; y: number; minute: number; dragging: boolean };
+type EditingState = { course: Course | null; slot?: CourseSlot };
 
 export default function CoursesPage() {
   const navigate = useNavigate();
@@ -48,14 +40,10 @@ export default function CoursesPage() {
   const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
-  // 视图：列表（课程管理）/ 课表（二维模板网格）
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-
-  // 课表视图：是否折叠不重要时段（默认折叠，仅组件状态不持久化）
-  const [foldUnimportant, setFoldUnimportant] = useState(true);
-
-  // 编辑弹窗：undefined=关闭，null=新建，Course=编辑
-  const [editingCourse, setEditingCourse] = useState<Course | null | undefined>(undefined);
+  const [showWeekends, setShowWeekends] = useState(false);
+  const [editing, setEditing] = useState<EditingState | null>(null);
+  const [selection, setSelection] = useState<{ day: number; from: number; to: number } | null>(null);
+  const gesture = useRef<GridGesture | null>(null);
   const [askDeleteCourse, setAskDeleteCourse] = useState<Course | null>(null);
   const [askDeleteSpecial, setAskDeleteSpecial] = useState<number | null>(null);
   const [knowledgeCourse, setKnowledgeCourse] = useState<Course | null>(null);
@@ -69,12 +57,46 @@ export default function CoursesPage() {
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState('');
   const [importBusy, setImportBusy] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportedCourseRow[]>([]);
+  const [importStep, setImportStep] = useState<'text' | 'preview'>('text');
+  const [importStartWeek, setImportStartWeek] = useState('');
+  const [importWeekCount, setImportWeekCount] = useState('');
+  const [importWeekType, setImportWeekType] = useState<'all' | 'odd' | 'even'>('all');
 
-  // Android 返回键处理
+  const closeKnowledge = useCallback(() => { setKnowledgeCourse(null); setKnowledgeNodeId(null); }, []);
+  const closeImport = () => { if (!importBusy) setImportOpen(false); };
+  const backFromPreview = () => { setImportStep('text'); setImportError(''); };
+  const handleBack = useCallback(() => {
+    if (askDeleteSpecial !== null) setAskDeleteSpecial(null);
+    else if (askDeleteCourse) setAskDeleteCourse(null);
+    else if (knowledgeCourse) closeKnowledge();
+    else if (editing) setEditing(null);
+    else if (importOpen) {
+      if (!importBusy) {
+        if (importStep === 'preview') { setImportStep('text'); setImportError(''); }
+        else setImportOpen(false);
+      }
+    } else if (semesterOpen) setSemesterOpen(false);
+    else navigate('/', { replace: true });
+  }, [askDeleteSpecial, askDeleteCourse, knowledgeCourse, closeKnowledge, editing, importOpen, importBusy, importStep, semesterOpen, navigate]);
+
+  // The knowledge map registers its own nested handler; let it run first.
   useRegisterBackHandler(() => {
-    navigate(-1);
+    if (knowledgeCourse) return false;
+    handleBack();
     return true;
-  }, []);
+  }, [handleBack, knowledgeCourse]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (!askDeleteSpecial && !askDeleteCourse && !knowledgeCourse && !editing && !importOpen && !semesterOpen) return;
+      event.preventDefault();
+      handleBack();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleBack, askDeleteSpecial, askDeleteCourse, knowledgeCourse, editing, importOpen, semesterOpen]);
 
   const load = useCallback(async () => {
     const [cs, sem] = await Promise.all([getAllCourses(), getSemester()]);
@@ -97,10 +119,6 @@ export default function CoursesPage() {
     setSearchParams({}, { replace: true });
   }, [courses, searchParams, setSearchParams]);
 
-  const handleBack = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
-
   // ============ 学期设置 ============
 
   const handleStartDateChange = async (startDate: string) => {
@@ -110,7 +128,7 @@ export default function CoursesPage() {
       specialDates: semester?.specialDates ?? [],
       updatedAt: Date.now(),
     });
-    setSemester(await getSemester());
+    await load();
   };
 
   const handleAddSpecialDate = async () => {
@@ -143,25 +161,49 @@ export default function CoursesPage() {
   // ============ 课程 ============
 
   const removeCourse = async (c: Course) => {
-    setAskDeleteCourse(null);
     await deleteCourse(c.id!);
+    setAskDeleteCourse(null);
+    setEditing(null);
     setCourses(await getAllCourses());
   };
 
-  async function importCourses() {
+  function parseImport() {
     const parsed = parseTimetableText(importText);
     if (!parsed.rows.length) { setImportError(parsed.errors[0] || '没有可导入的课程'); return; }
     if (parsed.errors.length) { setImportError(parsed.errors.join('；')); return; }
+    setImportPreview(parsed.rows);
+    setImportStep('preview');
+    setImportError('');
+  }
+
+  function updateImportRow(index: number, patch: Partial<ImportedCourseRow>) {
+    setImportPreview(rows => rows.map((row, i) => i === index ? { ...row, ...patch } : row));
+  }
+
+  async function importCourses() {
+    const startWeek = Number(importStartWeek);
+    const weekCount = Number(importWeekCount);
+    if (!Number.isInteger(startWeek) || startWeek < 1 || startWeek > 30 || !Number.isInteger(weekCount) || weekCount < 1 || weekCount > 30) {
+      setImportError('请填写 1–30 的起始周和持续周数');
+      return;
+    }
+    if (!importPreview.length) { setImportError('没有可导入的课程'); return; }
+    if (importPreview.some(row => !row.name.trim() || row.dayOfWeek.length !== 1 || row.startTime >= row.endTime)) {
+      setImportError('请补全课程名，并确认结束时间晚于开始时间');
+      return;
+    }
     setImportBusy(true);
     setImportError('');
     try {
       const now = Date.now();
-      for (const row of parsed.rows) {
-        await saveCourse({ name: row.name, teacher: '', location: row.location, dayOfWeek: row.dayOfWeek, startTime: row.startTime, endTime: row.endTime, weekType: 'all', startWeek: 1, weekCount: 18, createdAt: now, updatedAt: now });
+      for (const row of importPreview) {
+        await saveCourse({ name: row.name.trim(), teacher: '', location: row.location.trim(), dayOfWeek: row.dayOfWeek, startTime: row.startTime, endTime: row.endTime, weekType: importWeekType, startWeek, weekCount, createdAt: now, updatedAt: now });
       }
       await load();
       setImportOpen(false);
       setImportText('');
+      setImportPreview([]);
+      setImportStep('text');
     } catch (cause) {
       setImportError(String(cause));
     } finally {
@@ -170,329 +212,191 @@ export default function CoursesPage() {
   }
 
   const handleCourseSaved = async () => {
-    setEditingCourse(undefined);
+    setEditing(null);
     setCourses(await getAllCourses());
   };
 
-  // 按周日→周六分组（多星期课程在每个所选星期分组中都出现）
-  const grouped = DAY_LABELS.map((label, dw) => ({
-    label,
-    dayOfWeek: dw,
-    list: courses.filter(c => c.dayOfWeek.includes(dw)),
-  }));
+  const days = showWeekends ? TIMETABLE_FULL_WEEK : TIMETABLE_WEEKDAYS;
+  const gridCourses = useMemo(() => courses.filter(c => isCourseInSemester(c, semester)), [courses, semester]);
+  const timetable = useMemo(() => createTimetable(gridCourses, days, prefs.hourHeight), [gridCourses, days, prefs.hourHeight]);
+  const dayBlocks = useMemo(() => days.map(day => timetableDayBlocks(gridCourses, day)), [gridCourses, days]);
+  const hasVisibleCourses = dayBlocks.some(blocks => blocks.length > 0);
+  const hourTicks = Array.from({ length: 24 }, (_, hour) => hour * 60)
+    .filter(minute => timetable.bands.some(band => !band.folded && minute >= band.start && minute < band.end));
 
-  // 课表只展示当前学期的模板（不按周过滤）；列表保留历史课程供管理。
-  const gridCourses = courses.filter(c => isCourseInSemester(c, semester)).sort(
-    (a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime),
-  );
-  const hourHeight = prefs.hourHeight;
-  // 折叠态：多段折叠几何；展开态：全 0-24h（现有 blockRenderRect 路径不变）
-  const fg =
-    viewMode === 'grid' && foldUnimportant
-      ? foldedGrid(UNIMPORTANT_FOLDS, hourHeight, FOLD_BAR_H)
-      : null;
-  const gridHeight = fg ? fg.gridHeight : 24 * hourHeight;
-  const gridGeo = { hideSleep: false, sleepStart: '', sleepEnd: '', hourHeight, barHeight: 0, gridHeight };
+  function openSlot(day: number, from: number, to?: number) {
+    setEditing({ course: null, slot: timetableSlot(day, from, to, prefs.courseTimeCombinations) });
+  }
+
+  function eventMinute(event: PointerEvent<HTMLDivElement>) {
+    return timetable.minuteAtY(event.clientY - event.currentTarget.getBoundingClientRect().top);
+  }
+
+  function startSelection(event: PointerEvent<HTMLDivElement>, day: number) {
+    if (!event.isPrimary || event.button !== 0 || gesture.current || (event.target as HTMLElement).closest('.ct-course-block')) return;
+    gesture.current = { pointerId: event.pointerId, day, y: event.clientY, minute: eventMinute(event), dragging: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveSelection(event: PointerEvent<HTMLDivElement>) {
+    const start = gesture.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    start.dragging ||= Math.abs(event.clientY - start.y) >= DRAG_THRESHOLD;
+    if (start.dragging) setSelection({ day: start.day, from: start.minute, to: eventMinute(event) });
+  }
+
+  function cancelSelection(event: PointerEvent<HTMLDivElement>) {
+    if (gesture.current?.pointerId !== event.pointerId) return;
+    gesture.current = null;
+    setSelection(null);
+  }
+
+  function endSelection(event: PointerEvent<HTMLDivElement>) {
+    const start = gesture.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const dragged = start.dragging || Math.abs(event.clientY - start.y) >= DRAG_THRESHOLD;
+    const end = dragged ? eventMinute(event) : undefined;
+    cancelSelection(event);
+    openSlot(start.day, start.minute, end);
+  }
 
   if (loading) {
-    return (
-      <div className="app-container">
-        <div className="empty-state"><p>加载中...</p></div>
-      </div>
-    );
+    return <div className="app-container"><div className="empty-state"><p>加载中...</p></div></div>;
   }
 
   return (
-    <div className={`app-container${viewMode === 'grid' ? ' app-container--week' : ''}`}>
-      {/* 页面标题 */}
-      <div className="page-header">
-        <button className="btn btn-ghost btn-icon" onClick={handleBack}>
-          <ArrowLeft size={22} />
-        </button>
+    <div className="app-container courses-page">
+      <header className="page-header courses-page-header">
+        <button type="button" className="btn btn-ghost courses-back" onClick={handleBack}>返回计划</button>
         <h1 className="page-title">课程表</h1>
-        <div style={{ width: 36 }} />
-      </div>
-
-      {/* === 学期设置（列表视图专属：课表视图只显示课程） === */}
-      {viewMode === 'list' && (
-        <section className="settings-section">
-          <button type="button" className="courses-semester-toggle" onClick={() => setSemesterOpen(value => !value)} aria-expanded={semesterOpen}>
-            <h2 className="settings-section-title">📅 学期设置</h2>
-            <span>{semester?.startDate || '未设置开学时间'} · {(semester?.specialDates ?? []).length} 个特殊日期</span>
-            {semesterOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-          </button>
-          {semesterOpen && <div className="card">
-            <div className="settings-field">
-              <label className="label">🎒 开学时间</label>
-              <p className="settings-field-hint" style={{ marginBottom: 8 }}>
-                开学时间所在周为第 1 周。切换学期不迁移已有课程。
-              </p>
-              <input
-                className="input"
-                type="date"
-                value={semester?.startDate ?? ''}
-                onChange={e => handleStartDateChange(e.target.value)}
-              />
-              {!semester?.startDate && (
-                <p className="courses-warn" style={{ marginTop: 8 }}>
-                  ⚠️ 未设置开学时间，课程不会显示在日程表中
-                </p>
-              )}
-            </div>
-
-            <div className="settings-field">
-              <label className="label">🎌 特殊日期</label>
-              <p className="settings-field-hint" style={{ marginBottom: 8 }}>
-                法定节假日已内置。放假不显示课程，补课照常显示。
-              </p>
-              <div className="courses-special-add">
-                <input
-                  className="input input-sm"
-                  type="date"
-                  value={specialDate}
-                  onChange={e => setSpecialDate(e.target.value)}
-                />
-                <div className="courses-kind-row">
-                  {SPECIAL_KINDS.map(k => (
-                    <button
-                      key={k.value}
-                      className={`settings-chip ${specialKind === k.value ? 'settings-chip--active' : ''}`}
-                      onClick={() => setSpecialKind(k.value)}
-                    >
-                      {k.label}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={handleAddSpecialDate}
-                  disabled={!specialDate}
-                >
-                  添加
-                </button>
-              </div>
-              {(semester?.specialDates?.length ?? 0) > 0 && (
-                <div className="courses-special-list">
-                  {semester!.specialDates
-                    .slice()
-                    .sort((a, b) => a.date.localeCompare(b.date))
-                    .map(s => (
-                      <div key={s.id} className="courses-special-item">
-                        <span className="courses-special-date">{s.date}</span>
-                        <span
-                          className={`courses-special-tag ${s.kind === 'holiday' ? 'courses-special-tag--holiday' : 'courses-special-tag--makeup'}`}
-                        >
-                          {s.kind === 'holiday' ? '放假' : '补课'}
-                        </span>
-                        <button
-                          className="btn btn-ghost btn-icon courses-special-del"
-                          title="删除"
-                          onClick={() => setAskDeleteSpecial(s.id)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          </div>}
-        </section>
-      )}
-
-      {/* === 课程（列表 / 课表双视图） === */}
-      <section className="settings-section">
-        <div className="courses-list-header">
-          <h2 className="settings-section-title" style={{ marginBottom: 0 }}>📚 课程</h2>
-          <div className="courses-header-right">
-            <div className="courses-view-toggle">
-              <button
-                className={`settings-chip ${viewMode === 'list' ? 'settings-chip--active' : ''}`}
-                onClick={() => setViewMode('list')}
-              >
-                列表
-              </button>
-              <button
-                className={`settings-chip ${viewMode === 'grid' ? 'settings-chip--active' : ''}`}
-                onClick={() => setViewMode('grid')}
-              >
-                课表
-              </button>
-            </div>
-            <button className="btn btn-outline btn-sm" onClick={() => { setImportError(''); setImportOpen(true); }}>粘贴导入</button>
-            <button className="btn btn-primary btn-sm" onClick={() => setEditingCourse(null)}>
-              <Plus size={16} /> 添加课程
-            </button>
-          </div>
+        <button type="button" className="btn btn-ghost courses-settings" onClick={() => setSemesterOpen(true)}>学期设置</button>
+      </header>
+      <p className="ct-hint" id="course-grid-help">
+        {hasVisibleCourses ? '点击空白选时间，拖动选范围' : '当前课表暂无可见课程，点击折叠时段添加'}
+        <span className="ct-touch-hint"> · 滑动时间轴滚动</span>
+      </p>
+      <section className="ct-scroll" aria-label="课程表网格" aria-describedby="course-grid-help" style={{ '--ct-day-count': days.length } as CSSProperties}>
+        <div className="ct-head ct-columns">
+          <span>时间</span>
+          {days.map(day => <span key={day}>{DAY_LABELS[day]}</span>)}
         </div>
-
-        {viewMode === 'grid' ? (
-          gridCourses.length === 0 ? (
-            <div className="empty-state">
-              <p>本学期还没有课程，点击「添加课程」开始创建</p>
-              {courses.length > 0 && <p>其他学期的课程可在列表中管理</p>}
-            </div>
-          ) : (
-            /* === 课程表视图：星期 × 时间的二维模板网格，显示当前学期课程 === */
-            <>
-              <div className="ct-fold-toggle-row">
-                <button
-                  className={`settings-chip${foldUnimportant ? ' settings-chip--active' : ''}`}
-                  onClick={() => setFoldUnimportant(v => !v)}
-                >
-                  折叠不重要时段
-                </button>
+        <div className="ct-body ct-columns" style={{ height: timetable.height }}>
+          <div className="ct-time-axis" aria-hidden="true">
+            {timetable.bands.filter(band => band.folded).map(band => (
+              <div className="ct-time-fold" key={band.start} style={{ top: band.top, height: band.height }}>
+                <span>{timetableTime(band.start)}</span><span>{timetableTime(band.end)}</span>
               </div>
-              <div className="ct-scroll">
-              <div className="ct-inner" style={{ height: GRID_HEADER_H + gridHeight }}>
-                {/* 表头（星期，模板不绑定具体日期） */}
-                <div className="ct-head" style={{ height: GRID_HEADER_H }}>
-                  {DAY_LABELS.map((label, dw) => (
-                    <div
-                      key={dw}
-                      className="ct-head-cell"
-                      style={{ left: TIME_COL_W + dw * COL_W, width: COL_W }}
-                    >
-                      {label}
-                    </div>
-                  ))}
-                </div>
-                {/* 小时行：折叠态跳过整点落入折叠段的小时（折叠段整点对齐） */}
-                {Array.from({ length: 24 }, (_, h) => {
-                  const rowTop = fg ? fg.mapMinute(h * 60) : h * hourHeight;
-                  if (fg && rowTop < 0) return null;
+            ))}
+            {hourTicks.map(minute => <span className="ct-time-tick" key={minute} style={{ top: timetable.yAtMinute(minute) }}>{timetableTime(minute)}</span>)}
+          </div>
+          {days.map((day, index) => {
+            const selected = selection?.day === day ? selection : null;
+            const selectionTop = selected ? timetable.yAtMinute(Math.min(selected.from, selected.to)) : 0;
+            return (
+              <div className="ct-day" key={day} aria-label={DAY_LABELS[day]} role="group"
+                onPointerDown={event => startSelection(event, day)} onPointerMove={moveSelection}
+                onPointerUp={endSelection} onPointerCancel={cancelSelection} onLostPointerCapture={cancelSelection}>
+                {timetable.bands.map(band => (
+                  <button key={band.start} className={`ct-band${band.folded ? ' ct-band--folded' : ''}`} type="button"
+                    style={{ top: band.top, height: band.height }}
+                    aria-label={`${DAY_LABELS[day]} ${timetableTime(band.start)}–${timetableTime(band.end)}${band.folded ? '（折叠）' : ''}：新建课程`}
+                    onClick={event => { if (event.detail === 0) openSlot(day, band.folded ? (band.start + band.end) / 2 : band.start); }}>
+                    {band.folded && <span aria-hidden="true">⋯</span>}
+                  </button>
+                ))}
+                {hourTicks.map(minute => <span className="ct-hour-line" key={minute} style={{ top: timetable.yAtMinute(minute) }} />)}
+                {selected && <div className="ct-selection" style={{ top: selectionTop, height: timetable.yAtMinute(Math.max(selected.from, selected.to)) - selectionTop }} />}
+                {dayBlocks[index].map(({ course, start, end, lane, laneCount }) => {
+                  const top = timetable.yAtMinute(start);
+                  const label = `${course.name} · ${course.startTime}–${course.endTime} · ${weekRangeText(course)} · ${WEEK_TYPE_LABELS[course.weekType]}${course.location ? ` · ${course.location}` : ''}`;
                   return (
-                    <div
-                      key={h}
-                      className="ct-hour-row"
-                      style={{ top: GRID_HEADER_H + rowTop, height: hourHeight }}
-                    >
-                      <span className="ct-hour-label">{String(h).padStart(2, '0')}:00</span>
-                      <div className="ct-hour-line" />
-                    </div>
+                    <button type="button" key={course.id} className="ct-course-block"
+                      style={{ left: `${lane / laneCount * 100}%`, width: `${100 / laneCount}%`, top, height: timetable.yAtMinute(end) - top, background: COURSE_COLORS[(course.id ?? 0) % COURSE_COLORS.length] }}
+                      title={label} aria-label={`编辑 ${label}`} onClick={() => setEditing({ course })}>
+                      <span className="ct-block-name">{course.name}{course.weekType !== 'all' && <sup>{course.weekType === 'odd' ? '单' : '双'}</sup>}</span>
+                      <span className="ct-block-time">{course.startTime}–{course.endTime}</span>
+                      {course.location && <span className="ct-block-loc">{course.location}</span>}
+                    </button>
                   );
                 })}
-                {/* 折叠条（仅展示，不点击；z=4 高于课程块、低于 sticky 表头） */}
-                {fg &&
-                  UNIMPORTANT_FOLDS.map((fold, i) => (
-                    <div
-                      key={fold.start}
-                      className="ct-fold-bar"
-                      style={{ top: GRID_HEADER_H + fg.barTops[i], height: FOLD_BAR_H }}
-                    >
-                      <span className="ct-fold-bar-text">
-                        {fold.label} {fold.start}–{fold.end}
-                      </span>
-                    </div>
-                  ))}
-                {/* 课程块：模板语义，周次/单双周以角标与 tooltip 呈现 */}
-                {gridCourses.map(c =>
-                  c.dayOfWeek.map(dw => {
-                    const rect = fg
-                      ? fg.rect(c.startTime, c.endTime)
-                      : blockRenderRect(c.startTime, c.endTime, gridGeo);
-                    if (!rect) return null;
-                    return (
-                      <div
-                        key={`${c.id}-${dw}`}
-                        className="ct-course-block ct-course-block--color"
-                        style={{
-                          left: TIME_COL_W + dw * COL_W + 2,
-                          width: COL_W - 6,
-                          top: GRID_HEADER_H + rect.top,
-                          height: rect.height,
-                          background: COURSE_COLORS[(c.id ?? 0) % COURSE_COLORS.length],
-                        }}
-                        title={`${c.name} · ${weekRangeText(c)} · ${WEEK_TYPE_LABELS[c.weekType]}${c.location ? ` · ${c.location}` : ''}`}
-                        onClick={e => {
-                          e.stopPropagation();
-                          setEditingCourse(c);
-                        }}
-                      >
-                        <div className="ct-block-inner">
-                          <span className="ct-block-time">{c.startTime}-{c.endTime}</span>
-                          <span className="ct-block-name">{c.name}</span>
-                          {c.location && <span className="ct-block-loc">{c.location}</span>}
-                        </div>
-                        {c.weekType !== 'all' && (
-                          <span className="ct-block-badge">{c.weekType === 'odd' ? '单' : '双'}</span>
-                        )}
-                      </div>
-                    );
-                  }),
-                )}
               </div>
-              </div>
-            </>
-          )
-        ) : (
-          <>
-            {courses.length === 0 ? (
-              <div className="empty-state">
-                <p>还没有课程，点击「添加课程」开始创建</p>
-              </div>
-            ) : (
-              grouped.map(g => (
-                <div key={g.dayOfWeek} className="courses-day-group">
-                  <div className="courses-day-label">{g.label}</div>
-                  {g.list.length === 0 ? (
-                    <div className="courses-day-empty">无课</div>
-                  ) : (
-                    g.list.map(c => (
-                      <div key={c.id} className="card courses-card" onClick={() => setEditingCourse(c)}>
-                        <div className="courses-card-info">
-                          <span className="courses-card-time">
-                            {c.startTime}-{c.endTime}
-                          </span>
-                          <span className="courses-card-name">{c.name}</span>
-                          <span className="courses-card-meta">
-                            {c.location || '未填地点'} · {weekRangeText(c)} · {WEEK_TYPE_LABELS[c.weekType]}
-                          </span>
-                          <span className="courses-card-meta">
-                            {c.semesterStartDate
-                              ? `所属学期：${c.semesterStartDate} 开学 · ${isCourseInSemester(c, semester) ? '当前' : '非当前'}`
-                              : '所属学期：待设置开学时间'}
-                          </span>
-                          <button className="courses-map-link" onClick={e => { e.stopPropagation(); setKnowledgeCourse(c); }}><BookOpen size={14} /> 知识地图</button>
-                        </div>
-                        <button
-                          className="btn btn-ghost btn-icon"
-                          title="删除课程"
-                          onClick={e => {
-                            e.stopPropagation();
-                            setAskDeleteCourse(c);
-                          }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              ))
-            )}
-          </>
-        )}
+            );
+          })}
+        </div>
       </section>
 
-      {/* === 新建/编辑弹窗（共享组件） === */}
-      {importOpen && <div className="modal-overlay" onClick={() => setImportOpen(false)}>
-        <section className="modal" onClick={event => event.stopPropagation()}>
-          <h3 className="modal-title">粘贴课表</h3><button className="modal-close" onClick={() => setImportOpen(false)} aria-label="关闭">×</button>
-          <p className="modal-hint">每行：周一 08:00-09:40 高等数学 @教1-101</p>
-          <textarea className="input textarea" rows={8} value={importText} onChange={event => { setImportText(event.target.value); setImportError(''); }} placeholder={'周一 08:00-09:40 高等数学 @教1-101\n周三 14:30-16:10 大学物理'} autoFocus />
-          {importError && <p className="knowledge-error" role="alert">{importError}</p>}
-          <div className="modal-actions"><button className="btn btn-ghost" onClick={() => setImportOpen(false)}>取消</button><button className="btn btn-primary" disabled={importBusy || !importText.trim()} onClick={() => void importCourses()}>{importBusy ? '导入中…' : '导入'}</button></div>
+      {semesterOpen && !importOpen && <div className="modal-overlay" onClick={() => setSemesterOpen(false)}>
+        <section className="modal courses-semester-modal" role="dialog" aria-modal="true" aria-labelledby="semester-settings-title" onClick={event => event.stopPropagation()}>
+          <h3 className="modal-title" id="semester-settings-title">学期设置</h3>
+          <div className="settings-field courses-weekend-setting">
+            <label><input type="checkbox" checked={showWeekends} onChange={event => setShowWeekends(event.target.checked)} /> 在课表中显示周末</label>
+            <p className="settings-field-hint">仅调整本页显示。需要编辑周末课程时可临时开启，隐藏不会删除课程。</p>
+          </div>
+          <div className="settings-field">
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => { setImportError(''); setImportStep('text'); setImportPreview([]); setImportOpen(true); }}>粘贴导入</button>
+          </div>
+          <div className="settings-field">
+            <label className="label">🎒 开学时间</label>
+            <p className="settings-field-hint" style={{ marginBottom: 8 }}>开学时间所在周为第 1 周。可切换到对应开学日期查看旧课表，已有课程不会迁移。</p>
+            <input className="input" type="date" value={semester?.startDate ?? ''} onChange={e => handleStartDateChange(e.target.value)} />
+            {!semester?.startDate && <p className="courses-warn" style={{ marginTop: 8 }}>⚠️ 未设置开学时间，课程不会显示在日程表中</p>}
+          </div>
+          <div className="settings-field">
+            <label className="label">🎌 特殊日期</label>
+            <p className="settings-field-hint" style={{ marginBottom: 8 }}>法定节假日已内置。放假不显示课程，补课照常显示。</p>
+            <div className="courses-special-add">
+              <input className="input input-sm" type="date" value={specialDate} onChange={e => setSpecialDate(e.target.value)} />
+              <div className="courses-kind-row">{SPECIAL_KINDS.map(k => <button key={k.value} className={`settings-chip ${specialKind === k.value ? 'settings-chip--active' : ''}`} onClick={() => setSpecialKind(k.value)}>{k.label}</button>)}</div>
+              <button className="btn btn-primary btn-sm" onClick={handleAddSpecialDate} disabled={!specialDate}>添加</button>
+            </div>
+            {(semester?.specialDates?.length ?? 0) > 0 && <div className="courses-special-list">{semester!.specialDates.slice().sort((a, b) => a.date.localeCompare(b.date)).map(s => <div key={s.id} className="courses-special-item"><span className="courses-special-date">{s.date}</span><span className={`courses-special-tag ${s.kind === 'holiday' ? 'courses-special-tag--holiday' : 'courses-special-tag--makeup'}`}>{s.kind === 'holiday' ? '放假' : '补课'}</span><button className="btn btn-ghost btn-icon courses-special-del" title="删除" onClick={() => setAskDeleteSpecial(s.id)}><Trash2 size={14} /></button></div>)}</div>}
+          </div>
+          <div className="modal-actions"><button className="btn btn-primary" onClick={() => setSemesterOpen(false)}>完成</button></div>
         </section>
       </div>}
-      {editingCourse !== undefined && (
+
+      {importOpen && <div className="modal-overlay" onClick={closeImport}>
+        <section className="modal courses-import-modal" role="dialog" aria-modal="true" aria-labelledby="course-import-title" onClick={event => event.stopPropagation()}>
+          <h3 className="modal-title" id="course-import-title">粘贴课表</h3>
+          {importStep === 'text' ? <>
+            <p className="modal-hint">每行：周一 08:00-09:40 高等数学 @教1-101</p>
+            <textarea className="input textarea" rows={8} value={importText} onChange={event => { setImportText(event.target.value); setImportError(''); }} placeholder={'周一 08:00-09:40 高等数学 @教1-101\n周三 14:30-16:10 大学物理'} autoFocus />
+            {importError && <p className="knowledge-error" role="alert">{importError}</p>}
+            <div className="modal-actions"><button className="btn btn-ghost" onClick={closeImport}>取消</button><button className="btn btn-primary" disabled={!importText.trim()} onClick={parseImport}>解析预览</button></div>
+          </> : <>
+            <p className="modal-hint">确认识别结果，可直接修改；周次不会自动猜测。</p>
+            <div className="courses-import-list">{importPreview.map((row, index) => <div key={index} className="courses-import-row">
+              <input className="input input-sm" aria-label={`课程 ${index + 1} 名称`} value={row.name} onChange={event => updateImportRow(index, { name: event.target.value })} />
+              <div className="courses-import-grid">
+                <select className="input input-sm" aria-label={`课程 ${index + 1} 星期`} value={row.dayOfWeek[0]} onChange={event => updateImportRow(index, { dayOfWeek: [Number(event.target.value)] })}>{DAY_LABELS.map((label, day) => <option key={day} value={day}>{label}</option>)}</select>
+                <input className="input input-sm" aria-label={`课程 ${index + 1} 开始时间`} type="time" value={row.startTime} onChange={event => updateImportRow(index, { startTime: event.target.value })} />
+                <input className="input input-sm" aria-label={`课程 ${index + 1} 结束时间`} type="time" value={row.endTime} onChange={event => updateImportRow(index, { endTime: event.target.value })} />
+              </div>
+              <input className="input input-sm" aria-label={`课程 ${index + 1} 地点`} value={row.location} onChange={event => updateImportRow(index, { location: event.target.value })} placeholder="地点" />
+            </div>)}</div>
+            <div className="courses-import-weeks">
+              <label>周次<input className="input input-sm" type="number" min={1} max={30} value={importStartWeek} onChange={event => setImportStartWeek(event.target.value)} placeholder="起始" /></label>
+              <span>起，共</span>
+              <input className="input input-sm" type="number" min={1} max={30} value={importWeekCount} onChange={event => setImportWeekCount(event.target.value)} placeholder="周数" />
+              <span>周</span>
+              <select className="input input-sm" value={importWeekType} onChange={event => setImportWeekType(event.target.value as 'all' | 'odd' | 'even')}><option value="all">每周</option><option value="odd">单周</option><option value="even">双周</option></select>
+            </div>
+            {importError && <p className="knowledge-error" role="alert">{importError}</p>}
+            <div className="modal-actions"><button className="btn btn-ghost" disabled={importBusy} onClick={backFromPreview}>返回</button><button className="btn btn-primary" disabled={importBusy || !importStartWeek || !importWeekCount} onClick={() => void importCourses()}>{importBusy ? '导入中…' : '确认导入'}</button></div>
+          </>}
+        </section>
+      </div>}
+      {editing && (
         <CourseEditModal
-          course={editingCourse}
-          onClose={() => setEditingCourse(undefined)}
+          course={editing.course}
+          initialSlot={editing.slot}
+          onClose={() => setEditing(null)}
           onSaved={handleCourseSaved}
+          onDelete={editing.course?.id != null ? () => setAskDeleteCourse(editing.course) : undefined}
+          onKnowledgeMap={editing.course?.id != null ? () => setKnowledgeCourse(editing.course) : undefined}
         />
       )}
-      {knowledgeCourse && <KnowledgeMapPanel course={knowledgeCourse} initialNodeId={knowledgeNodeId} onClose={() => { setKnowledgeCourse(null); setKnowledgeNodeId(null); }} />}
+      {knowledgeCourse && <KnowledgeMapPanel course={knowledgeCourse} initialNodeId={knowledgeNodeId} onClose={closeKnowledge} />}
       <ConfirmDialog
         open={askDeleteCourse !== null}
         message={askDeleteCourse ? `确定删除课程「${askDeleteCourse.name}」？删除后可在回收站恢复。` : ''}
@@ -504,6 +408,7 @@ export default function CoursesPage() {
         message="删除这条特殊日期？"
         onCancel={() => setAskDeleteSpecial(null)}
         onConfirm={() => askDeleteSpecial !== null && removeSpecialDate(askDeleteSpecial)}
-      />    </div>
+      />
+    </div>
   );
 }

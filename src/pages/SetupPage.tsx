@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FolderOpen, HardDrive, ArrowRight, Shield, FolderSearch } from 'lucide-react';
-import { normalizePath, listStorageSubdirs } from '../services/storage';
+import { isCapacitor, normalizePath, listStorageSubdirs } from '../services/storage';
 import './SetupPage.css';
 
 interface Props {
@@ -12,6 +12,7 @@ export default function SetupPage({ onComplete }: Props) {
   const [pathError, setPathError] = useState('');
   const [browsing, setBrowsing] = useState(false);
   const [subdirs, setSubdirs] = useState<string[]>([]);
+  const isNative = isCapacitor();
   const defaultPath = 'Documents/DailyNote';
 
   const handleBrowse = async () => {
@@ -57,7 +58,7 @@ export default function SetupPage({ onComplete }: Props) {
         </div>
         <h1 className="setup-title">欢迎使用 DailyNote</h1>
         <p className="setup-desc">
-          数据保存在设备公共存储，卸载重装不丢失，重新指定相同路径即可恢复。
+          Android 数据保存在设备公共存储。网页版数据保存在当前浏览器，清除站点数据后无法恢复，请定期导出备份。
         </p>
 
         {/* 默认路径 */}
@@ -69,7 +70,7 @@ export default function SetupPage({ onComplete }: Props) {
             <strong>使用默认位置</strong>
             <span className="setup-option-path">{defaultPath}/</span>
             <span className="setup-option-hint">
-              系统 Documents 文件夹，卸载不丢失
+              {isNative ? '系统 Documents 文件夹，卸载后仍保留' : '保存在当前浏览器；清除站点数据后无法恢复'}
             </span>
           </div>
           <ArrowRight size={20} className="setup-option-arrow" />
@@ -83,7 +84,7 @@ export default function SetupPage({ onComplete }: Props) {
           <div className="setup-option-body">
             <strong>自定义子目录</strong>
             <span className="setup-option-hint">
-              输入完整路径，或使用默认位置。重装后选择同一目录即可恢复。
+              {isNative ? '可指定公共 Documents 子目录，重装后选同一目录恢复' : '网页版保存在浏览器；更换浏览器或清除站点数据后无法恢复'}
             </span>
             <input
               className="input input-sm"

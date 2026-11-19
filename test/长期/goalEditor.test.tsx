@@ -19,14 +19,20 @@ vi.mock('react', async original => ({
     }];
   },
   useEffect: () => undefined,
-  useRef: (initial: unknown) => ({ current: initial }),
+  useRef: (initial: unknown) => {
+    const index = hooks.index++;
+    const slots = hooks.slots.get(hooks.path) ?? [];
+    hooks.slots.set(hooks.path, slots);
+    if (!(index in slots)) slots[index] = { current: initial };
+    return slots[index];
+  },
 }));
 vi.mock('../../src/contexts/BackButtonContext', () => ({ useRegisterBackHandler: () => undefined }));
 vi.mock('../../src/components/PlanMindmap', () => ({ default: () => null }));
 vi.mock('../../src/components/ConfirmDialog', async () => ({
-  default: ({ open, message, onConfirm, onCancel }: { open: boolean; message: string; onConfirm: () => void; onCancel: () => void }) =>
-    open ? createElement('div', { role: 'alertdialog' }, message,
-      createElement('button', { onClick: onConfirm }, '放弃修改'), createElement('button', { onClick: onCancel }, '继续编辑')) : null,
+  default: ({ open, message, confirmText, onConfirm, onCancel }: { open: boolean; message: string; confirmText: string; onConfirm: () => void; onCancel: () => void }) =>
+    open ? createElement('div', { role: 'alertdialog', 'aria-label': message }, message,
+      createElement('button', { onClick: onConfirm }, confirmText), createElement('button', { onClick: onCancel }, confirmText === '删除' ? '取消' : '继续编辑')) : null,
 }));
 
 import GoalPlanEditor from '../../src/components/GoalPlanEditor';
@@ -65,7 +71,7 @@ function mount(component: (props: Props) => ReactNode, props: Props) {
   const button = (name: string) => find('button', props => props['aria-label'] === name || props.title === name ||
     (typeof props.children === 'string' && props.children === name) ||
     (Array.isArray(props.children) && props.children.includes(name)));
-  const click = (name: string) => button(name).props.onClick();
+  const click = (name: string) => button(name).props.onClick({ detail: 0, stopPropagation: vi.fn() });
   const input = (label: string) => find('input', props => props['aria-label'] === label || props.placeholder === label || props.id === label);
   const change = (field: View, value: string) => field.props.onChange({ target: { value } });
   return { render, all, find, button, click, input, change };
@@ -80,7 +86,7 @@ const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
 beforeEach(() => { hooks.slots.clear(); hooks.path = ''; hooks.index = 0; });
 
 describe('GoalPlanEditor 真实组件事件', () => {
-  it('展示三行字段，进入全屏层级编辑并用换行、缩进、缩退、删除完成计划', () => {
+  it('在树尾保留一个普通追加输入，Enter 前进，编辑旧行不丢失追加草稿', () => {
     const onSave = vi.fn(async () => true);
     const app = mount(GoalPlanEditor, { goal: null, onSave, onClose: vi.fn() });
     app.change(app.input('gp-goal-title'), '年度计划');
@@ -88,22 +94,118 @@ describe('GoalPlanEditor 真实组件事件', () => {
     expect(app.all().filter(x => x.type === 'section' && String(x.props.className).includes('gp-field'))).toHaveLength(3);
     app.find('button', p => p.className === 'gp-open-plan').props.onClick();
     expect(app.find('div', p => p.role === 'dialog' && p['aria-label'] === '编辑目标内容')).toBeTruthy();
-    app.change(app.input('添加下一步'), '阶段一');
-    app.click('换行');
-    app.click('进一层');
-    app.change(app.input('添加下一步'), '行动一');
-    app.click('换行');
-    expect(app.input('第 2 行目标').props.value).toBe('行动一');
-    app.click('退一层');
-    app.change(app.input('添加下一步'), '暂时节点');
-    app.click('换行');
-    app.click('删除');
+    const append = () => app.input('添加下一步');
+    const enter = (field: View, isComposing = false) => field.props.onKeyDown({ key: 'Enter', nativeEvent: { isComposing }, preventDefault: vi.fn() });
+    const inTree = () => app.find('div', p => p.className === 'gp-lines').children;
+    expect(inTree()).toHaveLength(1);
+    expect(app.all().some(x => ['换行', '进一层', '退一层', '删除'].includes(String(x.props.children)))).toBe(false);
+    enter(append());
+    expect(inTree()).toHaveLength(1);
+    app.change(append(), '阶段一');
+    enter(append(), true);
+    expect(inTree()).toHaveLength(1);
+    enter(append());
+    expect(append().props.value).toBe('');
+    app.click('阶段一');
+    app.change(app.input('第 1 行目标'), '新阶段');
+    expect(append().props.value).toBe('');
+    enter(app.input('第 1 行目标'));
+    expect(inTree()).toHaveLength(2);
+    app.change(append(), '行动一');
+    app.click('新阶段');
+    expect(append().props.value).toBe('行动一');
+    // A non-empty append draft is also retained when completing without another Enter.
+    app.input('第 1 行目标').props.onBlur();
     app.click('完成');
     expect(app.all().some(x => x.props['aria-label'] === '编辑目标内容')).toBe(false);
     app.click('保存');
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ title: '年度计划', description: '材料线索', nodes: [
-      expect.objectContaining({ title: '阶段一', children: [expect.objectContaining({ title: '行动一' })] }),
+      expect.objectContaining({ title: '新阶段', children: [] }),
+      expect.objectContaining({ title: '行动一', children: [] }),
     ] }));
+  });
+
+  it('长按拖动时整个分支实时平移，释放才变更层级，并保留节点标识及元数据', () => {
+    vi.useFakeTimers();
+    try {
+      const onSave = vi.fn(async () => true);
+      const branch = { ...goal.nodes![0], weight: 1.5, createdAt: 123 };
+      const leading = { ...goal.nodes![1], createdAt: 456 };
+      const app = mount(GoalPlanEditor, { goal: { ...goal, nodes: [leading, branch] }, onSave, onClose: vi.fn() });
+      app.find('button', p => p.className === 'gp-open-plan').props.onClick();
+      const tree = () => app.find('div', p => p.className === 'gp-lines').children;
+      const pointer = (clientX: number) => ({ button: 0, pointerId: 3, clientX, clientY: 50, target: { closest: () => null, setPointerCapture: vi.fn() } });
+      const level = (i: number) => tree()[i].props.style['--gp-depth'];
+      tree()[1].props.onPointerDown(pointer(0));
+      tree()[1].props.onPointerMove(pointer(35));
+      vi.advanceTimersByTime(450);
+      tree()[1].props.onPointerUp(pointer(35));
+      expect(level(1)).toBe(0);
+      expect(tree()[1].props.style.transform).toBeUndefined();
+      tree()[1].props.onPointerDown(pointer(0));
+      vi.advanceTimersByTime(450);
+      tree()[1].props.onPointerMove(pointer(35));
+      expect([1, 2, 3].map(i => tree()[i].props.style.transform)).toEqual(Array(3).fill('translateX(35px)'));
+      expect(tree()[0].props.style.transform).toBeUndefined();
+      expect([1, 2, 3].map(level)).toEqual([0, 1, 1]);
+      tree()[1].props.onPointerUp(pointer(35));
+      expect([1, 2, 3].map(level)).toEqual([1, 2, 2]);
+      expect(tree()[1].props.style.transform).toBeUndefined();
+      tree()[1].props.onPointerDown(pointer(35));
+      vi.advanceTimersByTime(450);
+      tree()[1].props.onPointerMove(pointer(0));
+      tree()[1].props.onPointerUp(pointer(0));
+      expect([1, 2, 3].map(level)).toEqual([0, 1, 1]);
+      const appendIndex = tree().length - 1;
+      tree()[appendIndex].props.onPointerDown(pointer(0));
+      vi.advanceTimersByTime(450);
+      tree()[appendIndex].props.onPointerMove(pointer(30));
+      expect(tree()[appendIndex].props.style.transform).toBe('translateX(30px)');
+      expect(level(appendIndex)).toBe(1);
+      tree()[appendIndex].props.onPointerUp(pointer(30));
+      expect(level(appendIndex)).toBe(2);
+      tree()[1].props.onPointerDown(pointer(0));
+      vi.advanceTimersByTime(450);
+      tree()[1].props.onPointerMove(pointer(35));
+      tree()[1].props.onPointerUp(pointer(35));
+      app.click('完成');
+      app.click('保存');
+      expect(onSave.mock.lastCall?.[0]).toMatchObject({ nodes: [{ ...leading, children: [branch] }] });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('长按提供编辑和删除，取消保留分支；确认才删除且不影响追加草稿', () => {
+    vi.useFakeTimers();
+    try {
+      const onSave = vi.fn(async () => true);
+      const app = mount(GoalPlanEditor, { goal, onSave, onClose: vi.fn() });
+      app.find('button', p => p.className === 'gp-open-plan').props.onClick();
+      app.change(app.input('添加下一步'), '新步骤');
+      const pressFirst = () => {
+        const row = app.find('div', p => p.className === 'gp-lines').children[0];
+        const event = { button: 0, pointerId: 3, clientX: 0, clientY: 0, target: { closest: () => null } };
+        row.props.onPointerDown(event);
+        vi.advanceTimersByTime(450);
+        row.props.onPointerUp(event);
+        expect(app.find('section', p => p['aria-label'] === '目标行操作')).toBeTruthy();
+      };
+      pressFirst();
+      app.click('编辑');
+      app.change(app.input('第 1 行目标'), '新版听力');
+      app.input('第 1 行目标').props.onBlur();
+      pressFirst();
+      app.click('删除');
+      expect(app.find('div', p => p.role === 'alertdialog' && p['aria-label'] === '删除这一行及其子目标？')).toBeTruthy();
+      app.click('取消');
+      expect(app.button('新版听力')).toBeTruthy();
+      pressFirst();
+      app.click('删除');
+      app.click('删除');
+      expect(app.input('添加下一步').props.value).toBe('新步骤');
+      app.click('完成');
+      app.click('保存');
+      expect(onSave.mock.lastCall?.[0]).toMatchObject({ nodes: [goal.nodes![1], { title: '新步骤', completed: false, children: [] }] });
+    } finally { vi.useRealTimers(); }
   });
 
   it('文本格式错误阻止完成和外层保存；修复后保留已完成叶并可切换', () => {

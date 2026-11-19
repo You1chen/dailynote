@@ -8,8 +8,7 @@ export interface ImportedCourseRow {
 
 const DAY_MAP: Record<string, number> = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
 
-function time(value: string): string {
-  const [hour, minute] = value.split(/[:：]/).map(Number);
+function time(hour: number, minute: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
@@ -26,6 +25,19 @@ export function parseTimetableText(text: string): { rows: ImportedCourseRow[]; e
       errors.push(`第 ${index + 1} 行缺少星期或时间`);
       continue;
     }
+    const dayOfWeek = DAY_MAP[day[1]];
+    const startHour = Number(range[1]), startMinute = Number(range[2]);
+    const endHour = Number(range[3]), endMinute = Number(range[4]);
+    if (dayOfWeek === undefined || startHour > 23 || endHour > 23 || startMinute > 59 || endMinute > 59) {
+      errors.push(`第 ${index + 1} 行星期或时间无效`);
+      continue;
+    }
+    const startTime = time(startHour, startMinute);
+    const endTime = time(endHour, endMinute);
+    if (endTime <= startTime) {
+      errors.push(`第 ${index + 1} 行结束时间必须晚于开始时间`);
+      continue;
+    }
     let rest = line.replace(day[0], '').replace(range[0], '').trim();
     rest = rest.replace(/^[|,\t]+/, '').trim();
     const [namePart, ...locationParts] = rest.split(/\s*[@|｜\t]\s*/);
@@ -37,9 +49,9 @@ export function parseTimetableText(text: string): { rows: ImportedCourseRow[]; e
     rows.push({
       name,
       location: locationParts.join(' ').trim(),
-      dayOfWeek: [DAY_MAP[day[1]]],
-      startTime: time(`${range[1]}:${range[2]}`),
-      endTime: time(`${range[3]}:${range[4]}`),
+      dayOfWeek: [dayOfWeek],
+      startTime,
+      endTime,
     });
   }
   return { rows, errors };

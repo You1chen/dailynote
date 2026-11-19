@@ -82,6 +82,22 @@ describe('课程时间组合', () => {
     expect(input(tree, '课程结束时间').props.value).toBe('11:00');
   });
 
+  it('prefills grid selections and exposes optional actions only for an existing course', () => {
+    const onDelete = vi.fn();
+    const onKnowledgeMap = vi.fn();
+    const draft = CourseEditModal({ course: null, initialSlot: { dayOfWeek: [6], startTime: '08:00', endTime: '08:35' }, onClose: vi.fn(), onSaved: vi.fn(), onDelete, onKnowledgeMap });
+    expect(input(draft, '课程开始时间').props.value).toBe('08:00');
+    expect(input(draft, '课程结束时间').props.value).toBe('08:35');
+    expect(find(draft, element => element.props.children === '周六').props.className).toContain('settings-chip--active');
+    expect(() => input(draft, '删除课程')).toThrow();
+    hooks.values = []; hooks.index = 0;
+    const edit = CourseEditModal({ course, onClose: vi.fn(), onSaved: vi.fn(), onDelete, onKnowledgeMap });
+    input(edit, '删除课程').props.onClick();
+    find(edit, element => element.type === 'button' && element.props.children === '知识地图').props.onClick();
+    expect(onDelete).toHaveBeenCalledOnce();
+    expect(onKnowledgeMap).toHaveBeenCalledOnce();
+  });
+
   it('creates, edits, rejects duplicates, and deletes combinations in settings', () => {
     let combinations = [...DEFAULT_COURSE_TIME_COMBINATIONS];
     const render = () => {

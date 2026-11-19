@@ -14,11 +14,12 @@ export default function Walk() {
   const [range,setRange]=useState(['','']),[draft,setDraft]=useState(['','']),[hist,setHist]=useState(false),[version,setVersion]=useState(0);
   const [sheet,setSheet]=useState(false),[detail,setDetail]=useState<Memory|null>(null),[editing,setEditing]=useState<Memory|null>(null);
   const dialog=useRef<HTMLDialogElement>(null);
+  const backgroundEntry = useRef('');
   useEffect(()=>{let live=true;setError(false); Promise.all([getCards(),getAllIdeas()]).then(([cards,ideas])=>{if(live)setAll(deal(collectMemories(cards,ideas)));}).catch(()=>{if(live)setError(true);});return()=>{live=false;};},[retry]);
   const entries=useMemo(()=>all?.filter(i=>matchesDay(i.day,range[0],range[1],hist))??[],[all,range,hist]);
   const close=useCallback(()=>{setSheet(false);setDetail(null);},[]);
   const beginEdit=useCallback(()=>{if(!detail)return;setEditing(detail);setDetail(null);},[detail]);
-  const back=useCallback(()=>{if(editing){setEditing(null);return true;}if(sheet||detail)close();else if(window.history.state?.idx>0)navigate(-1);else navigate('/',{replace:true});return true;},[editing,sheet,detail,close,navigate]);
+  const back=useCallback(()=>{if(editing){setEditing(null);return true;}if(sheet||detail)close();else navigate('/',{replace:true});return true;},[editing,sheet,detail,close,navigate]);
   useRegisterBackHandler(back,[back]);
   useEffect(()=>{if(sheet||detail)dialog.current?.showModal();else dialog.current?.close();},[sheet,detail]);
   return <main className="walk-room"><header className="walk-head"><button onClick={back} aria-label="返回"><ArrowLeft/></button><h1>漫步</h1><button title="历史上的今天" aria-label="历史上的今天" aria-pressed={hist} onClick={()=>setHist(!hist)}><History/></button><button title="时间区间筛选" aria-label="时间区间筛选" aria-pressed={!!(range[0]||range[1])} onClick={()=>{setDraft([...range]);setSheet(true);}}><Filter/></button></header>

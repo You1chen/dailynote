@@ -95,7 +95,7 @@ export async function exportCardData(card: KnowledgeCard, folder = 'DailyNote/ca
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const picker = (window as unknown as { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable: () => Promise<{ write: (value: Blob) => Promise<void>; close: () => Promise<void> }>; name: string }> }).showSaveFilePicker;
   if (picker) {
-    const handle = await picker({ suggestedName: safeName, types: [{ description: 'DailyNote 卡片数据', accept: { 'application/json': ['.json'] } }] });
+    const handle = await picker.call(window, { suggestedName: safeName, types: [{ description: 'DailyNote 卡片数据', accept: { 'application/json': ['.json'] } }] });
     const writable = await handle.createWritable();
     await writable.write(blob);
     await writable.close();
@@ -127,7 +127,7 @@ export async function exportImageBlob(dataUrl: string, folder = 'Pictures/DailyN
   const blob = dataUrlToBlob(dataUrl);
   const picker = (window as unknown as { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable: () => Promise<{ write: (value: Blob) => Promise<void>; close: () => Promise<void> }>; name: string }> }).showSaveFilePicker;
   if (picker) {
-    const handle = await picker({ suggestedName: safeName, types: [{ description: '图片', accept: { [blob.type]: [`.${extension}`] } }] });
+    const handle = await picker.call(window, { suggestedName: safeName, types: [{ description: '图片', accept: { [blob.type]: [`.${extension}`] } }] });
     const writable = await handle.createWritable();
     await writable.write(blob);
     await writable.close();

@@ -69,273 +69,161 @@
   color: var(--color-text-muted);
 }
 
-/* ---- 课程列表（按星期分组） ---- */
-.courses-list-header {
+/* The timetable fills the available app pane, not the global 480px content column. */
+.app-container.courses-page {
+  --ct-time-width: 40px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.courses-day-group {
-  margin-bottom: 16px;
-}
-
-.courses-day-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  padding-left: 4px;
-  margin-bottom: 7px;
-  letter-spacing: 0.04em;
-}
-
-.courses-day-empty {
-  font-size: var(--font-sm);
-  color: var(--color-text-muted);
-  padding: 4px;
-  opacity: 0.55;
-}
-
-.courses-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 6px;
-  cursor: pointer;
-}
-
-.courses-card-info {
-  flex: 1;
+  flex-direction: column;
+  max-width: none;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 60px);
+  min-height: 0;
+  flex: 0 0 auto;
+  padding: 0 var(--safe-right) 0 0;
 }
 
-.courses-card-time {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--color-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.courses-card-name {
-  font-size: var(--font-base);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.courses-card-meta {
-  font-size: 11.5px;
-  color: var(--color-text-muted);
-}
-
-/* ---- 课表视图 ---- */
-
-.app-container--week {
-  padding-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  height: calc(100dvh - 64px - var(--safe-top));
-}
-
-.courses-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 视图切换：填充色胶囊，不再描边 */
-.courses-view-toggle {
-  display: flex;
+.courses-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 2px;
-  border: none;
-  border-radius: 999px;
-  background: var(--color-bg);
-  padding: 2px;
-  overflow: hidden;
+  padding: 10px 4px 4px;
 }
 
-.courses-view-toggle .settings-chip {
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-}
+.courses-page-header .page-title { font-size: clamp(1rem, 5vw, 1.25rem); }
+.courses-page-header .btn { min-width: 0; padding: 8px 4px; font-size: var(--font-xs); color: var(--color-primary); }
+.courses-back { justify-self: start; }
+.courses-settings { justify-self: end; }
 
-/* 网格：不再是盒子 */
+.ct-hint {
+  padding: 0 6px 5px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.ct-touch-hint { display: none; }
+@media (pointer: coarse) { .ct-touch-hint { display: inline; } }
+
 .ct-scroll {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
-  margin: 0 -8px;
-  background: transparent;
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
+  overflow: hidden auto;
+  overscroll-behavior-y: contain;
 }
 
-.ct-inner {
-  position: relative;
-  min-width: 408px;
+.ct-columns {
+  display: grid;
+  grid-template-columns: var(--ct-time-width) repeat(var(--ct-day-count), minmax(0, 1fr));
 }
 
 .ct-head {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--color-bg);
-}
-
-.ct-head-cell {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
   color: var(--color-text-secondary);
-  border-left: none;
-  border-bottom: none;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  user-select: none;
 }
+.ct-head > span { padding: 6px 0; min-width: 0; }
+.ct-head > span + span { border-left: 1px solid var(--color-border); }
 
-.ct-hour-row {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: flex-start;
-  border-bottom: none;
-}
-
-.ct-hour-label {
-  width: 44px;
-  padding: 2px 8px 0 0;
-  text-align: right;
-  font-size: 10.5px;
-  color: var(--color-text-muted);
-  font-weight: 500;
-  flex-shrink: 0;
-  position: sticky;
-  left: 0;
-  background: var(--color-bg);
-  z-index: 2;
+.ct-time-axis, .ct-day { position: relative; min-width: 0; }
+.ct-time-axis {
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-size: 9px;
+  text-align: center;
   user-select: none;
   font-variant-numeric: tabular-nums;
+  touch-action: pan-y;
 }
+.ct-time-fold, .ct-time-tick { position: absolute; inset-inline: 0; }
+.ct-time-tick { line-height: 12px; }
+.ct-time-fold { display: grid; align-content: center; line-height: 11px; background: var(--color-bg); }
+.ct-time-fold span { display: block; }
+
+.ct-day { border-left: 1px solid var(--color-border); user-select: none; }
+.ct-band {
+  position: absolute;
+  inset-inline: 0;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  cursor: crosshair;
+  touch-action: none;
+}
+.ct-band--folded {
+  border-block: 1px dashed var(--color-border);
+  background: var(--color-bg);
+  font-size: 15px;
+  line-height: 1;
+}
+.ct-band:hover, .ct-band:focus-visible { background: var(--color-primary-bg); }
+.ct-band:focus-visible, .ct-course-block:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 
 .ct-hour-line {
-  flex: 1;
-  align-self: flex-start;
-  height: 1px;
-  background: rgba(17, 17, 27, 0.055);
+  position: absolute;
+  inset-inline: 0;
+  border-top: 1px solid var(--color-border);
+  pointer-events: none;
+}
+.ct-selection {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 3;
+  border: 2px solid var(--color-primary);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  pointer-events: none;
 }
 
-/* 课程块：圆角加大、内边距放宽 */
 .ct-course-block {
   position: absolute;
-  border-radius: 10px;
-  background: rgba(245, 158, 11, 0.14);
-  border-left: 3px solid var(--color-warning);
-  cursor: pointer;
-  overflow: hidden;
-  z-index: 2;
-  min-height: 20px;
-}
-
-.ct-course-block:active {
-  opacity: 0.9;
-}
-
-.ct-block-inner {
-  padding: 5px 7px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  height: 100%;
+  align-items: stretch;
   overflow: hidden;
-}
-
-.ct-block-time {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-warning);
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.ct-block-name {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--color-text);
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  letter-spacing: 0.01em;
-}
-
-.ct-block-loc {
-  font-size: 10px;
-  color: var(--color-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 单/双周角标 */
-.ct-block-badge {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 2px 4px;
+  z-index: 2;
+  padding: 1px 3px;
+  border: 1px solid var(--color-bg);
   border-radius: 5px;
-  color: #92400e;
-  background: rgba(245, 158, 11, 0.22);
+  color: #211c26;
+  text-align: left;
+  cursor: pointer;
+  touch-action: pan-y;
 }
-
-/* ---- 不重要时段折叠 ---- */
-.ct-fold-toggle-row {
-  display: flex;
-  justify-content: flex-end;
-  padding: 2px 0 8px;
+.ct-course-block:active { opacity: 0.85; }
+.ct-block-name, .ct-block-time, .ct-block-loc {
+  display: block;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
 }
+.ct-block-name { font-size: 11px; font-weight: 700; }
+.ct-block-name sup { margin-left: 2px; font-size: 8px; line-height: 1; }
+.ct-block-time, .ct-block-loc { font-size: 9px; }
+.ct-block-time { font-variant-numeric: tabular-nums; }
 
-/* 折叠条：去掉渐变块，只留一条虚线 */
-.ct-fold-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  background: transparent;
-  border-bottom: 1px dashed var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 4;
-}
+.courses-weekend-setting label { display: flex; align-items: center; gap: 8px; }
+.courses-weekend-setting input { accent-color: var(--color-primary); }
 
-.ct-fold-bar-text {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  font-weight: 500;
-}
-
-.courses-semester-toggle { display:flex; align-items:center; gap:8px; width:100%; padding:4px 0 10px; border:0; background:transparent; color:var(--color-text); text-align:left; }
-.courses-semester-toggle .settings-section-title { margin:0; }
-.courses-semester-toggle span { margin-left:auto; color:var(--color-text-muted); font-size:12px; }
-.courses-semester-toggle svg { color:var(--color-text-muted); flex-shrink:0; }
-.ct-course-block--color { border-left:0; box-shadow:0 2px 6px #0002; }
-.ct-course-block--color .ct-block-time,
-.ct-course-block--color .ct-block-name,
-.ct-course-block--color .ct-block-loc { color:#fff; }
-.ct-course-block--color .ct-block-time,
-.ct-course-block--color .ct-block-loc { opacity:.9; }
-.ct-course-block--color .ct-block-badge { color:#fff; background:#0003; }
-
-.modal-close { position:absolute; top:12px; right:12px; width:30px; height:30px; border:0; border-radius:50%; background:var(--color-bg); color:var(--color-text-muted); font-size:20px; }
 .modal-hint { margin:8px 0; color:var(--color-text-muted); font-size:12px; }
+
+.courses-import-modal { max-width: 560px; }
+.courses-import-list { display:flex; flex-direction:column; gap:8px; max-height:42vh; overflow:auto; margin:8px 0; }
+.courses-import-row { display:flex; flex-direction:column; gap:5px; padding:8px; border-radius:8px; background:var(--color-bg); }
+.courses-import-grid { display:grid; grid-template-columns:minmax(0, 1.2fr) repeat(2, minmax(0, 1fr)); gap:5px; }
+.courses-import-grid > .input { min-width: 0; padding-inline: 3px; }
+.courses-import-weeks { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin:8px 0; font-size:12px; }
+.courses-import-weeks label { display:flex; align-items:center; gap:4px; }
+.courses-import-weeks .input { width:64px; }

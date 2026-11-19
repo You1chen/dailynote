@@ -521,9 +521,11 @@ Reflection 仅包含日期导航、灵感与卡片收集器；MindSheet 承载�
 
 ## 问题反馈修复（2026-11-19）
 - `hooks/useSheetDrag.ts` 提供底部弹层下拉关闭；TaskBall、DailyPlan、PreferencePanel、MindSheet 已接入。
-- TaskBall 进入层级编辑时自动聚焦最后一行；底部输入与缩进/缩退/删除按钮已移除。长按行横向拖动跟手改层级，松手吸附；长按不动打开编辑/搁置/删除菜单。
+- TaskBall 点击 TODO 总是打开树编辑，最新行自动聚焦；底部输入与缩进/缩退/删除按钮已移除。`utils/taskRows.ts` 以稳定 id 保存完成/搁置元数据；长按行把手横向拖动整段分支，松手吸附；长按不动打开编辑/搁置/删除菜单，删除需确认。
 - `AppShell` 在页面没有返回处理时回到 `/`；知识卡片显式保存不关闭编辑页。
-- `utils/timetableImport.ts` 解析粘贴课表文本；CoursesPage 学期设置可收起，课表块使用课程色。
+- `utils/courseTimetable.ts` 提供课程占用区间并集、折叠纵坐标双向映射及拖选时间，`CoursesPage` 使用固定分栏的周一至周五网格，周末仅在设置中临时展开；`utils/timetableImport.ts` 解析粘贴课表文本。
+- `utils/taskRowEditing.ts` 管理 TODO 追加行的提交和焦点约束；`utils/goalPlanRows.ts` 负责目标行与树互转和分支位移。
+- 文件写入前作废旧启动快照，避免保存后立刻重读时命中只有文件名相同的旧数据。
 
 ## 导出与构建产物
 - KnowledgeCardEditor 的 `exportOpen` 确认层统一承载卡片/图片导出；Android 写指定相对目录，Web 优先 `showSaveFilePicker`，否则下载。

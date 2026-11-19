@@ -22,7 +22,7 @@ Web/PWA 与 Android APK 共用同一份代码，数据格式互通。
 ```bash
 npm ci
 npm run dev       # Vite 开发服务器
-npm test          # Vitest，55 个文件 / 832 个用例
+npm test          # Vitest，57 个文件 / 852 个用例
 npm run build     # 类型检查 + 生产构建，输出 dist/
 npm run preview   # 预览生产构建
 ```
@@ -43,7 +43,8 @@ npm run build:apk
 bash scripts/build-apk.sh
 ```
 
-APK 输出：`android/app/build/outputs/apk/debug/dailynote.apk`
+调试 APK 输出：`android/app/build/outputs/apk/debug/dailynote.apk`。
+配置本机签名后，Windows 用 `npm run build:release`，macOS / Linux 用 `bash scripts/build-apk.sh --release`，生成 `android/app/build/outputs/apk/release/dailynote.apk`。本地签名不等于应用商店或系统开发者身份认证。
 
 只做 Web 构建并同步到 Android、不跑 Gradle：
 
@@ -73,7 +74,7 @@ implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
 
 ## 数据与隐私
 
-- 数据是普通 JSON 文件，默认在 `Documents/DailyNote/`，可在应用内更换目录。
+- Android 数据是普通 JSON 文件，默认在 `Documents/DailyNote/`，可在应用内更换目录。网页版保存在当前浏览器的 IndexedDB 中，不会创建这个目录；清除站点数据前请导出备份。
 - 没有账号、云同步或网络请求；换设备靠导出/导入或直接拷贝目录。
 - 启动优先读本地快照；只有目录结构变化或手动「重新扫描存储目录」才全量读文件。
 - 写入按表指纹增量落盘，只写变脏的文件。

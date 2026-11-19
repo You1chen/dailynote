@@ -68,9 +68,7 @@ android {
 
     // Keep the debug artifact friendly to share: dailynote.apk instead of app-debug.apk.
     applicationVariants.all { variant ->
-        if (variant.buildType.name == 'debug') {
-            variant.outputs.all { outputFileName = 'dailynote.apk' }
-        }
+        variant.outputs.all { outputFileName = 'dailynote.apk' }
     }
 }
 

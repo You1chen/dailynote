@@ -30,7 +30,7 @@ export default function SideNav({ badge = 0, ddlBadge = 0, importantBadge = 0 }:
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('dailynote_nav_collapsed') === '1');
   useEffect(() => {
-    document.documentElement.style.setProperty('--nav-w', collapsed ? '52px' : '76px');
+    document.documentElement.style.setProperty('--nav-w', collapsed ? '0px' : '76px');
     localStorage.setItem('dailynote_nav_collapsed', collapsed ? '1' : '0');
   }, [collapsed]);
 
@@ -72,8 +72,9 @@ export default function SideNav({ badge = 0, ddlBadge = 0, importantBadge = 0 }:
 
   return (
     <>
-      <nav className={`side-nav ${collapsed ? 'side-nav--collapsed' : ''}`}>
-        <button className="side-nav-toggle" onClick={() => setCollapsed(value => !value)} aria-label={collapsed ? '展开导航' : '收起导航'} title={collapsed ? '展开导航' : '收起导航'}>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button>
+      {collapsed && <button className="side-nav-reopen" aria-label="展开导航" onClick={() => setCollapsed(false)}><ChevronRight size={18}/></button>}
+      <nav hidden={collapsed} className="side-nav">
+        <button className="side-nav-toggle" onClick={() => setCollapsed(true)} aria-label="收起导航" title="收起导航"><ChevronLeft size={16} /></button>
         <div className="side-nav-search">
           <button
             className="side-nav-item side-nav-item--search"

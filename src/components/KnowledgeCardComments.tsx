@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { Image as ImageIcon, Pencil, Trash2, X } from 'lucide-react';
 import type { KnowledgeCardContent, KnowledgeComment } from '../types/knowledge';
 import { fileToCompressedDataURL } from '../utils/avatarCrop';
@@ -26,6 +27,7 @@ export default function KnowledgeCardComments({ content, onUpdate, onClose }: Pr
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const sheetDrag = useSheetDrag(onClose, !busy && !confirmSave && !deleteId && !lightbox);
 
   function closeTopLayer() {
     if (confirmSave) setConfirmSave(false);
@@ -100,8 +102,9 @@ export default function KnowledgeCardComments({ content, onUpdate, onClose }: Pr
   }
 
   return <div className="kce-comments" role="dialog" aria-modal="true" aria-label="评论">
-    <section className="kce-comments-sheet">
+    <section className="kce-comments-sheet" style={sheetDrag.style}>
       <header className="kce-comments-header">
+        <div className="kce-comments-grip" {...sheetDrag.handlers} aria-label="下拉关闭评论"><span/></div>
         <div><span>评论</span><strong>{comments.length}</strong></div>
         <button type="button" onClick={closeTopLayer} aria-label="关闭评论"><X size={20} /></button>
       </header>
