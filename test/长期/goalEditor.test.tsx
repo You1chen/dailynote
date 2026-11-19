@@ -90,11 +90,11 @@ describe('GoalPlanEditor 真实组件事件', () => {
     expect(app.find('div', p => p.role === 'dialog' && p['aria-label'] === '编辑目标内容')).toBeTruthy();
     app.change(app.input('添加下一步'), '阶段一');
     app.click('换行');
-    app.click('缩进');
+    app.click('进一层');
     app.change(app.input('添加下一步'), '行动一');
     app.click('换行');
     expect(app.input('第 2 行目标').props.value).toBe('行动一');
-    app.click('缩退');
+    app.click('退一层');
     app.change(app.input('添加下一步'), '暂时节点');
     app.click('换行');
     app.click('删除');

@@ -324,3 +324,18 @@
   color: var(--color-text-muted);
   font-weight: 500;
 }
+
+.courses-semester-toggle { display:flex; align-items:center; gap:8px; width:100%; padding:4px 0 10px; border:0; background:transparent; color:var(--color-text); text-align:left; }
+.courses-semester-toggle .settings-section-title { margin:0; }
+.courses-semester-toggle span { margin-left:auto; color:var(--color-text-muted); font-size:12px; }
+.courses-semester-toggle svg { color:var(--color-text-muted); flex-shrink:0; }
+.ct-course-block--color { border-left:0; box-shadow:0 2px 6px #0002; }
+.ct-course-block--color .ct-block-time,
+.ct-course-block--color .ct-block-name,
+.ct-course-block--color .ct-block-loc { color:#fff; }
+.ct-course-block--color .ct-block-time,
+.ct-course-block--color .ct-block-loc { opacity:.9; }
+.ct-course-block--color .ct-block-badge { color:#fff; background:#0003; }
+
+.modal-close { position:absolute; top:12px; right:12px; width:30px; height:30px; border:0; border-radius:50%; background:var(--color-bg); color:var(--color-text-muted); font-size:20px; }
+.modal-hint { margin:8px 0; color:var(--color-text-muted); font-size:12px; }

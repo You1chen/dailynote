@@ -28,6 +28,7 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
+.mind-grip { width: 38px; height: 4px; margin: 0 auto 8px; border-radius: 3px; background: var(--color-border); touch-action: none; }
 .mind-head {
   display: flex;
   align-items: center;

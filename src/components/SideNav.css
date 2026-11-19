@@ -108,3 +108,8 @@
 .side-nav-item--search {
   color: var(--color-primary);
 }
+
+.side-nav-toggle { display:grid; place-items:center; width:26px; height:26px; margin:8px auto 0; border:1px solid var(--color-border); border-radius:50%; background:var(--color-surface); color:var(--color-text-muted); z-index:1; }
+.side-nav--collapsed .side-nav-label { display:none; }
+.side-nav--collapsed .side-nav-item { gap:0; padding:11px 2px; }
+.side-nav--collapsed .side-nav-toggle { margin-top:8px; }

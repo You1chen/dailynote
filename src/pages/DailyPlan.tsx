@@ -7,6 +7,7 @@ import MindSheet from '../components/MindSheet';
 import { useIdeas } from '../hooks/useIdeas';
 import PreferencePanel from '../components/PreferencePanel';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { useDailyPlan } from '../hooks/useDailyPlan';
 import { usePreferences } from '../hooks/usePreferences';
 import { getAllRoutines, getAllTaskTemplates, savePlan, getAllCourses, getSemester, getAllPlans } from '../db';
@@ -80,6 +81,7 @@ export default function DailyPlanPage() {
 
   // UI 状态
   const [editingBlock, setEditingBlock] = useState<TimeBlock | null>(null);
+  const blockSheet = useSheetDrag(() => setEditingBlock(null), !!editingBlock);
   const [showPrefs, setShowPrefs] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [showNewMenu, setShowNewMenu] = useState(false);
@@ -766,8 +768,8 @@ export default function DailyPlanPage() {
       {/* 底部编辑面板 (Bottom Sheet) */}
       {editingBlock && (
         <div className="bs-overlay" onClick={() => setEditingBlock(null)}>
-          <div className="bs-sheet" onClick={e => e.stopPropagation()}>
-            <div className="bs-handle" />
+          <div className="bs-sheet" style={blockSheet.style} onClick={e => e.stopPropagation()}>
+            <div className="bs-handle" {...blockSheet.handlers} />
             <h3 className="bs-title">
               {editingBlock.id ? '编辑任务' : '新建任务'}
             </h3>

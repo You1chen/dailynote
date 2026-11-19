@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskBoard } from '../hooks/useTaskBoard';
 import MindSheet from './MindSheet';
 import { usePreferences } from '../hooks/usePreferences';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { Archive, CornerUpLeft } from 'lucide-react';
 import CelebrationDialog from './CelebrationDialog';
 import type { TaskLeaf } from '../types';
@@ -61,6 +62,9 @@ export default function TaskBall() {
   const [dragging, setDragging] = useState<string | null>(null);
   /** 全部完成时的庆祝弹窗（null = 不显示；数字 = 本次清单总条数） */
   const [celebration, setCelebration] = useState<number | null>(null);
+  const editInputRef = useRef<HTMLInputElement | null>(null);
+  const editorSheet = useSheetDrag(() => setPanel(null), panel === 'editor');
+  const focusEditInput = () => requestAnimationFrame(() => editInputRef.current?.focus());
 
   // ---- 悬浮球位置（可拖动） ----
   const [pos, setPos] = useState<Pos>(loadPos);
@@ -154,6 +158,7 @@ export default function TaskBall() {
     const current = lines.map((line, i) => i === index ? { ...line, title: editing.title.trim() } : line);
     setLines(insertTaskLineAfter(current, index));
     setEditing({ index: index + 1, title: '' });
+    focusEditInput();
   }
 
   function indent() {
@@ -164,6 +169,7 @@ export default function TaskBall() {
         const max = i === 0 ? 0 : ls[i - 1].level + 1;
         return { ...l, level: Math.min(l.level + 1, max) };
       }));
+      focusEditInput();
       return;
     }
     if (lines.length === 0) return;
@@ -174,6 +180,7 @@ export default function TaskBall() {
     if (editing) {
       const idx = editing.index;
       setLines(ls => ls.map((l, i) => (i === idx ? { ...l, level: Math.max(0, l.level - 1) } : l)));
+      focusEditInput();
       return;
     }
     if (lines.length === 0) return; // 没有上一行：不处理，不提示
@@ -183,8 +190,16 @@ export default function TaskBall() {
   function deleteLine() {
     if (editing) {
       const idx = editing.index;
-      setEditing(null);
-      setLines(ls => ls.filter((_, i) => i !== idx));
+      const next = lines.filter((_, i) => i !== idx);
+      if (!next.length) {
+        setEditing(null);
+        setLines([]);
+        return;
+      }
+      const nextIndex = Math.min(idx, next.length - 1);
+      setLines(next);
+      setEditing({ index: nextIndex, title: next[nextIndex].title });
+      focusEditInput();
       return;
     }
     if (pending) { setPending(''); return; }
@@ -385,8 +400,8 @@ export default function TaskBall() {
       )}
       {panel === 'editor' && (
         <div className="tb-mask" onClick={() => setPanel(null)}>
-          <div className="tb-sheet tb-sheet--editor" onClick={e => e.stopPropagation()}>
-            <div className="tb-grip" />
+          <div className="tb-sheet tb-sheet--editor" style={editorSheet.style} onClick={e => e.stopPropagation()}>
+            <div className="tb-grip" {...editorSheet.handlers} />
             <div className="tb-head">
               <span className="tb-title">任务</span>
               <span className="tb-head-acts">
@@ -415,6 +430,7 @@ export default function TaskBall() {
                       >
                         {isEditing ? (
                           <input
+                            ref={editInputRef}
                             className="tb-line-input"
                             autoFocus
                             value={editing.title}
@@ -452,10 +468,10 @@ export default function TaskBall() {
                 </div>
 
                 <div className="tb-keys">
-                  <button className="tb-key" onClick={newLine}>换行</button>
-                  <button className="tb-key" onClick={indent}>缩进</button>
-                  <button className="tb-key" onClick={outdent}>缩退</button>
-                  <button className="tb-key" onClick={deleteLine}>删除</button>
+                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={newLine}>换行</button>
+                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={indent}>进一层</button>
+                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={outdent}>退一层</button>
+                  <button className="tb-key" onMouseDown={event => event.preventDefault()} onClick={deleteLine}>删除</button>
                 </div>
               </>
             ) : (

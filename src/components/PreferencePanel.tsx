@@ -1,6 +1,7 @@
 import { X, RotateCcw } from 'lucide-react';
 import type { UserPreferences } from '../hooks/usePreferences';
 import './PreferencePanel.css';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 
 interface Props {
   visible: boolean;
@@ -17,12 +18,13 @@ const DENSITY_OPTIONS: { label: string; value: number }[] = [
 ];
 
 export default function PreferencePanel({ visible, prefs, onUpdate, onReset, onClose }: Props) {
+  const sheet = useSheetDrag(onClose, visible);
   if (!visible) return null;
 
   return (
     <div className="pref-overlay" onClick={onClose}>
-      <div className="pref-sheet" onClick={e => e.stopPropagation()}>
-        <div className="pref-handle" />
+      <div className="pref-sheet" style={sheet.style} onClick={e => e.stopPropagation()}>
+        <div className="pref-handle" {...sheet.handlers} />
 
         <div className="pref-header">
           <h3 className="pref-title">偏好设置</h3>

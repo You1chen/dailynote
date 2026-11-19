@@ -518,3 +518,9 @@ Reflection 仅包含日期导航、灵感与卡片收集器；MindSheet 承载�
 ## 卡片图片操作（2026-11-19）
 - `KnowledgeCardEditor` 为图片内容提供 500ms 长按/右键菜单；替换只改当前 `data`，保留内容 id 与评论。
 - `utils/knowledgeCards.ts` 的 `exportImageBlob` 保存图片文件，`exportCardData`/`cardDataJSON` 导出含图片 data URL 的完整卡片 JSON。
+
+## 问题反馈修复（2026-11-19）
+- `hooks/useSheetDrag.ts` 提供底部弹层下拉关闭；TaskBall、DailyPlan、PreferencePanel、MindSheet 已接入。
+- TaskBall 层级编辑在缩进/缩退/删除后重新聚焦当前输入；按钮文案改为「进一层/退一层」。
+- `AppShell` 在页面没有返回处理时回到 `/`；知识卡片显式保存不关闭编辑页。
+- `utils/timetableImport.ts` 解析粘贴课表文本；CoursesPage 学期设置可收起，课表块使用课程色。

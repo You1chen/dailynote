@@ -1,5 +1,5 @@
 import { Suspense, lazy as ReactLazy, useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TabBar from './components/TabBar';
 import TaskBall from './components/TaskBall';
 import SideNav from './components/SideNav';
@@ -17,7 +17,7 @@ import DdlPage from './pages/DdlPage';
 import ImportantPage from './pages/ImportantPage';
 import BacklogPage from './pages/BacklogPage';
 import SettlementPage from './pages/Settlement';
-import { BackButtonProvider } from './contexts/BackButtonContext';
+import { BackButtonProvider, useRegisterBackHandler } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import { useBacklogBadge } from './hooks/useBacklog';
 import { useDdlBadge } from './hooks/useDdlBadge';
@@ -38,8 +38,14 @@ function applyTheme(theme: ThemeMode) {
 const Walk = ReactLazy(() => import('./pages/Walk'));
 function AppShell() {
   const location = useLocation();
+  const navigate = useNavigate();
   const inGarden = location.pathname === '/garden' || location.pathname.startsWith('/garden/');
   const immersive = inGarden || location.pathname === '/wander';
+  useRegisterBackHandler(() => {
+    if (location.pathname === '/') return false;
+    navigate('/');
+    return true;
+  }, [location.pathname, navigate]);
   const { prefs } = usePreferences();
   const backlogBadge = useBacklogBadge();
   const ddlBadge = useDdlBadge();

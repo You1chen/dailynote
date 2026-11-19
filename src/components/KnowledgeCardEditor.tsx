@@ -239,7 +239,15 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
         ...latest, contents, title: latest.title.trim() || '未命名卡片', updatedAt: Date.now(),
       };
       await onSave(saved);
-      if (mounted.current) onClose();
+      if (mounted.current) {
+        if (explicit) {
+          draftRef.current = saved;
+          setDraft(saved);
+          setNotice('已保存');
+        } else {
+          onClose();
+        }
+      }
     } catch (cause) {
       if (mounted.current) setError(`保存失败，草稿已保留。${errorText(cause)}`);
     } finally {

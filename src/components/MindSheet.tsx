@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { X, Sparkles, Star, ListChecks, Plus, Trash2, Hash, Check, ArrowLeft } from 'lucide-react';
 import { useIdeas } from '../hooks/useIdeas';
 import { playChime } from '../utils/sound';
@@ -28,6 +29,7 @@ const KINDS: { key: MindKind; label: string; icon: typeof Sparkles; hint: string
 /** 杂念面板：小愿望（俏皮）/ 琐事（简约）/ 灵感（灵光一闪），三种各自一套界面 */
 export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, onBrowseDates }: Props) {
   const { byKind, addMind, updateIdea, removeIdea } = useIdeas();
+  const sheet = useSheetDrag(onClose);
   const allowed = kinds && kinds.length > 0 ? KINDS.filter(k => kinds.includes(k.key)) : KINDS;
   const [kind, setKind] = useState<MindKind>(
     kinds && kinds.length > 0 ? kinds[0] : initialKind,
@@ -149,7 +151,8 @@ export default function MindSheet({ onClose, initialKind = 'wish', date, kinds, 
 
   return (
     <div className="mind-mask" onClick={onClose}>
-      <div className="mind-sheet" onClick={e => e.stopPropagation()}>
+      <div className="mind-sheet" style={sheet.style} onClick={e => e.stopPropagation()}>
+        <div className="mind-grip" {...sheet.handlers} />
         <div className="mind-head">
           <span className="mind-title"><ActiveIcon size={15} /> {active.label}</span>
           <button className="mind-close" onClick={onClose} aria-label="关闭">

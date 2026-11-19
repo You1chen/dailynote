@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Search, CalendarClock, CalendarDays, CalendarRange,
+  Search, ChevronLeft, ChevronRight, CalendarClock, CalendarDays, CalendarRange,
   Target, Archive, Trash2, Database, Settings, Star, type LucideIcon,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -28,6 +28,11 @@ export default function SideNav({ badge = 0, ddlBadge = 0, importantBadge = 0 }:
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('dailynote_nav_collapsed') === '1');
+  useEffect(() => {
+    document.documentElement.style.setProperty('--nav-w', collapsed ? '52px' : '76px');
+    localStorage.setItem('dailynote_nav_collapsed', collapsed ? '1' : '0');
+  }, [collapsed]);
 
   const groups: NavItem[][] = [
     [
@@ -67,7 +72,8 @@ export default function SideNav({ badge = 0, ddlBadge = 0, importantBadge = 0 }:
 
   return (
     <>
-      <nav className="side-nav">
+      <nav className={`side-nav ${collapsed ? 'side-nav--collapsed' : ''}`}>
+        <button className="side-nav-toggle" onClick={() => setCollapsed(value => !value)} aria-label={collapsed ? '展开导航' : '收起导航'} title={collapsed ? '展开导航' : '收起导航'}>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button>
         <div className="side-nav-search">
           <button
             className="side-nav-item side-nav-item--search"

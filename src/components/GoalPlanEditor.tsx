@@ -172,7 +172,7 @@ function ContentEditor({ initial, onDone, onBack }: { initial: GoalNode[]; onDon
         })}
       </div>
       <div className="gp-entry"><span>第 {Math.min(level, lines.length ? lines[lines.length - 1].level + 1 : 0) + 1} 层</span><input value={pending} placeholder="添加下一步" onFocus={() => setSelected(null)} onChange={event => setPending(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLine(); } }} /></div>
-      <div className="gp-tools" role="group" aria-label="层级编辑工具"><button type="button" onClick={newLine}><CornerDownLeft size={17} />换行</button><button type="button" onClick={() => adjustLevel(1)}><Indent size={17} />缩进</button><button type="button" onClick={() => adjustLevel(-1)}><Outdent size={17} />缩退</button><button type="button" onClick={deleteLine}><Trash2 size={17} />删除</button></div>
+      <div className="gp-tools" role="group" aria-label="层级编辑工具"><button type="button" onClick={newLine}><CornerDownLeft size={17} />换行</button><button type="button" onClick={() => adjustLevel(1)}><Indent size={17} />进一层</button><button type="button" onClick={() => adjustLevel(-1)}><Outdent size={17} />退一层</button><button type="button" onClick={deleteLine}><Trash2 size={17} />删除</button></div>
     </> : <div className="gp-text-wrap"><textarea spellCheck={false} aria-label="Markdown 目标内容" placeholder={'- 第一步\n\t- 子步骤'} value={text} onChange={event => { setText(event.target.value); setError(''); }} onKeyDown={onTextKeyDown} /><small>每行 - 标题；支持 Tab 或每层 2 / 4 个空格缩进</small></div>}
     {error && <p className="gp-error" role="alert">{error}</p>}
     {mode === 'text' && parsed?.error && !error && <p className="gp-error" role="alert">{parsed.error}</p>}

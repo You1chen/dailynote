@@ -1,18 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, BookOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 import KnowledgeMapPanel from '../components/KnowledgeMapPanel';
-import { getAllCourses, deleteCourse, getSemester, saveSemester } from '../db';
+import { getAllCourses, deleteCourse, getSemester, saveSemester, saveCourse } from '../db';
 import type { Course, SemesterRecord } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { blockRenderRect, foldedGrid } from '../utils/time';
 import { isCourseInSemester } from '../utils/courseSchedule';
+import { parseTimetableText } from '../utils/timetableImport';
 import CourseEditModal, { DAY_LABELS, WEEK_TYPE_LABELS } from '../components/CourseEditModal';
 // settings-section / settings-field / settings-chip 等通用表单样式复用设置页
 import './SettingsPage.css';
 import ConfirmDialog from '../components/ConfirmDialog';
 import './CoursesPage.css';
+
+const COURSE_COLORS = ['#85b978', '#e8899d', '#c49a4a', '#a28bd4', '#62b3c7', '#d88967', '#8d9fc9'];
 
 const SPECIAL_KINDS: { value: 'holiday' | 'makeup'; label: string }[] = [
   { value: 'holiday', label: '放假' },
@@ -59,8 +62,13 @@ export default function CoursesPage() {
   const [knowledgeNodeId, setKnowledgeNodeId] = useState<string | null>(null);
 
   // 特殊日期表单
+  const [semesterOpen, setSemesterOpen] = useState(false);
   const [specialDate, setSpecialDate] = useState('');
   const [specialKind, setSpecialKind] = useState<'holiday' | 'makeup'>('holiday');
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
 
   // Android 返回键处理
   useRegisterBackHandler(() => {
@@ -140,6 +148,27 @@ export default function CoursesPage() {
     setCourses(await getAllCourses());
   };
 
+  async function importCourses() {
+    const parsed = parseTimetableText(importText);
+    if (!parsed.rows.length) { setImportError(parsed.errors[0] || '没有可导入的课程'); return; }
+    if (parsed.errors.length) { setImportError(parsed.errors.join('；')); return; }
+    setImportBusy(true);
+    setImportError('');
+    try {
+      const now = Date.now();
+      for (const row of parsed.rows) {
+        await saveCourse({ name: row.name, teacher: '', location: row.location, dayOfWeek: row.dayOfWeek, startTime: row.startTime, endTime: row.endTime, weekType: 'all', startWeek: 1, weekCount: 18, createdAt: now, updatedAt: now });
+      }
+      await load();
+      setImportOpen(false);
+      setImportText('');
+    } catch (cause) {
+      setImportError(String(cause));
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   const handleCourseSaved = async () => {
     setEditingCourse(undefined);
     setCourses(await getAllCourses());
@@ -187,8 +216,12 @@ export default function CoursesPage() {
       {/* === 学期设置（列表视图专属：课表视图只显示课程） === */}
       {viewMode === 'list' && (
         <section className="settings-section">
-          <h2 className="settings-section-title">📅 学期设置</h2>
-          <div className="card">
+          <button type="button" className="courses-semester-toggle" onClick={() => setSemesterOpen(value => !value)} aria-expanded={semesterOpen}>
+            <h2 className="settings-section-title">📅 学期设置</h2>
+            <span>{semester?.startDate || '未设置开学时间'} · {(semester?.specialDates ?? []).length} 个特殊日期</span>
+            {semesterOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          </button>
+          {semesterOpen && <div className="card">
             <div className="settings-field">
               <label className="label">🎒 开学时间</label>
               <p className="settings-field-hint" style={{ marginBottom: 8 }}>
@@ -263,7 +296,7 @@ export default function CoursesPage() {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
         </section>
       )}
 
@@ -286,6 +319,7 @@ export default function CoursesPage() {
                 课表
               </button>
             </div>
+            <button className="btn btn-outline btn-sm" onClick={() => { setImportError(''); setImportOpen(true); }}>粘贴导入</button>
             <button className="btn btn-primary btn-sm" onClick={() => setEditingCourse(null)}>
               <Plus size={16} /> 添加课程
             </button>
@@ -361,12 +395,13 @@ export default function CoursesPage() {
                     return (
                       <div
                         key={`${c.id}-${dw}`}
-                        className="ct-course-block"
+                        className="ct-course-block ct-course-block--color"
                         style={{
                           left: TIME_COL_W + dw * COL_W + 2,
                           width: COL_W - 6,
                           top: GRID_HEADER_H + rect.top,
                           height: rect.height,
+                          background: COURSE_COLORS[(c.id ?? 0) % COURSE_COLORS.length],
                         }}
                         title={`${c.name} · ${weekRangeText(c)} · ${WEEK_TYPE_LABELS[c.weekType]}${c.location ? ` · ${c.location}` : ''}`}
                         onClick={e => {
@@ -441,6 +476,15 @@ export default function CoursesPage() {
       </section>
 
       {/* === 新建/编辑弹窗（共享组件） === */}
+      {importOpen && <div className="modal-overlay" onClick={() => setImportOpen(false)}>
+        <section className="modal" onClick={event => event.stopPropagation()}>
+          <h3 className="modal-title">粘贴课表</h3><button className="modal-close" onClick={() => setImportOpen(false)} aria-label="关闭">×</button>
+          <p className="modal-hint">每行：周一 08:00-09:40 高等数学 @教1-101</p>
+          <textarea className="input textarea" rows={8} value={importText} onChange={event => { setImportText(event.target.value); setImportError(''); }} placeholder={'周一 08:00-09:40 高等数学 @教1-101\n周三 14:30-16:10 大学物理'} autoFocus />
+          {importError && <p className="knowledge-error" role="alert">{importError}</p>}
+          <div className="modal-actions"><button className="btn btn-ghost" onClick={() => setImportOpen(false)}>取消</button><button className="btn btn-primary" disabled={importBusy || !importText.trim()} onClick={() => void importCourses()}>{importBusy ? '导入中…' : '导入'}</button></div>
+        </section>
+      </div>}
       {editingCourse !== undefined && (
         <CourseEditModal
           course={editingCourse}
