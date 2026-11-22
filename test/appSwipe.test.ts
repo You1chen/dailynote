@@ -1,22 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { appSwipeAction, attachAppSwipe, blockAppSwipeForCurrentTouch, isAppSwipeClaimed, type SwipeSurface } from '../src/hooks/useAppSwipe';
+import { appSwipeAction, attachAppSwipe, blockAppSwipeForCurrentTouch, isAppSwipeClaimed, routeSwipeSurface, type SwipeSurface } from '../src/hooks/useAppSwipe';
 
 describe('fullscreen navigation swipe direction', () => {
   it.each([
     ['home', 100, 'open-navigation'], ['home', -100, 'open-quick-note'],
-    ['page', 100, 'open-navigation'], ['page', -100, undefined],
     ['navigation', -100, 'close-navigation'], ['navigation', 100, undefined],
     ['quick-note', 100, 'close-quick-note'], ['quick-note', -100, undefined],
   ] as const)('routes a %s swipe of %s px to %s', (surface, dx, action) => {
     expect(appSwipeAction(surface, dx, 15)).toBe(action);
   });
 
-  it.each(['home', 'page', 'navigation', 'quick-note'] satisfies SwipeSurface[])('ignores short, vertical, and diagonal movement on %s', surface => {
+  it.each(['home', 'navigation', 'quick-note'] satisfies SwipeSurface[])('ignores short, vertical, and diagonal movement on %s', surface => {
     expect(appSwipeAction(surface, -30, 0)).toBeUndefined();
     expect(appSwipeAction(surface, 30, 0)).toBeUndefined();
     expect(appSwipeAction(surface, 0, 160)).toBeUndefined();
     expect(appSwipeAction(surface, -90, 80)).toBeUndefined();
     expect(appSwipeAction(surface, 90, 80)).toBeUndefined();
+  });
+});
+
+describe('home-only swipe routing', () => {
+  it.each(['/settings', '/courses', '/week', '/reflection', '/goals', '/backlog'])('keeps shell gestures off %s', path => {
+    expect(routeSwipeSurface(path, false, false)).toBeUndefined();
+    expect(routeSwipeSurface(path, true, false)).toBeUndefined();
+  });
+
+  it('preserves both home gestures and the two return gestures', () => {
+    expect(routeSwipeSurface('/', false, false)).toBe('home');
+    expect(routeSwipeSurface('/', true, false)).toBe('navigation');
+    expect(routeSwipeSurface('/reflection', false, true)).toBe('quick-note');
   });
 });
 

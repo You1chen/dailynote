@@ -1,6 +1,7 @@
 import type { ActivityEvent } from './settlement';
 import type { GardenKeyEnvelope } from './garden';
 import type { KnowledgeMap, KnowledgeCardLibrary } from './knowledge';
+import type { PreferencesPatch } from './preferences';
 import type {
   DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem,
   TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, ImportantItem,
@@ -34,6 +35,8 @@ export interface StoreShape {
 export interface StorageData extends StoreShape {
   version: 1;
   savedAt: number;
+  /** Optional for legacy saves and internal data-only snapshots. New backups include all fields. */
+  preferences?: PreferencesPatch;
 }
 
 export type AnyStoreTable = keyof StoreShape;

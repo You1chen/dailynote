@@ -4,8 +4,7 @@ import { StaticRouter } from 'react-router-dom/server';
 import HomeAlarm from '../src/components/HomeAlarm';
 import SideNav, { type NavGroup } from '../src/components/SideNav';
 import {
-  alarmFlashState, alarmPauseDeadline, DEFAULT_ALARM_PAUSE_MINUTES, HOME_ALARM_STORAGE_KEY,
-  loadAlarmPreference, saveAlarmPreference,
+  alarmFlashState, alarmPauseDeadline, DEFAULT_ALARM_PAUSE_MINUTES,
 } from '../src/utils/homeAlarm';
 import { navigationBadges, sumBadges } from '../src/utils/navigationBadges';
 
@@ -76,16 +75,7 @@ describe('Home alarm flash preferences', () => {
     }
   });
 
-  it('restores pause and permanent disabling from storage and falls back for malformed values', () => {
-    const values = new Map<string, string>();
-    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: values.set.bind(values) };
-    const paused = { flashDisabled: false, pausedUntil: now + 10_000 };
-    saveAlarmPreference(paused, storage);
-    expect(loadAlarmPreference(storage)).toEqual(paused);
-    expect(alarmFlashState(loadAlarmPreference(storage), now)).toBe('paused');
-    saveAlarmPreference({ flashDisabled: true, pausedUntil: 0 }, storage);
-    expect(alarmFlashState(loadAlarmPreference(storage), now + 10_001)).toBe('disabled');
-    values.set(HOME_ALARM_STORAGE_KEY, '{');
-    expect(alarmFlashState(loadAlarmPreference(storage), now)).toBe('active');
+  it('honors permanent disabling even after the pause deadline', () => {
+    expect(alarmFlashState({ flashDisabled: true, pausedUntil: now - 1 }, now)).toBe('disabled');
   });
 });

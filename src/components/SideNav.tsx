@@ -6,6 +6,7 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import SearchOverlay from './SearchOverlay';
 import { navigationBadges, sumBadges } from '../utils/navigationBadges';
+import { canPreviewAvatar, DEFAULT_AVATAR, isAvatarImage } from '../utils/avatar';
 import './SideNav.css';
 
 export type NavGroup = 'items' | 'planning' | 'data';
@@ -17,6 +18,7 @@ interface Props {
   searchOpen: boolean;
   avatar: string;
   username: string;
+  onPreviewAvatar?: () => void;
   badge?: number;
   ddlBadge?: number;
   importantBadge?: number;
@@ -44,7 +46,7 @@ function NavBadge({ count = 0 }: { count?: number }) {
   return <span className="side-nav-badge" role="img" aria-label={`${count} 项提醒`}>{count}</span>;
 }
 
-export default function SideNav({ open, group, onGroup, searchOpen, avatar, username, badge, ddlBadge, importantBadge, onClose, onHelp, onShowSearch, onCloseSearch, onSelect }: Props) {
+export default function SideNav({ open, group, onGroup, searchOpen, avatar, username, onPreviewAvatar, badge, ddlBadge, importantBadge, onClose, onHelp, onShowSearch, onCloseSearch, onSelect }: Props) {
   const { pathname } = useLocation();
   const navContent = useRef<HTMLDivElement>(null);
   const searchButton = useRef<HTMLButtonElement>(null);
@@ -95,6 +97,9 @@ export default function SideNav({ open, group, onGroup, searchOpen, avatar, user
 
   const appearance = '/settings?section=appearance';
   const currentGroup = groups.find(item => item.id === group);
+  const profileAvatar = avatar || DEFAULT_AVATAR;
+  const canPreview = canPreviewAvatar(profileAvatar) && !!onPreviewAvatar;
+  const avatarFace = isAvatarImage(profileAvatar) ? <img src={profileAvatar} alt="" /> : profileAvatar;
   return (
     <section id="app-navigation" className={`side-nav${open ? ' side-nav--open' : ''}`} role="dialog" aria-label="导航" aria-modal={open || undefined} aria-hidden={!open}>
       <div className="side-nav-scroll" ref={navContent} aria-hidden={searchOpen || undefined}>
@@ -117,11 +122,16 @@ export default function SideNav({ open, group, onGroup, searchOpen, avatar, user
               <div className="side-nav-top">
                 <button ref={searchButton} className="side-nav-search" onClick={onShowSearch} type="button"><Search size={20} aria-hidden="true" />搜索</button>
               </div>
-              <Link className="side-nav-profile" to={appearance} onClick={event => selectLink(event, appearance)}>
-                <span className="side-nav-avatar" aria-hidden="true">{avatar?.startsWith('data:image/') ? <img src={avatar} alt="" /> : avatar || '👤'}</span>
-                <span className="side-nav-identity"><small>ID</small><strong>{username?.trim() || '未设置'}</strong></span>
-                <ChevronRight size={18} className="side-nav-profile-arrow" aria-hidden="true" />
-              </Link>
+              <div className="side-nav-profile">
+                {canPreview && <button type="button" className="side-nav-avatar side-nav-avatar-preview" aria-label="预览头像" aria-haspopup="dialog" onClick={onPreviewAvatar}>
+                  {avatarFace}
+                </button>}
+                <Link className="side-nav-profile-link" to={appearance} onClick={event => selectLink(event, appearance)}>
+                  {!canPreview && <span className="side-nav-avatar" aria-hidden="true">{avatarFace}</span>}
+                  <span className="side-nav-identity"><small>ID</small><strong>{username?.trim() || '未设置'}</strong></span>
+                  <ChevronRight size={18} className="side-nav-profile-arrow" aria-hidden="true" />
+                </Link>
+              </div>
               <div className="side-nav-links side-nav-links--featured">{notesLinks.map(renderItem)}</div>
               <div className="side-nav-directory">
                 {groups.map(({ id, title, icon: Icon, items }) => (

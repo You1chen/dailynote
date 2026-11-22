@@ -17,13 +17,14 @@ import ImportantPage from './pages/ImportantPage';
 import BacklogPage from './pages/BacklogPage';
 import SettlementPage from './pages/Settlement';
 import HelpDialog from './components/HelpDialog';
+import AvatarPreview from './components/AvatarPreview';
 import { BackButtonProvider, useRegisterBackHandler } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import { useBacklogBadge } from './hooks/useBacklog';
 import { useDdlBadge } from './hooks/useDdlBadge';
 import { useImportantBadge } from './hooks/useImportantBadge';
 import { watchServiceWorkerUpdate } from './services/swUpdate';
-import { useAppSwipe, type SwipePreview } from './hooks/useAppSwipe';
+import { routeSwipeSurface, useAppSwipe, type SwipePreview } from './hooks/useAppSwipe';
 import KnowledgeCardCollector from './components/KnowledgeCardCollector';
 import type { QuickCardBackDetail } from './components/KnowledgeCardEditor';
 import HomeAlarm from './components/HomeAlarm';
@@ -48,16 +49,19 @@ function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const routeBack = useRouteBack();
-  const inGarden = location.pathname === '/garden' || location.pathname.startsWith('/garden/');
-  const immersive = inGarden || location.pathname === '/wander';
   const home = location.pathname === '/';
   const quickNote = location.pathname === '/reflection' && !!location.state?.fromHomeQuickNote;
   const marker = location.state?.fullscreenNavigation as { base: Location; group?: NavGroup } | undefined;
-  const navOpen = !!marker;
+  const homeNavigation = home && marker?.base?.pathname === '/' ? marker : undefined;
+  const navOpen = !!homeNavigation;
   const quickBase = location.state?.quickCardBase as Location | undefined;
-  const underlying = marker?.base ?? (quickNote ? quickBase ?? { ...location, pathname: '/', hash: '', search: '', state: null } : location);
+  const underlying = homeNavigation?.base ?? (quickNote ? quickBase ?? { ...location, pathname: '/', hash: '', search: '', state: null } : location);
   const [searchKey, setSearchKey] = useState<string>();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [avatarPreviewKey, setAvatarPreviewKey] = useState<string>();
+  const avatarPreviewOpen = avatarPreviewKey === location.key;
+  const openAvatarPreview = () => setAvatarPreviewKey(location.key);
+  const closeAvatarPreview = () => setAvatarPreviewKey(undefined);
   const searchOpen = navOpen && searchKey === location.key;
   const showNav = useCallback((base: Location, group?: NavGroup) => {
     navigate(`${base.pathname}${base.search}${base.hash}`, {
@@ -65,7 +69,9 @@ function AppShell() {
       preventScrollReset: true,
     });
   }, [navigate]);
-  const openNav = useCallback(() => showNav(underlying), [showNav, underlying]);
+  const openNav = useCallback(() => {
+    if (home && !navOpen) showNav(underlying);
+  }, [home, navOpen, showNav, underlying]);
   const closeNav = useCallback(() => navigate(-1), [navigate]);
   const openSearch = useCallback(() => setSearchKey(location.key), [location.key]);
   const closeSearch = useCallback(() => setSearchKey(undefined), []);
@@ -92,7 +98,7 @@ function AppShell() {
   useEffect(() => {
     if (navOpen) {
       const onKey = (event: KeyboardEvent) => {
-        if (event.key !== 'Escape' || helpOpen) return;
+        if (event.key !== 'Escape' || helpOpen || avatarPreviewOpen) return;
         event.preventDefault();
         event.stopPropagation();
         if (searchOpen) closeSearch();
@@ -106,14 +112,16 @@ function AppShell() {
     }
     if (previouslyOpen.current) opener.current?.focus({ preventScroll: true });
     previouslyOpen.current = false;
-  }, [navOpen, searchOpen, helpOpen, closeNav, closeSearch]);
+  }, [navOpen, searchOpen, helpOpen, avatarPreviewOpen, closeNav, closeSearch]);
 
   useRegisterBackHandler(() => {
+    if (avatarPreviewOpen) { closeAvatarPreview(); return true; }
     if (!navOpen) return false;
+    if (helpOpen) { setHelpOpen(false); return true; }
     if (searchOpen) closeSearch();
     else closeNav();
     return true;
-  }, [navOpen, searchOpen, closeSearch, closeNav], 'overlay');
+  }, [navOpen, searchOpen, helpOpen, avatarPreviewOpen, closeSearch, closeNav], 'overlay');
   useRegisterBackHandler(() => {
     if (home) return false;
     routeBack();
@@ -197,7 +205,9 @@ function AppShell() {
     }
   }
 
-  const swipeSurface = searchOpen || helpOpen || immersive ? undefined : navOpen ? 'navigation' : quickNote ? 'quick-note' : home ? 'home' : 'page';
+  const swipeSurface = searchOpen || helpOpen || avatarPreviewOpen
+    ? undefined
+    : routeSwipeSurface(location.pathname, navOpen, quickNote);
   useAppSwipe({
     context: `${location.key}:${swipeSurface}`,
     // Let a started gesture own its direction, but block new gestures during a settling animation.
@@ -229,13 +239,14 @@ function AppShell() {
 
   return (
     <div ref={swipeShell} className="app-gesture-shell" data-swipe={motion?.action} data-swipe-phase={motion?.phase}>
-      {!immersive && <SideNav open={navOpen} group={marker?.group} onGroup={group => showNav(underlying, group)} searchOpen={searchOpen} avatar={prefs.avatar} username={prefs.username}
+      {home && <SideNav open={navOpen} group={marker?.group} onGroup={group => showNav(underlying, group)} searchOpen={searchOpen} avatar={prefs.avatar} username={prefs.username}
         badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge}
-        onClose={closeNav} onHelp={() => setHelpOpen(true)} onShowSearch={openSearch} onCloseSearch={closeSearch} onSelect={selectRoute} />}
+        onClose={closeNav} onPreviewAvatar={openAvatarPreview} onHelp={() => setHelpOpen(true)} onShowSearch={openSearch} onCloseSearch={closeSearch} onSelect={selectRoute} />}
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {avatarPreviewOpen && <AvatarPreview avatar={prefs.avatar} onClose={closeAvatarPreview} />}
 
       <div ref={page} className="app-page" aria-hidden={navOpen || quickNote || undefined}>
-        {!immersive && !quickNote && <button type="button" ref={opener} className="app-nav-toggle" onClick={openNav}
+        {home && <button type="button" ref={opener} className="app-nav-toggle" onClick={openNav}
           aria-haspopup="dialog" aria-expanded={navOpen} aria-controls="app-navigation">打开导航</button>}
         <div className="app-main">
         <Routes location={underlying}>
@@ -248,7 +259,7 @@ function AppShell() {
           <Route path="/harvest" element={<Navigate to={`/reflection${location.search}`} replace />} />
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/backup" element={<BackupRestorePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={<SettingsPage onPreviewAvatar={openAvatarPreview} />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/week" element={<WeekViewPage />} />
           <Route path="/ddl" element={<DdlPage />} />
@@ -256,7 +267,7 @@ function AppShell() {
           <Route path="/settlement" element={<SettlementPage />} />
         </Routes>
         </div>
-        {!immersive && !quickNote && underlying.pathname !== '/settings' && <TaskBall />}
+        {home && <TaskBall />}
 
         {updateReady && (
           <div className="app-update-bar" role="status">

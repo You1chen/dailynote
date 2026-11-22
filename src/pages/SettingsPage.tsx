@@ -7,9 +7,10 @@ import { useRouteBack } from '../hooks/useRouteBack';
 import AvatarCropper from '../components/AvatarCropper';
 import CourseTimeSettings from '../components/CourseTimeSettings';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { canPreviewAvatar, DEFAULT_AVATAR, isAvatarImage } from '../utils/avatar';
 import './SettingsPage.css';
 
-const AVATARS = ['👤','😊','🎯','💪','🧠','🌟','🔥','💡','📚','✏️','🎨','🎵','🏃','🌱','☕','🐱','🐶','🦊','🌙','⭐','🚀','💎','🎉','🌈'];
+const AVATARS = [DEFAULT_AVATAR,'😊','🎯','💪','🧠','🌟','🔥','💡','📚','✏️','🎨','🎵','🏃','🌱','☕','🐱','🐶','🦊','🌙','⭐','🚀','💎','🎉','🌈'];
 const THEMES: {value: ThemeMode; label: string; icon: string}[] = [{value:'light',label:'浅色',icon:'☀️'},{value:'dark',label:'深色',icon:'🌙'},{value:'system',label:'跟随系统',icon:'◐'}];
 const SECTIONS = [
   {id:'appearance',title:'个人与外观',description:'头像、名字与明暗主题',icon:Palette},
@@ -18,7 +19,7 @@ const SECTIONS = [
   {id:'todo',title:'TODO',description:'计时与移入遗留的确认',icon:ListTodo},
   {id:'data',title:'数据与备份',description:'导入导出、存储目录与偏好恢复',icon:Database},
 ];
-export default function SettingsPage() {
+export default function SettingsPage({ onPreviewAvatar }: { onPreviewAvatar?: () => void } = {}) {
   const navigate = useNavigate();
   const backFromSettings = useRouteBack();
   const [params, setParams] = useSearchParams();
@@ -29,8 +30,20 @@ export default function SettingsPage() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetNotice, setResetNotice] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const back = () => { if (cropperFile) setCropperFile(null); else if (confirmReset) setConfirmReset(false); else if (section) setParams({}, { replace: true }); else backFromSettings(); };
-  useRegisterBackHandler(() => { back(); return true; }, [section?.id, cropperFile, confirmReset, backFromSettings]);
+  const avatar = prefs.avatar || DEFAULT_AVATAR;
+  const canPreview = canPreviewAvatar(avatar) && !!onPreviewAvatar;
+  const avatarPickerOpen = section?.id === 'appearance' && avatarPicker;
+  const avatarFace = isAvatarImage(avatar)
+    ? <img className="settings-avatar-img" src={avatar} alt="" />
+    : <span className="settings-avatar-emoji" aria-hidden="true">{avatar}</span>;
+  const back = () => {
+    if (cropperFile) setCropperFile(null);
+    else if (confirmReset) setConfirmReset(false);
+    else if (avatarPickerOpen) setAvatarPicker(false);
+    else if (section) setParams({}, { replace: true });
+    else backFromSettings();
+  };
+  useRegisterBackHandler(() => { back(); return true; }, [section?.id, cropperFile, confirmReset, avatarPickerOpen, backFromSettings]);
   const toggle = (label: string, hint: string, checked: boolean, onChange: (value: boolean) => void) => <div className="settings-field settings-toggle-row"><div><span>{label}</span><p className="settings-field-hint">{hint}</p></div><label className="settings-switch"><input aria-label={label} type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/><span className="settings-switch-slider"/></label></div>;
   return <div className="app-container settings-page">
     <header className="page-header"><button className="btn btn-ghost btn-icon" aria-label={section ? '返回设置首页' : '返回'} onClick={back}><ArrowLeft size={22}/></button><h1 className="page-title">{section?.title ?? '设置'}</h1><span className="settings-autosave">自动保存</span></header>
@@ -41,7 +54,31 @@ export default function SettingsPage() {
     </>}
     {section?.id==='appearance' && <>
       <p className="settings-intro">给这个每天见面的地方，留一点自己的样子。</p>
-      <section className="settings-section"><h2 className="settings-section-title">个人名片</h2><div className="card"><div className="settings-profile"><button className="settings-avatar-btn" aria-label="更换头像" onClick={()=>setAvatarPicker(!avatarPicker)}>{prefs.avatar.startsWith('data:image') ? <img className="settings-avatar-img" src={prefs.avatar} alt="头像"/> : <span className="settings-avatar-emoji">{prefs.avatar}</span>}</button><div className="settings-username"><label className="label" htmlFor="settings-name">怎么称呼你</label><input id="settings-name" className="input" value={prefs.username} maxLength={20} placeholder="你的名字" onChange={e=>updatePrefs({username:e.target.value})}/></div></div>{avatarPicker && <div className="settings-avatar-picker"><button className="settings-avatar-import-btn" onClick={()=>fileInput.current?.click()}><Camera size={16}/>从图片导入</button>{AVATARS.map(emoji=><button key={emoji} className={`settings-avatar-option ${prefs.avatar===emoji?'settings-avatar-option--active':''}`} onClick={()=>{updatePrefs({avatar:emoji});setAvatarPicker(false);}}>{emoji}</button>)}</div>}</div></section>
+      <section className="settings-section">
+        <h2 className="settings-section-title">个人名片</h2>
+        <div className="card">
+          <div className="settings-profile">
+            {canPreview
+              ? <button type="button" className="settings-avatar settings-avatar-preview-trigger" aria-label="预览头像" aria-haspopup="dialog" onClick={onPreviewAvatar}>{avatarFace}</button>
+              : <span className="settings-avatar" role="img" aria-label="头像">{avatarFace}</span>}
+            <div className="settings-username">
+              <label className="label" htmlFor="settings-name">怎么称呼你</label>
+              <input id="settings-name" className="input" value={prefs.username} maxLength={20} placeholder="你的名字" onChange={event => updatePrefs({ username: event.target.value })} />
+            </div>
+          </div>
+          <button type="button" className="settings-avatar-change" aria-expanded={avatarPickerOpen} aria-controls="settings-avatar-picker" onClick={() => setAvatarPicker(open => !open)}>
+            <Camera size={16} aria-hidden="true" />更换头像
+          </button>
+          <div id="settings-avatar-picker" className="settings-avatar-picker" hidden={!avatarPickerOpen}>
+            <button type="button" className="settings-avatar-import-btn" onClick={() => fileInput.current?.click()}><Camera size={16} aria-hidden="true" />从图片导入</button>
+            {AVATARS.map(emoji => (
+              <button type="button" key={emoji} className={`settings-avatar-option${avatar === emoji ? ' settings-avatar-option--active' : ''}`} aria-pressed={avatar === emoji} onClick={() => { updatePrefs({ avatar: emoji }); setAvatarPicker(false); }}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
       <section className="settings-section"><h2 className="settings-section-title">明暗主题</h2><div className="card settings-theme-row">{THEMES.map(t=><button key={t.value} className={`settings-theme-chip ${prefs.theme===t.value?'settings-theme-chip--active':''}`} aria-label={t.label} aria-pressed={prefs.theme===t.value} onClick={()=>updatePrefs({theme:t.value})}><span className="settings-theme-icon">{t.icon}</span>{t.label}</button>)}</div></section>
     </>}
     {section?.id==='schedule' && <>

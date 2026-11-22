@@ -20,6 +20,7 @@
  *     important.json                 重要的事
  *     backlog.json                   遗留问题（backlog）
  *     taskboard.json                 任务树（单记录，id 恒 1）
+ *     preferences.json               应用偏好与个人资料（单个对象）
  *
  * 写盘策略：
  *   - mutate() 先对每张表做指纹快照，变更后对比，只写"变脏"的文件
@@ -30,7 +31,8 @@
 
 import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, TaskBoard, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
-import { loadCourseTimeCombinations, saveCourseTimeCombinations } from '../utils/courseTimeCombinations';
+import type { PreferencesPatch, UserPreferences } from '../types/preferences';
+import { defaultPreferences, LEGACY_HOME_ALARM_KEY, LEGACY_PREFERENCES_KEY, mergePreferences, normalizeCourseTimeCombinations, parsePreferencesPatch, PREFERENCES_CHANGED } from '../utils/preferenceValues';
 import type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { CATEGORY_FILES, CATEGORY_NAMES, CATEGORY_TABLES, DEFAULT_WRITE_ORDER, NUMERIC_TABLES, emptyStore } from './storeSchema';
 export type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
@@ -52,6 +54,7 @@ export const OLD_SINGLE_REL = 'dailynote-data.json';
 function oldSingleRel(): string {
   return isCapacitor() ? 'dailynote-data.json' : 'dailynote-data';
 }
+const PREFERENCES_FILE = 'preferences.json';
 const DAY_DIR = 'days';
 const DAY_TYPES = ['reflections', 'harvests', 'tasks', 'activity'] as const;
 function dayPlan(date: string): string {
@@ -129,7 +132,11 @@ function countData(): number {
 // ============ 路径管理 ============
 
 export function getStoragePath(): string {
-  return localStorage.getItem('dailynote_storage_path') || 'Documents/DailyNote';
+  try {
+    return localStorage.getItem('dailynote_storage_path') || 'Documents/DailyNote';
+  } catch {
+    return 'Documents/DailyNote';
+  }
 }
 
 export function setStoragePath(path: string): void {
@@ -394,6 +401,11 @@ function parseStorageData(text: string): StorageData | null {
     return {
       version: 1,
       savedAt: typeof data.savedAt === 'number' ? data.savedAt : 0,
+      preferences: parsePreferencesPatch(data.preferences) ?? (
+        Array.isArray(data.courseTimeCombinations)
+          ? { courseTimeCombinations: normalizeCourseTimeCombinations(data.courseTimeCombinations) }
+          : undefined
+      ),
       dailyPlans: data.dailyPlans,
       longTermGoals: Array.isArray(data.longTermGoals) ? data.longTermGoals : [],
       reflections: Array.isArray(data.reflections) ? data.reflections : [],
@@ -669,11 +681,103 @@ async function readBackendAt(path: string): Promise<StorageData | 'CORRUPT' | nu
 
 let persistQueue: Promise<unknown> = Promise.resolve();
 let lastPersistError: string | null = null;
+let preferences = defaultPreferences();
+let preferencesConfigured = false;
+const preferenceListeners = new Set<() => void>();
+
+export function getPreferences(): UserPreferences {
+  return preferences;
+}
+
+export function subscribePreferences(listener: () => void): () => void {
+  preferenceListeners.add(listener);
+  return () => { preferenceListeners.delete(listener); };
+}
+
+function publishPreferences(next: UserPreferences, configured: boolean): void {
+  preferences = next;
+  preferencesConfigured = configured;
+  for (const listener of preferenceListeners) listener();
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new Event(PREFERENCES_CHANGED));
+  }
+}
+
+function preferencesWrite(value = preferences): FileWrite {
+  return { relPath: PREFERENCES_FILE, json: JSON.stringify(value, null, 2), table: 'preferences' };
+}
+
+function writePreferences(value = preferences): Promise<boolean> {
+  return enqueue(() => ({ writes: [preferencesWrite(value)], deletes: [] }));
+}
+
+function replacePreferences(next: UserPreferences): Promise<boolean> {
+  const write = writePreferences(next);
+  publishPreferences(next, true);
+  return write;
+}
+
+export function updatePreferences(partial: PreferencesPatch): Promise<boolean> {
+  const patch = parsePreferencesPatch(partial);
+  return patch ? replacePreferences(mergePreferences(preferences, patch)) : Promise.resolve(true);
+}
+
+export function resetPreferences(): Promise<boolean> {
+  return replacePreferences(defaultPreferences());
+}
+
+function readLegacyPreference(key: string): unknown {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? 'null');
+  } catch {
+    return undefined;
+  }
+}
+
+function removeLegacyPreference(key: string): void {
+  try { localStorage.removeItem(key); } catch { /* Backing JSON is already authoritative. */ }
+}
+
+async function readSavedPreferences(dir: string): Promise<PreferencesPatch | 'CORRUPT' | null> {
+  const json = await readFile(dir, PREFERENCES_FILE);
+  if (json == null) return null;
+  try {
+    const value: unknown = JSON.parse(json);
+    if (value && typeof value === 'object' && !Array.isArray(value)) return parsePreferencesPatch(value) ?? {};
+  } catch { /* Report corruption without preventing access to other data. */ }
+  console.warn('偏好设置文件损坏:', dir);
+  return 'CORRUPT';
+}
+
+async function initializePreferences(fromOldBackup?: PreferencesPatch): Promise<boolean> {
+  const saved = await readSavedPreferences(getStoragePath());
+  const defaults = defaultPreferences();
+  const legacy = parsePreferencesPatch(readLegacyPreference(LEGACY_PREFERENCES_KEY));
+  const legacyAlarm = parsePreferencesPatch({ homeAlarm: readLegacyPreference(LEGACY_HOME_ALARM_KEY) })?.homeAlarm;
+  const hasSaved = saved !== null && saved !== 'CORRUPT';
+  const migrateAlarm = legacyAlarm && !fromOldBackup?.homeAlarm && (!hasSaved || !saved.homeAlarm);
+  const fromLegacy = mergePreferences(defaults, {
+    ...(!hasSaved ? legacy : undefined),
+    homeAlarm: migrateAlarm ? legacyAlarm : undefined,
+  });
+  const next = mergePreferences(fromLegacy, hasSaved ? saved : fromOldBackup ?? {});
+
+  if ((saved === null && (legacy || legacyAlarm || fromOldBackup)) || (hasSaved && migrateAlarm)) {
+    if (!(await replacePreferences(next))) return true;
+  } else {
+    publishPreferences(next, hasSaved);
+  }
+  if (saved !== 'CORRUPT') {
+    if (legacy) removeLegacyPreference(LEGACY_PREFERENCES_KEY);
+    if (legacyAlarm) removeLegacyPreference(LEGACY_HOME_ALARM_KEY);
+  }
+  return saved !== null || !!legacy || !!legacyAlarm;
+}
 
 interface FileWrite {
   relPath: string;
   json: string;
-  table: AnyStoreTable;
+  table: AnyStoreTable | 'preferences';
 }
 
 
@@ -689,7 +793,7 @@ function enqueue(build: () => { writes: FileWrite[]; deletes: string[] }, cleanO
   const dir = getStoragePath();
   const { writes, deletes } = build();
   const job = persistQueue.then(async () => {
-    if (writes.length || deletes.length || cleanOrphans) {
+    if (writes.some(write => write.table !== 'preferences') || deletes.length || cleanOrphans) {
       // A reload can interrupt the debounced refresh. Invalidate the old snapshot
       // before changing any backing file, even if the file names do not change.
       if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
@@ -752,6 +856,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
   for (const { table, file } of CATEGORY_TABLES) {
     writes.push({ relPath: file, json: JSON.stringify(store[table], null, 2), table });
   }
+  if (preferencesConfigured) writes.push(preferencesWrite());
   writes.sort((a, b) => Number(b.table === 'gardenKeys') - Number(a.table === 'gardenKeys'));
   return { writes, deletes: [] };
 }
@@ -1106,6 +1211,8 @@ export async function initStore(): Promise<number> {
 
   clearStore();
   if (backend) applyData(backend);
+  // Preferences stay independent of the startup data snapshot so edits are read on every launch.
+  const hadPreferences = await initializePreferences(oldFormat ? backend?.preferences : undefined);
 
   const legacyHasData = legacy ? Object.values(legacy).some(arr => Array.isArray(arr) && arr.length > 0) : false;
   if (legacyHasData && legacy) mergeLegacy(legacy);
@@ -1134,7 +1241,7 @@ export async function initStore(): Promise<number> {
   }
 
   const total = countData();
-  if (!hasPreviousState && !hadLegacy) return -1;
+  if (!hasPreviousState && !hadLegacy && !hadPreferences) return -1;
   return total;
 }
 
@@ -1180,7 +1287,7 @@ export async function importJSONIntoStore(json: string): Promise<number> {
     }
   }
   let count = 0;
-  await mutate(() => {
+  const persisted = await mutate(() => {
     bindLegacyCourses(store.semester[0]?.startDate);
     count = mergeIntoStore(data);
     bindLegacyCourses(store.semester[0]?.startDate);
@@ -1188,10 +1295,9 @@ export async function importJSONIntoStore(json: string): Promise<number> {
     recoverTimestampedActivity(store);
   }, { skipActivity: true });
   resetNextId();
-  // Older backups omit preferences: preserve this device's combinations in that case.
-  const imported = JSON.parse(trimmed);
-  if (Array.isArray(imported.courseTimeCombinations)) {
-    saveCourseTimeCombinations(imported.courseTimeCombinations);
+  if (!persisted) throw new Error(getLastPersistError() ?? '导入数据写入失败');
+  if (data.preferences && !(await updatePreferences(data.preferences))) {
+    throw new Error(getLastPersistError() ?? '偏好设置写入失败');
   }
   return count;
 }
@@ -1199,7 +1305,12 @@ export async function importJSONIntoStore(json: string): Promise<number> {
 /** 当前内存数据的 JSON 字符串（手动导出 / 备份包） */
 export function exportJSON(): string {
   if (pendingGardenEncryption()) throw new Error('请先进入秘密花园，验证原密码并完成加密迁移，再导出备份');
-  return JSON.stringify({ ...snapshot(), courseTimeCombinations: loadCourseTimeCombinations() }, null, 2);
+  return JSON.stringify({
+    ...snapshot(),
+    preferences,
+    // Older releases restore only this top-level field.
+    courseTimeCombinations: preferences.courseTimeCombinations,
+  }, null, 2);
 }
 
 function backupFileName(): string {
@@ -1241,14 +1352,18 @@ export async function exportBackupFile(): Promise<string> {
 /** 后端是否已有数据（供首次向导 / 恢复提示使用） */
 export async function storeHasData(): Promise<boolean> {
   const { data } = await readBackend();
-  return data ? hasAny(data) : false;
+  if (data && (hasAny(data) || data.preferences)) return true;
+  const saved = await readSavedPreferences(getStoragePath());
+  return !!saved && saved !== 'CORRUPT';
 }
 
 /** 探测某路径是否已有数据（不切换当前路径）。返回 false 也可能表示该处文件损坏。 */
 export async function hasDataAt(path: string): Promise<boolean> {
   const probe = await readBackendAt(path);
-  if (!probe || probe === 'CORRUPT') return false;
-  return hasAny(probe);
+  if (probe === 'CORRUPT') return false;
+  if (probe && (hasAny(probe) || probe.preferences)) return true;
+  const saved = await readSavedPreferences(path);
+  return !!saved && saved !== 'CORRUPT';
 }
 
 /** 列出 Documents 根目录下的子目录，供「浏览已有目录」点选。
@@ -1280,7 +1395,9 @@ export async function changeStoragePath(path: string): Promise<{ recovered: bool
   await flush();
   const probe = await readBackendAt(path);
   if (probe === 'CORRUPT') throw new Error('目标位置存在文件但已损坏，未做任何更改');
-  const hasData = !!probe && hasAny(probe);
+  const savedPreferences = await readSavedPreferences(path);
+  if (savedPreferences === 'CORRUPT') throw new Error('目标位置的偏好设置文件已损坏，未做任何更改');
+  const hasData = !!savedPreferences || (!!probe && (hasAny(probe) || !!probe.preferences));
 
   setStoragePath(path);
 
@@ -1317,6 +1434,9 @@ export async function _resetForTest(): Promise<void> {
   if (snapTimer) clearTimeout(snapTimer);
   snapTimer = null;
   clearStore();
+  preferences = defaultPreferences();
+  preferencesConfigured = false;
+  preferenceListeners.clear();
   for (const table of Object.keys(nextId) as NumericTable[]) nextId[table] = 1;
   persistQueue = Promise.resolve();
   lastPersistError = null;

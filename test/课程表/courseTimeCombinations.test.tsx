@@ -126,10 +126,11 @@ describe('课程时间组合', () => {
 
   it('persists custom and empty combinations through backup import/export; old backups retain local choices', async () => {
     const custom = [{ startTime: '12:10', endTime: '13:20' }];
-    saveCourseTimeCombinations(custom);
+    await saveCourseTimeCombinations(custom);
     const backup = exportJSON();
+    expect(JSON.parse(backup).preferences.courseTimeCombinations).toEqual(custom);
     expect(JSON.parse(backup).courseTimeCombinations).toEqual(custom);
-    saveCourseTimeCombinations([]);
+    await saveCourseTimeCombinations([]);
     await importJSONIntoStore(backup);
     expect(loadCourseTimeCombinations()).toEqual(custom);
     await importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [] }));

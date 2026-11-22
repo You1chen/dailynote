@@ -45,6 +45,10 @@ import {
   flush,
   exportBackupFile,
   _resetForTest,
+  changeStoragePath,
+  getPreferences,
+  importJSONIntoStore,
+  updatePreferences,
 } from '../../src/services/store';
 import * as db from '../../src/db';
 import type { DailyPlan, LongTermGoal } from '../../src/types';
@@ -74,6 +78,27 @@ beforeEach(async () => {
 });
 
 describe('Android 原生写入编码', () => {
+  it('migrates the profile into UTF-8 preferences JSON and restores a profile-only location', async () => {
+    const profile = { username: '昵称 🚀', avatar: 'data:image/png;base64,aW1hZ2U=' };
+    localStorage.setItem('dailynote_preferences', JSON.stringify(profile));
+    expect(await initStore()).toBe(0);
+    expect(localStorage.getItem('dailynote_preferences')).toBeNull();
+    expect(writeFileCalls.at(-1)).toMatchObject({ path: 'DailyNote/preferences.json', encoding: 'utf8' });
+    expect(JSON.parse(memFiles.get('DailyNote/preferences.json')!)).toMatchObject(profile);
+
+    const backupPath = await exportBackupFile();
+    const backup = memFiles.get(backupPath.replace('Documents/', ''))!;
+    await _resetForTest();
+    expect(await initStore()).toBe(0);
+    expect(getPreferences()).toMatchObject(profile);
+
+    memFiles.set('OtherNotes/preferences.json', JSON.stringify({ username: '另一个目录', avatar: '🦊' }));
+    expect(await changeStoragePath('Documents/OtherNotes')).toEqual({ recovered: true, count: 0 });
+    expect(getPreferences()).toMatchObject({ username: '另一个目录', avatar: '🦊' });
+    expect(await updatePreferences({ avatar: '🌙' })).toBe(true);
+    expect(await importJSONIntoStore(backup)).toBe(0);
+    expect(JSON.parse(memFiles.get('OtherNotes/preferences.json')!)).toMatchObject(profile);
+  });
   it('增量写盘必须带 encoding: utf8，且 data 是 JSON 文本本身（不是 base64）', async () => {
     await db.saveGoal(makeGoal('编码回归'));
     await flush();

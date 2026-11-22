@@ -1,6 +1,12 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-export type SwipeSurface = 'page' | 'home' | 'navigation' | 'quick-note';
+export type SwipeSurface = 'home' | 'navigation' | 'quick-note';
+
+export function routeSwipeSurface(pathname: string, navigationOpen: boolean, quickNoteOpen: boolean): SwipeSurface | undefined {
+  if (quickNoteOpen) return 'quick-note';
+  if (pathname !== '/') return undefined;
+  return navigationOpen ? 'navigation' : 'home';
+}
 export type SwipeAction = 'open-navigation' | 'close-navigation' | 'open-quick-note' | 'close-quick-note';
 export interface SwipePreview { action: SwipeAction; distance: number }
 

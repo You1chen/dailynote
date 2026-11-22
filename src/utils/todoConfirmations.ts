@@ -1,30 +1,7 @@
-import { PREFERENCES_KEY } from './courseTimeCombinations';
+import { getPreferences } from '../services/store';
+export type { TodoConfirmations } from '../types/preferences';
+export { DEFAULT_TODO_CONFIRMATIONS } from './preferenceValues';
 
-export interface TodoConfirmations {
-  startTimer: boolean;
-  stopTimer: boolean;
-  moveToBacklog: boolean;
-}
-
-export const DEFAULT_TODO_CONFIRMATIONS: TodoConfirmations = {
-  startTimer: true,
-  stopTimer: true,
-  moveToBacklog: true,
-};
-
-export function normalizeTodoConfirmations(input: Partial<TodoConfirmations> | null | undefined): TodoConfirmations {
-  return {
-    startTimer: input?.startTimer !== false,
-    stopTimer: input?.stopTimer !== false,
-    moveToBacklog: input?.moveToBacklog !== false,
-  };
-}
-
-export function readTodoConfirmations(): TodoConfirmations {
-  try {
-    const raw = localStorage.getItem(PREFERENCES_KEY);
-    return normalizeTodoConfirmations(raw ? JSON.parse(raw)?.todoConfirmations : undefined);
-  } catch {
-    return DEFAULT_TODO_CONFIRMATIONS;
-  }
+export function readTodoConfirmations() {
+  return getPreferences().todoConfirmations;
 }

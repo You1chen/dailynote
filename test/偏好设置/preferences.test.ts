@@ -1,207 +1,101 @@
-/**
- * 偏好设置测试
- *
- * 验证：
- *   1. 偏好默认值正确
- *   2. 新字段（theme, username, avatar）存在且有默认值
- *   3. localStorage 存取正确
- *   4. 深色主题 CSS 变量完整性
- *   5. 主题应用逻辑
- */
+import 'fake-indexeddb/auto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initializeStartup } from '../../src/services/startup';
+import { _resetForTest, exportJSON, getPreferences, importJSONIntoStore, initStore, resetPreferences, storeHasData, updatePreferences } from '../../src/services/store';
+import type { UserPreferences } from '../../src/types/preferences';
+import { defaultPreferences, LEGACY_HOME_ALARM_KEY, LEGACY_PREFERENCES_KEY } from '../../src/utils/preferenceValues';
+import { loadCourseTimeCombinations } from '../../src/utils/courseTimeCombinations';
+import { readTodoConfirmations } from '../../src/utils/todoConfirmations';
 
-import { describe, it, expect, beforeEach } from 'vitest';
-
-// 简单的内存存储模拟 localStorage
-let store: Record<string, string> = {};
-const mockStorage = {
-  getItem(key: string): string | null {
-    return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
-  },
-  setItem(key: string, value: string): void {
-    store[key] = value;
-  },
-  removeItem(key: string): void {
-    delete store[key];
-  },
-  clear(): void {
-    store = {};
-  },
+const custom: UserPreferences = {
+  sleepStart: '22:15', sleepEnd: '06:45', hideSleepHours: false, defaultDuration: 30,
+  hourHeight: 80, futureOnly: true, theme: 'dark', username: '小明 🚀',
+  avatar: 'data:image/webp;base64,UklGRg==', courseTimeCombinations: [{ startTime: '12:20', endTime: '13:30' }],
+  todoConfirmations: { startTimer: false, stopTimer: true, moveToBacklog: false },
+  homeAlarm: { flashDisabled: false, pausedUntil: 1_900_000_000_000 },
 };
 
-const STORAGE_KEY = 'dailynote_preferences';
-
-interface UserPreferences {
-  sleepStart: string;
-  sleepEnd: string;
-  hideSleepHours: boolean;
-  defaultDuration: number;
-  hourHeight: number;
-  theme: 'light' | 'dark' | 'system';
-  username: string;
-  avatar: string;
-}
-
-const DEFAULTS: UserPreferences = {
-  sleepStart: '23:00',
-  sleepEnd: '07:00',
-  hideSleepHours: true,
-  defaultDuration: 60,
-  hourHeight: 64,
-  theme: 'system',
-  username: '',
-  avatar: '👤',
-};
-
-function loadPrefs(): UserPreferences {
-  try {
-    const raw = mockStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return { ...DEFAULTS, ...parsed };
-    }
-  } catch { /* ignore */ }
-  return { ...DEFAULTS };
-}
-
-function savePrefs(prefs: UserPreferences): void {
-  mockStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-}
-
-function applyTheme(theme: 'light' | 'dark' | 'system', prefersDark: boolean): 'light' | 'dark' {
-  if (theme === 'system') {
-    return prefersDark ? 'dark' : 'light';
-  }
-  return theme;
-}
-
-describe('偏好设置 — 默认值', () => {
-  beforeEach(() => {
-    mockStorage.clear();
+let legacy: Map<string, string>;
+beforeEach(async () => {
+  legacy = new Map();
+  vi.stubGlobal('localStorage', {
+    get length() { return legacy.size; },
+    key: (index: number) => [...legacy.keys()][index] ?? null,
+    getItem: (key: string) => legacy.get(key) ?? null,
+    removeItem: (key: string) => { legacy.delete(key); },
   });
-
-  it('首次加载应返回默认值', () => {
-    const prefs = loadPrefs();
-    expect(prefs.sleepStart).toBe('23:00');
-    expect(prefs.sleepEnd).toBe('07:00');
-    expect(prefs.hideSleepHours).toBe(true);
-    expect(prefs.defaultDuration).toBe(60);
-    expect(prefs.hourHeight).toBe(64);
-  });
-
-  it('新字段 theme 默认值应为 system', () => {
-    const prefs = loadPrefs();
-    expect(prefs.theme).toBe('system');
-  });
-
-  it('新字段 username 默认值应为空字符串', () => {
-    const prefs = loadPrefs();
-    expect(prefs.username).toBe('');
-  });
-
-  it('新字段 avatar 默认值应为 👤', () => {
-    const prefs = loadPrefs();
-    expect(prefs.avatar).toBe('👤');
-  });
+  await _resetForTest();
 });
+afterEach(() => vi.unstubAllGlobals());
 
-describe('偏好设置 — localStorage 存取', () => {
-  beforeEach(() => {
-    mockStorage.clear();
-  });
-
-  it('保存后再加载应返回保存的值', () => {
-    const custom: UserPreferences = {
-      ...DEFAULTS,
-      sleepStart: '22:00',
-      username: '测试用户',
-      avatar: '🌟',
-      theme: 'dark',
+async function preferencesFile(): Promise<UserPreferences | undefined> {
+  return await new Promise((resolve, reject) => {
+    const req = indexedDB.open('dailynote_kv', 1);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const query = db.transaction('kv', 'readonly').objectStore('kv').get('preferences.json');
+      query.onsuccess = () => { db.close(); resolve(query.result === undefined ? undefined : JSON.parse(query.result)); };
+      query.onerror = () => { db.close(); reject(query.error); };
     };
-    savePrefs(custom);
-    const loaded = loadPrefs();
-    expect(loaded.sleepStart).toBe('22:00');
-    expect(loaded.username).toBe('测试用户');
-    expect(loaded.avatar).toBe('🌟');
-    expect(loaded.theme).toBe('dark');
+  });
+}
+
+const importBackup = (extras: object) => importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [], ...extras }));
+
+describe('Web preference storage', () => {
+  it('keeps fresh install defaults in memory and allows onboarding', async () => {
+    expect(await initializeStartup()).toEqual({ phase: 'ready', count: -1, showOnboarding: true });
+    expect(getPreferences()).toMatchObject({ theme: 'system', username: '', avatar: '👤', defaultDuration: 60 });
+    expect(await preferencesFile()).toBeUndefined();
   });
 
-  it('部分保存时应合并默认值', () => {
-    const partial = { username: 'Alice', theme: 'dark' as const };
-    mockStorage.setItem(STORAGE_KEY, JSON.stringify(partial));
-    const loaded = loadPrefs();
-    expect(loaded.username).toBe('Alice');
-    expect(loaded.theme).toBe('dark');
-    // 未保存的字段应用默认值
-    expect(loaded.sleepStart).toBe('23:00');
-    expect(loaded.hourHeight).toBe(64);
+  it('migrates all legacy localStorage settings before startup and removes the old key', async () => {
+    const { homeAlarm, ...oldPrefs } = custom;
+    legacy.set(LEGACY_PREFERENCES_KEY, JSON.stringify(oldPrefs));
+    legacy.set(LEGACY_HOME_ALARM_KEY, JSON.stringify(homeAlarm));
+    expect(await initializeStartup()).toEqual({ phase: 'ready', count: 0, showOnboarding: false });
+    expect(getPreferences()).toEqual(custom);
+    expect(await preferencesFile()).toEqual(custom);
+    expect(legacy.has(LEGACY_PREFERENCES_KEY)).toBe(false);
+    expect(legacy.has(LEGACY_HOME_ALARM_KEY)).toBe(false);
+    expect(await storeHasData()).toBe(true);
+
+    legacy.set(LEGACY_PREFERENCES_KEY, '{"username":"stale local value","avatar":"🐱"}');
+    expect(await initStore()).toBe(0);
+    expect(getPreferences()).toEqual(custom);
+    expect(legacy.has(LEGACY_PREFERENCES_KEY)).toBe(false);
   });
 
-  it('旧版数据（无新字段）加载时应补充默认值', () => {
-    const oldData = {
-      sleepStart: '23:00',
-      sleepEnd: '06:00',
-      hideSleepHours: true,
-      defaultDuration: 30,
-      hourHeight: 48,
-    };
-    mockStorage.setItem(STORAGE_KEY, JSON.stringify(oldData));
-    const loaded = loadPrefs();
-    expect(loaded.hourHeight).toBe(48); // 旧值保留
-    expect(loaded.theme).toBe('system'); // 新字段补充默认
-    expect(loaded.username).toBe('');
-    expect(loaded.avatar).toBe('👤');
-  });
-});
-
-describe('偏好设置 — 主题应用', () => {
-  it('light 模式始终返回 light', () => {
-    expect(applyTheme('light', true)).toBe('light');
-    expect(applyTheme('light', false)).toBe('light');
+  it('round trips all fields through a backup to an empty Web store', async () => {
+    await initStore();
+    expect(await updatePreferences(custom)).toBe(true);
+    const backup = exportJSON();
+    expect(JSON.parse(backup).preferences).toEqual(custom);
+    await _resetForTest();
+    await initStore();
+    expect(getPreferences()).toEqual(defaultPreferences());
+    expect(await importJSONIntoStore(backup)).toBe(0);
+    expect(getPreferences()).toEqual(custom);
+    expect(await preferencesFile()).toEqual(custom);
+    expect(loadCourseTimeCombinations()).toEqual(custom.courseTimeCombinations);
+    expect(readTodoConfirmations()).toEqual(custom.todoConfirmations);
+    expect(await initStore()).toBe(0);
+    expect(getPreferences()).toEqual(custom);
   });
 
-  it('dark 模式始终返回 dark', () => {
-    expect(applyTheme('dark', true)).toBe('dark');
-    expect(applyTheme('dark', false)).toBe('dark');
-  });
-
-  it('system 模式在系统深色时返回 dark', () => {
-    expect(applyTheme('system', true)).toBe('dark');
-  });
-
-  it('system 模式在系统浅色时返回 light', () => {
-    expect(applyTheme('system', false)).toBe('light');
-  });
-});
-
-describe('偏好设置 — 边界情况', () => {
-  beforeEach(() => {
-    mockStorage.clear();
-  });
-
-  it('存储损坏时应返回默认值', () => {
-    mockStorage.setItem(STORAGE_KEY, 'not-valid-json{{{');
-    const loaded = loadPrefs();
-    expect(loaded).toEqual(DEFAULTS);
-  });
-
-  it('null 值不应覆盖默认值', () => {
-    mockStorage.setItem(STORAGE_KEY, JSON.stringify({ username: null, theme: null }));
-    const loaded = loadPrefs();
-    expect(loaded.username).toBe(null); // null is a valid value
-    expect(loaded.theme).toBe(null);
-  });
-
-  it('用户名应支持 emoji', () => {
-    savePrefs({ ...DEFAULTS, username: '小明 🚀' });
-    const loaded = loadPrefs();
-    expect(loaded.username).toBe('小明 🚀');
-  });
-
-  it('头像应支持任意 emoji', () => {
-    const avatars = ['👤', '🐱', '🌟', '🚀', '💎'];
-    for (const av of avatars) {
-      savePrefs({ ...DEFAULTS, avatar: av });
-      expect(loadPrefs().avatar).toBe(av);
-    }
+  it('preserves unrelated choices for old or partial backups and accepts explicitly empty values', async () => {
+    await updatePreferences(custom);
+    await importBackup({});
+    expect(getPreferences()).toEqual(custom);
+    await importBackup({ courseTimeCombinations: [] });
+    expect(getPreferences()).toEqual({ ...custom, courseTimeCombinations: [] });
+    await importBackup({ preferences: { username: '', avatar: '🐱', theme: null, defaultDuration: -1, todoConfirmations: { stopTimer: false } } });
+    expect(getPreferences()).toEqual({
+      ...custom, username: '', avatar: '🐱', courseTimeCombinations: [],
+      todoConfirmations: { startTimer: false, stopTimer: false, moveToBacklog: false },
+    });
+    await resetPreferences();
+    expect(await preferencesFile()).toEqual(defaultPreferences());
   });
 });
