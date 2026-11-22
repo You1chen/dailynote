@@ -1,0 +1,222 @@
+/* ============ 课程表页面（去棱角版） ============ */
+
+.courses-warn {
+  font-size: var(--font-sm);
+  color: var(--color-danger);
+}
+
+/* ---- 特殊日期 ---- */
+.courses-special-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.courses-special-add > .input {
+  flex: 1;
+  min-width: 130px;
+}
+
+.courses-kind-row {
+  display: flex;
+  gap: 6px;
+}
+
+.courses-special-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 去掉描边，用底与圆角分层 */
+.courses-special-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  border: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.courses-special-date {
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.courses-special-tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.courses-special-tag--holiday {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.courses-special-tag--makeup {
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.courses-special-del {
+  margin-left: auto;
+  color: var(--color-text-muted);
+}
+
+/* The timetable fills the available app pane, not the global 480px content column. */
+.app-container.courses-page {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  min-width: 0;
+  height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+  min-height: 0;
+  flex: 0 0 auto;
+  padding: 0 var(--safe-right) 0 0;
+}
+
+.courses-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 2px;
+  padding: 10px 4px 4px;
+}
+
+.courses-page-header .page-title { font-size: clamp(1rem, 5vw, 1.25rem); }
+.courses-page-header .btn { min-width: 0; padding: 8px 4px; font-size: var(--font-xs); color: var(--color-primary); }
+.courses-back { justify-self: start; }
+.courses-settings { justify-self: end; }
+
+.ct-scroll {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior-y: contain;
+}
+
+.ct-columns {
+  display: grid;
+  grid-template-columns: repeat(var(--ct-day-count), minmax(0, 1fr)) 28px;
+}
+
+.ct-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  user-select: none;
+}
+.ct-head > span { padding: 6px 0; min-width: 0; }
+.ct-head > span + span { border-left: 1px solid var(--color-border); }
+
+/* A vertical swipe here scrolls the timetable. Swiping an empty day slot selects a range. */
+.ct-scroll-rail {
+  border-inline-start: 1px solid var(--color-border);
+  background: var(--color-bg);
+  touch-action: pan-y;
+}
+.ct-body > .ct-scroll-rail::before {
+  content: '';
+  position: sticky;
+  top: 50%;
+  display: block;
+  width: 4px;
+  height: 32px;
+  margin-inline: auto;
+  border-radius: 4px;
+  background: var(--color-text-muted);
+}
+
+.ct-day { position: relative; min-width: 0; border-left: 1px solid var(--color-border); user-select: none; }
+.ct-band {
+  position: absolute;
+  inset-inline: 0;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  cursor: crosshair;
+  touch-action: none;
+}
+.ct-band--folded {
+  border-block: 1px dashed var(--color-border);
+  background: var(--color-bg);
+  font-size: 15px;
+  line-height: 1;
+}
+.ct-band:hover, .ct-band:focus-visible { background: var(--color-primary-bg); }
+.ct-band:focus-visible, .ct-course-block:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+.ct-hour-line {
+  position: absolute;
+  inset-inline: 0;
+  border-top: 1px solid var(--color-border);
+  pointer-events: none;
+}
+.ct-selection {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 3;
+  border: 2px solid var(--color-primary);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  pointer-events: none;
+}
+
+.ct-course-block {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  z-index: 2;
+  padding: 1px 3px;
+  border: 1px solid var(--color-bg);
+  border-radius: 5px;
+  color: #211c26;
+  text-align: left;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.ct-course-block:active { opacity: 0.85; }
+.ct-block-name, .ct-block-time, .ct-block-loc {
+  display: block;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.ct-block-name { font-size: 12px; font-weight: 700; }
+.ct-block-name sup { margin-left: 2px; font-size: 9px; line-height: 1; }
+.ct-block-time, .ct-block-loc { font-size: 10.5px; }
+.ct-block-time { font-variant-numeric: tabular-nums; }
+
+.courses-weekend-setting label { display: flex; align-items: center; gap: 8px; }
+.courses-weekend-setting input { accent-color: var(--color-primary); }
+
+.modal-hint { margin:8px 0; color:var(--color-text-muted); font-size:12px; }
+
+.courses-import-modal { max-width: 560px; }
+.courses-import-list { display:flex; flex-direction:column; gap:8px; max-height:42vh; overflow:auto; margin:8px 0; }
+.courses-import-row { display:flex; flex-direction:column; gap:5px; padding:8px; border-radius:8px; background:var(--color-bg); }
+.courses-import-grid { display:grid; grid-template-columns:minmax(0, 1.2fr) repeat(2, minmax(0, 1fr)); gap:5px; }
+.courses-import-grid > .input { min-width: 0; padding-inline: 3px; }
+.courses-import-weeks { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin:8px 0; font-size:12px; }
+.courses-import-weeks label { display:flex; align-items:center; gap:4px; }
+.courses-import-weeks .input { width:64px; }
