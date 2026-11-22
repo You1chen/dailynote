@@ -6,7 +6,7 @@
 | 前端 | React 18、TypeScript、Vite 5、React Router 6 `HashRouter` |
 | 平台 | Web/PWA 与 Capacitor 8 Android，共用业务代码 |
 | 数据 | 本地优先，无账号服务。Android 默认 `Documents/DailyNote/`，Web 使用 IndexedDB |
-| 回归基线 | 67 个测试文件、923 个测试通过 |
+| 回归基线 | 68 个测试文件、931 个测试通过 |
 
 ## 开发起步
 
@@ -67,6 +67,8 @@ APK 输出到 `android/app/build/outputs/apk/{debug,release}/dailynote.apk`。�
 
 - 仅主页支持从左向右滑打开全屏导航，也只有主页渲染 TODO 悬浮球。导航内向左滑逐级返回，根层向左滑收起。导航及其分组以路由历史状态保存，返回课程表的上一级会回到「事项信息」。主页已移除底部标签。入口见 [SideNav.tsx](src/components/SideNav.tsx)、[App.tsx](src/App.tsx) 和 [useRouteBack.ts](src/hooks/useRouteBack.ts)。
 - 主页从右向左滑打开快捷卡片。打开与关闭跟手。快捷编辑页向右滑保存并返回，有内容但保存失败时保留草稿。卡片编辑器里的「保存」按钮保存后留在编辑器。见 [useAppSwipe.ts](src/hooks/useAppSwipe.ts) 与 [KnowledgeCardEditor.tsx](src/components/KnowledgeCardEditor.tsx)。
+- 主页周栏左右滑切换周，下滑展开当前周对应的月历。月历左右滑浏览月份，从日期行上滑收回该行所在的周。周栏和月历优先接收区域内的手势。
+- 卡片收集器按年、月、日选择日期，默认展开设备本地的当前年和月。左右滑动逐日浏览，包括当天没有卡片的日期。
 - 日计划及全屏日程共用 [PlanTimeGrid.tsx](src/components/PlanTimeGrid.tsx)。触屏轻扫上下滚动，点空白新建，长按空白再纵向拖选起止时间，点已有块编辑。全局横滑与网格手势互斥，避免点按穿透。新建面板标题为「计划在这个时间做什么？」，首项填写计划名称，下一项在同一行选择起止时间。点空白新建仍按用户偏好预填结束时间。表单位于 [DailyPlan.tsx](src/pages/DailyPlan.tsx)。
 - 首页警报汇总 DDL、重要、遗留的提醒数，分组显示子项总和。警报支持暂停一小时、自定义时长、持续停用及恢复动效，并尊重系统减少动态效果设置。见 [HomeAlarm.tsx](src/components/HomeAlarm.tsx) 与 [navigationBadges.ts](src/utils/navigationBadges.ts)。
 - 「帮助」是居中翻页弹窗，左右翻页，首屏介绍手势，随后各用一页介绍 TODO、目标、任务、卡片与 DDL，由导航打开。首次引导只在无既有状态的新安装出现，改为悬浮窗加框选高亮的分步引导：依次指出 TODO 悬浮球、左滑新建卡片、右滑打开设置与记事、长按框选时间建立日程，最后指明「导航 → 帮助」为说明书位置；支持上一步、跳过、Esc 与 Android 返回键回退，最后一步可直接打开帮助。文案与锚点见 [onboardingSteps.ts](src/content/onboardingSteps.ts) 与 [FirstRunGuide.tsx](src/components/FirstRunGuide.tsx)，样式见 [FirstRunGuide.css](src/components/FirstRunGuide.css)。

@@ -56,6 +56,7 @@ vi.mock('../src/components/ConfirmDialog', () => ({ default: () => null }));
 
 import DailyPlanPage from '../src/pages/DailyPlan';
 import PlanTimeGrid from '../src/components/PlanTimeGrid';
+import HomeCalendar from '../src/components/HomeCalendar';
 
 const block: TimeBlock = {
   id: 'user-created', startTime: '08:00', endTime: '09:00', taskTitle: '用户创建的计划',
@@ -170,6 +171,82 @@ describe('DailyPlan weekly block navigation', () => {
     expect(html).toContain('value="10:15"');
     expect(html).toContain('value="10:45"');
     expect(state.navigate).toHaveBeenCalledExactlyOnceWith('/?date=2026-10-27', { replace: true });
+  });
+});
+
+describe('DailyPlan homepage calendar', () => {
+  const dateButton = () => byClass(tree(), 'dp-date')!;
+  function calendar() {
+    const props = find(tree(), el => el.type === HomeCalendar)!.props as Parameters<typeof HomeCalendar>[0];
+    state.index = 200;
+    return HomeCalendar(props);
+  }
+  const day = (key: string) => find(calendar(), el => el.props['data-calendar-day'] === key);
+  const currentDate = () => find(calendar(), el => el.props['aria-pressed'] === true)?.props['data-calendar-day'];
+
+  function swipe(dx: number, dy: number, dayKey?: string, weekStart?: string) {
+    const element = calendar();
+    const start = pointer(150, { clientX: 150 });
+    const end = pointer(150 + dy, { clientX: 150 + dx });
+    element.props.onPointerDown({ ...start, target: {
+      closest: (selector: string) => selector === '[data-week-start]' && weekStart
+        ? { dataset: { weekStart } }
+        : selector === '[data-calendar-day]' && dayKey ? { dataset: { calendarDay: dayKey } } : null,
+    } });
+    element.props.onPointerMove(end);
+    element.props.onPointerUp(end);
+    element.props.onClickCapture(end);
+    return end;
+  }
+
+  it('pages Monday–Sunday weeks in both directions and isolates calendar swipes from the shell', () => {
+    expect(calendar().props['data-app-swipe']).toBe('off');
+    expect(currentDate()).toBe('2026-10-26');
+    expect(swipe(-70, 0).stopPropagation).toHaveBeenCalledOnce();
+    expect(currentDate()).toBe('2026-11-02');
+    swipe(70, 0);
+    expect(currentDate()).toBe('2026-10-26');
+    swipe(-60, 55);
+    expect(currentDate()).toBe('2026-10-26');
+    expect(dateButton().props['aria-expanded']).toBe(false);
+  });
+
+  it('opens the selected week’s month, pages months, and collapses to the origin row', () => {
+    swipe(0, 70);
+    expect(calendar().props['aria-label']).toBe('月历');
+    expect(dateButton().props['aria-expanded']).toBe(true);
+    expect(render().indexOf('class="dp-calendar')).toBeLessThan(render().indexOf('class="dp-stats"'));
+    expect(byClass(calendar(), 'dp-cal-title')?.props.children).toBe('2026年 10月');
+    swipe(-75, 0);
+    expect(byClass(calendar(), 'dp-cal-title')?.props.children).toBe('2026年 11月');
+    expect(currentDate()).toBe('2026-10-26'); // remains selected in November's leading partial week
+    swipe(75, 0);
+    expect(byClass(calendar(), 'dp-cal-title')?.props.children).toBe('2026年 10月');
+    swipe(-75, 0);
+    swipe(0, -82, '2026-11-20', '2026-11-16');
+    expect(calendar().props['aria-label']).toBe('周历');
+    expect(currentDate()).toBe('2026-11-20');
+    expect(day('2026-11-16')).toBeDefined();
+    expect(day('2026-11-22')).toBeDefined();
+    expect(day('2026-11-15')).toBeUndefined();
+  });
+
+  it('keeps date and month buttons keyboard operable and preserves a selected date when collapsing its row', () => {
+    expect(dateButton().type).toBe('button');
+    dateButton().props.onClick({ detail: 0 });
+    expect(calendar().props['aria-label']).toBe('月历');
+    swipe(0, -65, '2026-11-01', '2026-10-26');
+    expect(currentDate()).toBe('2026-10-26');
+    const date = day('2026-10-30')!;
+    expect(date.type).toBe('button');
+    date.props.onClick({ detail: 0 });
+    expect(currentDate()).toBe('2026-10-30');
+    dateButton().props.onClick({ detail: 0 });
+    find(calendar(), el => el.props['aria-label'] === '下个月')!.props.onClick({ detail: 0 });
+    expect(byClass(calendar(), 'dp-cal-title')?.props.children).toBe('2026年 11月');
+    day('2026-11-21')!.props.onClick({ detail: 0 });
+    expect(calendar().props['aria-label']).toBe('周历');
+    expect(currentDate()).toBe('2026-11-21');
   });
 });
 

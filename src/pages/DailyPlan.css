@@ -869,12 +869,58 @@
   font-family: inherit;
 }
 
+.dp-calendar {
+  touch-action: none;
+  user-select: none;
+}
+
 .dp-cal {
-  margin-bottom: 8px;
+  margin: 6px 0 8px;
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 8px;
+  box-shadow: var(--shadow-sm);
+  padding: 6px 8px 8px;
+}
+
+.dp-cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.dp-cal-title {
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dp-cal-weekdays,
+.dp-cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  text-align: center;
+}
+
+.dp-cal-row .dp-wd {
+  min-height: 32px;
+  padding: 4px 0;
+  justify-content: center;
+  gap: 2px;
+}
+
+.dp-wd--other:not(.dp-wd--on) .dp-wd-n {
+  color: var(--color-text-muted);
+}
+
+.dp-calendar button:focus-visible,
+.dp-date:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* 一周条 */

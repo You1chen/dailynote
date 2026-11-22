@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import PlanTimeGrid from '../components/PlanTimeGrid';
 import { Plus, X, Save, Trash2, CheckCircle2, Settings, Maximize2, ClipboardList, CalendarDays, SkipForward } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import DayNavigator from '../components/DayNavigator';
+import HomeCalendar from '../components/HomeCalendar';
 import FullscreenSchedule from '../components/FullscreenSchedule';
 import PreferencePanel from '../components/PreferencePanel';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -43,13 +43,6 @@ function shiftDate(dateStr: string, n: number): string {
   const d = dateObj(dateStr);
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** 该日期所在周（周一→周日）7 个日期 */
-function weekOf(dateStr: string): string[] {
-  const dow = dateObj(dateStr).getDay(); // 0=周日
-  const monday = shiftDate(dateStr, -((dow === 0 ? 7 : dow) - 1));
-  return Array.from({ length: 7 }, (_, i) => shiftDate(monday, i));
 }
 
 /** 只看未来：只留折叠起点之后的小时标签 */
@@ -337,14 +330,15 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
     setShowTemplatePicker(false);
   };
 
-  const blocks = plan?.timeBlocks ?? [];
+  const blocks = plan?.date === date ? plan.timeBlocks : [];
   // 当天课程（按课表+学期实时计算：星期/周次/单双周/节假日全部过滤完毕，按开始时间排序）
   const courseBlocks = useMemo(
     () => computeDayCourses(courses, semester, date),
     [courses, semester, date],
   );
-  // 月历面板（默认收起，点顶部日期展开）
-  const [calOpen, setCalOpen] = useState(false);
+  // 月历浏览独立于日程所选日期，收起后重新跟随所选日期。
+  const [calendarMonth, setCalendarMonth] = useState<string | null>(null);
+  const dateButtonRef = useRef<HTMLButtonElement>(null);
   // 哪些日期有计划（周条上的小圆点）
   const [planDates, setPlanDates] = useState<Set<string>>(new Set());
 
@@ -359,7 +353,6 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
     return () => { alive = false; };
   }, [plan]);
 
-  const weekDates = weekOf(date);
   // 从周视图跳过来：用同一套面板新建/编辑（参数用掉后清掉，避免刷新重复弹）
   useEffect(() => {
     // 日期切换后的首帧仍可能保留上一天的 plan/loading；等目标日期加载完成再消费参数。
@@ -416,7 +409,7 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
         gridHeight: GRID_HEIGHT,
       });
 
-  if (loading) {
+  if (loading && !plan) {
     return (
       <div className="app-container app-container--day">
         <div className="empty-state"><p>加载中...</p></div>
@@ -429,7 +422,9 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
       <div className="dp-head">
       {/* 顶部：日期 + 前后一天 */}
       <div className="dp-top">
-        <button className="dp-date" onClick={() => setCalOpen(v => !v)}>
+        <button type="button" className="dp-date" ref={dateButtonRef}
+          aria-expanded={calendarMonth !== null} aria-controls="dp-calendar"
+          onClick={() => setCalendarMonth(month => month ? null : `${date.slice(0, 7)}-01`)}>
           <span className="dp-date-main">
             {dateObj(date).getMonth() + 1}月{dateObj(date).getDate()}日
           </span>
@@ -446,32 +441,9 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
         </div>
       </div>
 
-      {/* 月历：点日期展开，选完自动收起 */}
-      {calOpen && (
-        <div className="dp-cal">
-          <DayNavigator
-            date={date}
-            onDateChange={d => { setDate(d); setCalOpen(false); }}
-          />
-        </div>
-      )}
-
-      {/* 一周条：点一下切日，圆点=那天有计划 */}
-      <div className="dp-week">
-        {weekDates.map(d => {
-          const on = d === date;
-          const todayCell = d === todayStr();
-          return (
-            <button key={d} className={`dp-wd ${on ? 'dp-wd--on' : ''}`} onClick={() => setDate(d)}>
-              <span className="dp-wd-w">{WEEKDAY_LABELS[dateObj(d).getDay()].replace('周', '')}</span>
-              <span className={`dp-wd-n ${todayCell && !on ? 'dp-wd-n--today' : ''}`}>
-                {dateObj(d).getDate()}
-              </span>
-              <span className={`dp-wd-dot ${planDates.has(d) ? 'dp-wd-dot--on' : ''}`} />
-            </button>
-          );
-        })}
-      </div>
+      <HomeCalendar date={date} month={calendarMonth} planDates={planDates}
+        onDateChange={setDate} onMonthChange={setCalendarMonth}
+        onClose={() => { setCalendarMonth(null); dateButtonRef.current?.focus({ preventScroll: true }); }} />
 
       {/* 一行统计 + 工具 */}
       <div className="dp-stats">
