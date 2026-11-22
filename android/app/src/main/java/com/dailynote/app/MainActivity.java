@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DailyNoteStoragePlugin.class);
         registerPlugin(MlkitOcrPlugin.class);
+        registerPlugin(ApkUpdatePlugin.class);
         super.onCreate(savedInstanceState);
 
         // Android 15+ draws the WebView edge-to-edge. Keep app content out of the

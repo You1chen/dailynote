@@ -29,6 +29,9 @@
         </provider>
     </application>
 
+    <!-- 应用内更新：校验同签名后调起系统安装器覆盖安装 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

@@ -113,7 +113,7 @@ export default function PlanTimeGrid({ className, firstY, height, hourTops, minu
   }
 
   return (
-    <div className={`${className} dp-time-grid`} role="group" aria-label="当天时间轴" style={{ height }}
+    <div className={`${className} dp-time-grid`} data-tour="time-grid" role="group" aria-label="当天时间轴" style={{ height }}
       onPointerDown={startSelection} onPointerMove={moveSelection} onPointerUp={endSelection}
       onPointerCancel={cancelSelection} onLostPointerCapture={cancelSelection}
       onPointerLeave={event => { if (gesture.current?.mode === 'pending') cancelSelection(event); }}

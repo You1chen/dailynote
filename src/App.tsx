@@ -17,6 +17,9 @@ import ImportantPage from './pages/ImportantPage';
 import BacklogPage from './pages/BacklogPage';
 import SettlementPage from './pages/Settlement';
 import HelpDialog from './components/HelpDialog';
+import UpdateApkDialog from './components/UpdateApkDialog';
+import { apkUpdateSupported, findAutoUpdate } from './services/apkUpdate';
+import type { ApkFileInfo } from './utils/apkUpdate';
 import { BackButtonProvider, useRegisterBackHandler } from './contexts/BackButtonContext';
 import { usePreferences, type ThemeMode } from './hooks/usePreferences';
 import { useBacklogBadge } from './hooks/useBacklog';
@@ -29,6 +32,13 @@ import type { QuickCardBackDetail } from './components/KnowledgeCardEditor';
 import HomeAlarm from './components/HomeAlarm';
 import { useRouteBack } from './hooks/useRouteBack';
 import './App.css';
+
+const AUTO_UPDATE_SKIP_KEY = 'dailynote_update_skip';
+
+/** 同一个 APK（路径、大小、修改时间）只自动提示一次。 */
+function autoUpdateKey(file: ApkFileInfo): string {
+  return `${file.path}|${file.size}|${file.modified}`;
+}
 
 function applyTheme(theme: ThemeMode) {
   const root = document.documentElement;
@@ -216,6 +226,48 @@ function AppShell() {
   const [updateReady, setUpdateReady] = useState(false);
   useEffect(() => { watchServiceWorkerUpdate(() => setUpdateReady(true)); }, []);
 
+  // 首次引导最后一步直接指向说明书：打开应用内「帮助」。
+  useEffect(() => {
+    const openHelp = () => setHelpOpen(true);
+    window.addEventListener('dailynote-open-help', openHelp);
+    return () => window.removeEventListener('dailynote-open-help', openHelp);
+  }, []);
+
+  // 应用内更新：设置页入口与启动时自动检测更高版本的安装包。
+  // 自动提示被关掉后，同一个 APK 不再打扰；换成新文件会重新提示。
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [pendingAutoUpdate, setPendingAutoUpdate] = useState<ApkFileInfo | null>(null);
+  useEffect(() => {
+    const openUpdate = () => {
+      setPendingAutoUpdate(null);
+      setUpdateOpen(true);
+    };
+    window.addEventListener('dailynote-open-update', openUpdate);
+    return () => window.removeEventListener('dailynote-open-update', openUpdate);
+  }, []);
+  useEffect(() => {
+    if (!apkUpdateSupported()) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void findAutoUpdate().then(file => {
+        if (cancelled || !file) return;
+        let skipped: string | null = null;
+        try { skipped = localStorage.getItem(AUTO_UPDATE_SKIP_KEY); } catch { /* 隐私模式 */ }
+        if (skipped === autoUpdateKey(file)) return;
+        setPendingAutoUpdate(file);
+        setUpdateOpen(true);
+      });
+    }, 1600);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
+  const closeUpdate = () => {
+    if (pendingAutoUpdate) {
+      try { localStorage.setItem(AUTO_UPDATE_SKIP_KEY, autoUpdateKey(pendingAutoUpdate)); } catch { /* 忽略 */ }
+      setPendingAutoUpdate(null);
+    }
+    setUpdateOpen(false);
+  };
+
   // 应用主题
   useEffect(() => {
     applyTheme(prefs.theme);
@@ -233,6 +285,7 @@ function AppShell() {
         badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge}
         onClose={closeNav} onHelp={() => setHelpOpen(true)} onShowSearch={openSearch} onCloseSearch={closeSearch} onSelect={selectRoute} />}
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <UpdateApkDialog open={updateOpen} onClose={closeUpdate} />
 
       <div ref={page} className="app-page" aria-hidden={navOpen || quickNote || undefined}>
         {!immersive && !quickNote && <button type="button" ref={opener} className="app-nav-toggle" onClick={openNav}
