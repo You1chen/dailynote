@@ -731,6 +731,7 @@ export default function TaskBall() {
   return (
     <>
       <button
+        data-tour="todo-ball"
         className={`task-ball ${undone > 0 ? 'task-ball--num' : 'task-ball--word'}`}
         style={{ right: pos.right, bottom: pos.bottom }}
         onPointerDown={onBallPointerDown}

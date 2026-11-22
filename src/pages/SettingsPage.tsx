@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Camera, Palette, CalendarClock, GraduationCap, Database, RotateCcw, ListTodo } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Camera, Palette, CalendarClock, GraduationCap, Database, Download, RotateCcw, ListTodo } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { usePreferences, type ThemeMode } from '../hooks/usePreferences';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { useRouteBack } from '../hooks/useRouteBack';
@@ -105,6 +106,7 @@ export default function SettingsPage({ onPreviewAvatar }: { onPreviewAvatar?: ()
     {section?.id==='data' && <>
       <p className="settings-intro">数据保存在你选择的设备目录。定期导出，给日常留一份副本。</p>
       <button className="settings-link-card" onClick={()=>navigate('/backup')}><Database size={20}/><span><strong>备份、导入与存储位置</strong><small>导出副本、恢复数据、查看或更换目录</small></span><ChevronRight size={18}/></button>
+      {Capacitor.getPlatform() === 'android' && <button className="settings-link-card" onClick={()=>window.dispatchEvent(new Event('dailynote-open-update'))}><Download size={20}/><span><strong>安装更新包</strong><small>扫描存储目录中的 APK，签名一致时覆盖安装</small></span><ChevronRight size={18}/></button>}
       <section className="settings-section settings-reset-area"><h2 className="settings-section-title">偏好恢复</h2><div className="card"><p className="settings-field-hint">恢复头像、名字、主题、日程偏好与课程时间组合。不会删除已有内容。</p><button className="btn btn-ghost settings-reset-btn" onClick={()=>setConfirmReset(true)}><RotateCcw size={16}/>恢复默认偏好</button>{resetNotice && <p role="status" className="settings-field-hint">已恢复默认偏好。</p>}</div></section>
     </>}
     <input ref={fileInput} type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file){setCropperFile(file);setAvatarPicker(false);}}}/>

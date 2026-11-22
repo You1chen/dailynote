@@ -49,14 +49,17 @@ describe('help and onboarding dialog', () => {
     expect(html).toContain('上下滑动');
   });
 
-  it('keeps the first-run guide as the same illustrated paging dialog with skip and start', () => {
+  it('starts the first run as a spotlight tour instead of the help dialog', () => {
     const html = renderToStaticMarkup(<FirstRunGuide onDismiss={vi.fn()} />);
-    expect(html).toContain('欢迎使用 DailyNote');
+    expect(html).toContain('新手引导');
     expect(html).toContain('跳过');
-    expect(html).toContain('下一页');
+    expect(html).toContain('下一步');
+    expect(html).not.toContain('欢迎使用 DailyNote');
+  });
+
+  it('labels the help dialog footer for both variants', () => {
     expect(helpPrimaryLabel(5, 'welcome')).toBe('开始使用');
     expect(helpPrimaryLabel(5, 'help')).toBe('完成');
     expect(helpPrimaryLabel(0, 'welcome')).toBe('下一页');
-    expect(html.match(/class="help-page-panel"/g)).toHaveLength(6);
   });
 });

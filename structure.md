@@ -6,7 +6,7 @@
 | 前端 | React 18、TypeScript、Vite 5、React Router 6 `HashRouter` |
 | 平台 | Web/PWA 与 Capacitor 8 Android，共用业务代码 |
 | 数据 | 本地优先，无账号服务。Android 默认 `Documents/DailyNote/`，Web 使用 IndexedDB |
-| 回归基线 | 65 个测试文件、912 个测试通过 |
+| 回归基线 | 67 个测试文件、923 个测试通过 |
 
 ## 开发起步
 
@@ -42,7 +42,7 @@ APK 输出到 `android/app/build/outputs/apk/{debug,release}/dailynote.apk`。�
 | [hooks/](src/hooks/)、[BackButtonContext.tsx](src/contexts/BackButtonContext.tsx) | 数据读取与跨页刷新、手势仲裁、Android 返回键分派 |
 | [db/](src/db/)、[services/](src/services/) | 业务 CRUD、读写队列、兼容迁移、快照与原生桥 |
 | [types/](src/types/)、[utils/](src/utils/) | 数据模型与领域规则，几何、任务树、课表和搜索等逻辑 |
-| [coreFeatures.ts](src/content/coreFeatures.ts) | 帮助和首次引导共用的五项功能文案 |
+| [coreFeatures.ts](src/content/coreFeatures.ts) | 帮助弹窗的五项功能文案；首次引导文案与锚点单独见 [onboardingSteps.ts](src/content/onboardingSteps.ts) |
 | [test/](test/) | Vitest 回归，包含模拟 IndexedDB 与原生文件桥的测试 |
 | [android/](android/)、[scripts/](scripts/) | Capacitor Android 工程、Gradle Wrapper、构建和图标生成脚本 |
 
@@ -69,7 +69,7 @@ APK 输出到 `android/app/build/outputs/apk/{debug,release}/dailynote.apk`。�
 - 主页从右向左滑打开快捷卡片。打开与关闭跟手。快捷编辑页向右滑保存并返回，有内容但保存失败时保留草稿。卡片编辑器里的「保存」按钮保存后留在编辑器。见 [useAppSwipe.ts](src/hooks/useAppSwipe.ts) 与 [KnowledgeCardEditor.tsx](src/components/KnowledgeCardEditor.tsx)。
 - 日计划及全屏日程共用 [PlanTimeGrid.tsx](src/components/PlanTimeGrid.tsx)。触屏轻扫上下滚动，点空白新建，长按空白再纵向拖选起止时间，点已有块编辑。全局横滑与网格手势互斥，避免点按穿透。新建面板标题为「计划在这个时间做什么？」，首项填写计划名称，下一项在同一行选择起止时间。点空白新建仍按用户偏好预填结束时间。表单位于 [DailyPlan.tsx](src/pages/DailyPlan.tsx)。
 - 首页警报汇总 DDL、重要、遗留的提醒数，分组显示子项总和。警报支持暂停一小时、自定义时长、持续停用及恢复动效，并尊重系统减少动态效果设置。见 [HomeAlarm.tsx](src/components/HomeAlarm.tsx) 与 [navigationBadges.ts](src/utils/navigationBadges.ts)。
-- 「帮助」和首次引导共用居中弹窗，左右翻页，首屏介绍手势，随后各用一页介绍 TODO、目标、任务、卡片与 DDL。帮助由导航打开，首次引导仅对无既有状态的新安装显示，支持跳过。见 [HelpDialog.tsx](src/components/HelpDialog.tsx)、[HelpArt.tsx](src/components/HelpArt.tsx) 与 [FirstRunGuide.tsx](src/components/FirstRunGuide.tsx)。
+- 「帮助」是居中翻页弹窗，左右翻页，首屏介绍手势，随后各用一页介绍 TODO、目标、任务、卡片与 DDL，由导航打开。首次引导只在无既有状态的新安装出现，改为悬浮窗加框选高亮的分步引导：依次指出 TODO 悬浮球、左滑新建卡片、右滑打开设置与记事、长按框选时间建立日程，最后指明「导航 → 帮助」为说明书位置；支持上一步、跳过、Esc 与 Android 返回键回退，最后一步可直接打开帮助。文案与锚点见 [onboardingSteps.ts](src/content/onboardingSteps.ts) 与 [FirstRunGuide.tsx](src/components/FirstRunGuide.tsx)，样式见 [FirstRunGuide.css](src/components/FirstRunGuide.css)。
 
 ## 核心功能维护入口
 
@@ -103,6 +103,7 @@ Android 默认根目录为 `Documents/DailyNote/`。Web 使用 `dailynote_kv` �
 - 快照用日期目录与分类文件名判定可复用性。外部直接修改同名文件后，通过备份页面的「重新扫描存储目录」重读。多文件更新靠写序和启动修复保持一致，文件层没有跨文件事务。
 - 备份为版本 1 的 JSON。导入校验、规范化并合并已有记录。旧单文件、Dexie、`reflections`、`harvests`、历史清单与作息模板仍有兼容逻辑。活动事件按 ID 去重。公开回收站支持可恢复删除，TODO 完成到期清理属于任务板生命周期。
 - 用户偏好、ID 和头像保存在数据目录的 `preferences.json`，也随 JSON 备份导出。Web 使用 IndexedDB。旧偏好会在升级启动时迁移。引导关闭标记仍保存在 `localStorage`。设备本地日历由 `todayStr()` 提供。跨页面更新用 `dailynote-*` 浏览器事件广播，典型事件包含任务、杂念、DDL、活动与偏好变化。
+- 应用内更新：设置 →「数据与备份 → 安装更新包」扫描当前存储目录、Documents 根目录与 Download 中的 APK；包名与签名都和当前应用一致时，确认后交给系统安装器覆盖安装（保留数据），启动时发现更高版本会自动提示一次。入口见 [UpdateApkDialog.tsx](src/components/UpdateApkDialog.tsx)，原生桥见 [ApkUpdatePlugin.java](android/app/src/main/java/com/dailynote/app/ApkUpdatePlugin.java)。
 - 原生权限与系统栏适配由 [MainActivity.java](android/app/src/main/java/com/dailynote/app/MainActivity.java) 和 [DailyNoteStoragePlugin.java](android/app/src/main/java/com/dailynote/app/DailyNoteStoragePlugin.java) 处理。中文离线识别入口见 [MlkitOcrPlugin.java](android/app/src/main/java/com/dailynote/app/MlkitOcrPlugin.java)。
 
 ## 交接与回归
