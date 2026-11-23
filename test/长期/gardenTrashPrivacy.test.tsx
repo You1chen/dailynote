@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 const state = vi.hoisted(()=>({items:[] as any[]}));
 vi.mock('../../src/hooks/useTrash',()=>({useTrash:()=>({items:state.items,loading:false,restore:vi.fn(),permDelete:vi.fn(),clearAll:vi.fn()})}));
 vi.mock('../../src/components/ConfirmDialog',()=>({default:()=>null}));
+vi.mock('../../src/hooks/useRouteBack',()=>({useRouteBack:()=>vi.fn()}));
 import TrashPage from '../../src/pages/Trash';
 describe('garden trash privacy',()=>{
  it('keeps even legacy wish titles out of public trash while other trash stays visible',()=>{

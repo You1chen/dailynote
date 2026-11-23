@@ -10,6 +10,7 @@ import {
   startAtFromAge,
 } from '../utils/backlog';
 import ConfirmDialog from '../components/ConfirmDialog';
+import GroupedPageHeader from '../components/GroupedPageHeader';
 import './BacklogPage.css';
 import { useSheetDrag } from '../hooks/useSheetDrag';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
@@ -45,10 +46,11 @@ export default function BacklogPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const sheetDrag = useSheetDrag(() => { if (!busy) setSheetOpen(false); }, sheetOpen && !busy);
   useRegisterBackHandler(() => {
+    if (notice !== null) { setNotice(null); return true; }
     if (askDelete) { setAskDelete(false); return true; }
     if (sheetOpen) { if (!busy) setSheetOpen(false); return true; }
     return false;
-  }, [askDelete, sheetOpen, busy]);
+  }, [notice, askDelete, sheetOpen, busy]);
 
   const blocked = useMemo(
     () => sortBacklog(items.filter(i => i.status === 'blocked')),
@@ -200,12 +202,11 @@ export default function BacklogPage() {
 
   return (
     <div className="app-container">
-      <div className="page-header">
-        <h1 className="page-title">遗留问题</h1>
+      <GroupedPageHeader title="遗留问题" blocked={sheetOpen || askDelete || notice !== null}>
         <button className="btn btn-primary btn-sm" onClick={openNew}>
           <Plus size={14} /> 记一条
         </button>
-      </div>
+      </GroupedPageHeader>
 
       <div className="bk-chips">
         <button className={`bk-chip ${filter === 'all' ? 'bk-chip--on' : ''}`} onClick={() => setFilter('all')}>全部</button>

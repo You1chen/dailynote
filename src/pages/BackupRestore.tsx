@@ -11,7 +11,7 @@ import {
   listStorageSubdirs,
 } from '../services/storage';
 import { rescanFromDisk } from '../services/store';
-import { useRegisterBackHandler } from '../contexts/BackButtonContext';
+import GroupedPageHeader from '../components/GroupedPageHeader';
 import './BackupRestore.css';
 
 export default function BackupRestorePage() {
@@ -25,8 +25,6 @@ export default function BackupRestorePage() {
   const [browsing, setBrowsing] = useState(false);
   const [subdirs, setSubdirs] = useState<string[]>([]);
   const [persistError, setPersistError] = useState(getLastPersistError());
-
-  useRegisterBackHandler(() => false, []);
 
   const showStatus = (msg: string, type: 'success' | 'error' = 'success') => {
     setStatus(msg);
@@ -149,9 +147,7 @@ export default function BackupRestorePage() {
 
   return (
     <div className="app-container">
-      <div className="page-header">
-        <h1 className="page-title">备份与恢复</h1>
-      </div>
+      <GroupedPageHeader title="备份与恢复" />
 
       {/* 存储位置 */}
       <div className="card" style={{ marginBottom: 16 }}>

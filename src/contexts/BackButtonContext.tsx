@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useCallback, useRef, useEffect } from 'react';
 import { App } from '@capacitor/app';
+import type { PluginListenerHandle } from '@capacitor/core';
+
+type BackPriority = boolean | 'overlay';
 
 interface BackButtonContextType {
   /** 注册一个返回键处理器，返回一个取消注册的函数 */
-  registerHandler: (handler: () => boolean | void, fallback?: boolean) => () => void;
+  registerHandler: (handler: () => boolean | void, priority?: BackPriority) => () => void;
 }
 
 const BackButtonContext = createContext<BackButtonContextType>({
@@ -26,14 +29,14 @@ export function useBackButton() {
 export function useRegisterBackHandler(
   handler: () => boolean | void,
   deps: React.DependencyList = [],
-  fallback = false,
+  priority: BackPriority = false,
 ) {
   const { registerHandler } = useBackButton();
 
   useEffect(() => {
     // 先注册闭包，让 handler 读取最新值
     const handlerRef = { current: handler };
-    const unregister = registerHandler(() => handlerRef.current(), fallback);
+    const unregister = registerHandler(() => handlerRef.current(), priority);
 
     // 当 deps 变化时更新 ref，但不要重新注册
     // 我们用一个小技巧：在 deps 变化时更新 ref
@@ -48,42 +51,37 @@ export function useRegisterBackHandler(
 
 export function BackButtonProvider({ children }: { children: React.ReactNode }) {
   const handlerStackRef = useRef<Array<() => boolean | void>>([]);
+  const overlayStackRef = useRef<Array<() => boolean | void>>([]);
 
-  const registerHandler = useCallback((handler: () => boolean | void, fallback = false) => {
-    if (fallback) handlerStackRef.current.unshift(handler);
-    else handlerStackRef.current.push(handler);
+  const registerHandler = useCallback((handler: () => boolean | void, priority: BackPriority = false) => {
+    const stack = priority === 'overlay' ? overlayStackRef : handlerStackRef;
+    if (priority === true) stack.current.unshift(handler);
+    else stack.current.push(handler);
     return () => {
-      handlerStackRef.current = handlerStackRef.current.filter(h => h !== handler);
+      stack.current = stack.current.filter(h => h !== handler);
     };
   }, []);
 
   useEffect(() => {
-    // 只在 Capacitor 环境下注册（Android）
-    let cleanup: (() => void) | undefined;
+    let disposed = false;
+    let listener: PluginListenerHandle | undefined;
 
-    try {
-      const listenerPromise = App.addListener('backButton', () => {
-        const stack = handlerStackRef.current;
-        // 从栈顶（最新注册的）开始调用
-        for (let i = stack.length - 1; i >= 0; i--) {
-          const result = stack[i]();
-          if (result === true) {
-            // handler 返回 true 表示已处理
-            return;
-          }
-        }
-        // 没有任何 handler 处理，执行默认行为：退出应用
-        App.exitApp();
-      });
-      listenerPromise.then(listener => {
-        cleanup = () => listener.remove();
-      });
-    } catch {
-      // 非 Capacitor 环境（浏览器开发），无需处理
-    }
+    void App.addListener('backButton', () => {
+      if (disposed) return;
+      const stack = [...handlerStackRef.current, ...overlayStackRef.current];
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i]() === true) return;
+      }
+      void App.exitApp();
+    }).then(handle => {
+      // StrictMode can clean up the first effect before the native bridge replies.
+      if (disposed) return handle.remove();
+      listener = handle;
+    }).catch(error => console.warn('无法注册 Android 返回键监听', error));
 
     return () => {
-      cleanup?.();
+      disposed = true;
+      void listener?.remove();
     };
   }, []);
 

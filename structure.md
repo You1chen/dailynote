@@ -50,6 +50,8 @@
 
 ---
 
+- 「数据」的回收站、备份和「规划」的目标、遗留问题共用 [GroupedPageHeader.tsx](src/components/GroupedPageHeader.tsx)。页头返回或从屏幕左侧向右滑会回到来时的分组，无上一条应用历史时回首页。Android 系统返回优先交给页面弹层，再走路由回退。
+
 ## 3. 目录
 
 ```
