@@ -6,75 +6,100 @@ on:
     branches: [main, master]
     paths:
       - 'src/**'
+      - 'index.html'
+      - 'tsconfig*.json'
       - 'vite.config.ts'
+      - 'vitest.config.mjs'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
       - 'public/**'
       - 'test/**'
       - 'android/**'
+      - 'scripts/build-apk.sh'
       - '.github/workflows/build-apk.yml'
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: npm
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Check Android SDK 36
+        shell: bash
+        run: |
+          sdk="${ANDROID_HOME:?The runner must provide ANDROID_HOME}"
+          platform="$sdk/platforms/android-36/android.jar"
+          tools="$sdk/build-tools/36.0.0"
+          sdk_ready() {
+            [[ -s "$platform" && -x "$tools/aapt" && -x "$tools/apksigner" ]]
+          }
+          if ! sdk_ready; then
+            manager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+            if [[ ! -x "$manager" ]]; then
+              echo '::error::Android SDK 36 is incomplete and sdkmanager is unavailable.'
+              exit 1
+            fi
+            "$manager" --sdk_root="$sdk" 'platforms;android-36' 'build-tools;36.0.0'
+          fi
+          sdk_ready
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Setup Keystore
+      - name: Configure Ji signing for trusted builds
+        if: github.event_name != 'pull_request'
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PROPERTIES: ${{ secrets.KEYSTORE_PROPERTIES }}
+          KEYSTORE_BASE64: ${{ secrets.JI_KEYSTORE_BASE64 }}
+          KEYSTORE_PROPERTIES: ${{ secrets.JI_KEYSTORE_PROPERTIES }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > android/daily-note-keystore.jks
-            echo "$KEYSTORE_PROPERTIES" > android/keystore.properties
-            echo "✅ 签名密钥已配置"
+          if [[ -z "$KEYSTORE_BASE64" && -z "$KEYSTORE_PROPERTIES" ]]; then
+            echo '::notice::Ji signing is not configured. This artifact uses the runner debug key.'
+          elif [[ -z "$KEYSTORE_BASE64" || -z "$KEYSTORE_PROPERTIES" ]]; then
+            echo '::error::Set both JI_KEYSTORE_BASE64 and JI_KEYSTORE_PROPERTIES.'
+            exit 1
           else
-            echo "⚠️ 未配置签名密钥，使用默认 debug 签名（无法覆盖安装）"
+            umask 077
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/ji-release.jks
+            printf '%s\n' "$KEYSTORE_PROPERTIES" > android/keystore.properties
           fi
 
-      - name: Run Tests
-        run: npm test
+      - name: Run tests
+        run: npm test -- --maxWorkers=4
 
-      - name: Build Web App & Sync
-        env:
-          CAPACITOR: 'true'
+      - name: Build debug APK
+        run: bash scripts/build-apk.sh
+
+      - name: Verify APK
         run: |
-          npx tsc --noEmit
-          npx vite build
-          npx cap sync android
-
-      - name: Generate App Icons
-        run: npm run cap:assets
-
-      - name: Build Debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug
+          apk='android/app/build/outputs/apk/debug/记.apk'
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          test -s "$apk"
+          "$tools/apksigner" verify "$apk"
+          badging=$("$tools/aapt" dump badging "$apk")
+          grep -q "^package: name='com\.ji\.note' " <<< "$badging"
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: 记-debug.apk
           path: android/app/build/outputs/apk/debug/记.apk
+          if-no-files-found: error
           retention-days: 30

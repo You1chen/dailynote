@@ -29,7 +29,7 @@ Android 使用 **JDK 21** 和 Android SDK 36，最低 API 24，目标 API 36。�
 | 调试 APK               | `npm run build:apk`     | `bash scripts/build-apk.sh`                            |
 | 签名发布 APK           | `npm run build:release` | `bash scripts/build-apk.sh --release`                  |
 
-APK 输出到 `android/app/build/outputs/apk/{debug,release}/记.apk`。发布构建需要开发者自行配置签名。已有安装的覆盖升级要求签名一致。Gradle Wrapper、原生资源及离线 OCR 依赖声明随源码交接。首次解析 Gradle 依赖需要网络，OCR 模型随 ML Kit 依赖装入 APK。详见 [README](README.md) 和 [模型说明](MODELS.md)。 [Android CI 工作流](.github/workflows/build-apk.yml) 同样使用 JDK 21。
+APK 输出到 `android/app/build/outputs/apk/{debug,release}/记.apk`。发布构建需要开发者自行配置签名。已有安装的覆盖升级要求签名一致。Gradle Wrapper、原生资源及离线 OCR 依赖声明随源码交接。首次解析 Gradle 依赖需要网络，OCR 模型随 ML Kit 依赖装入 APK。详见 [README](README.md) 和 [模型说明](MODELS.md)。 [Android CI 工作流](.github/workflows/build-apk.yml) 在 Ubuntu 24.04 上使用 JDK 21，优先检查并使用 runner 预装的 SDK 36。主线推送和 PR 都会运行测试、复用 Linux 构建脚本并校验 APK 的包名与签名。可信构建可配置 `JI_KEYSTORE_BASE64` 和 `JI_KEYSTORE_PROPERTIES` 使用「记」的独立签名，其中 `storeFile` 设为 `ji-release.jks`。未配置时产出用于测试的 runner 调试签名包。
 
 ## 入口与目录
 

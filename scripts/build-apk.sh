@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 记 Android build for macOS/Linux.
 # Usage: bash scripts/build-apk.sh [--release]
-# Requires JAVA_HOME (JDK 17) and an Android SDK (compileSdk 36).
+# Requires JAVA_HOME (JDK 21) and Android SDK 36.
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
