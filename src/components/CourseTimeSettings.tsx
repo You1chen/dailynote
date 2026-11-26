@@ -29,7 +29,6 @@ export default function CourseTimeSettings({ combinations, onChange }: Props) {
     <section className="settings-section">
       <h2 className="settings-section-title">📚 课程时间组合</h2>
       <div className="card">
-        <p className="settings-field-hint">新建或编辑课程时，选择组合或输入匹配的开始时间即可自动填写结束时间，仍可手动调整。每个开始时间对应一个结束时间。</p>
         {combinations.map(pair => (
           <div className="settings-course-time-item" key={pair.startTime}>
             <span>{pair.startTime} → {pair.endTime}</span>
@@ -42,7 +41,7 @@ export default function CourseTimeSettings({ combinations, onChange }: Props) {
             }}>删除</button>
           </div>
         ))}
-        {combinations.length === 0 && <p className="settings-field-hint">暂无组合，可自由输入课程时间。</p>}
+        {combinations.length === 0 && <p className="settings-field-hint">暂无组合</p>}
         <div className="settings-time-row" style={{ marginTop: 12 }}>
           <input className="input input-sm" type="time" aria-label="组合开始时间" value={startTime} onChange={e => setStartTime(e.target.value)} />
           <span className="settings-time-sep">→</span>

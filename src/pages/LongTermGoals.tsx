@@ -15,9 +15,8 @@ export default function LongTermGoalsPage() {
   const [goalEditor, setGoalEditor] = useState<{ id: number | null } | null>(null);
   const [goalMapId, setGoalMapId] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<{ message: string; info?: boolean; onConfirm?: () => void } | null>(null);
-  const plainGoals = goals.filter(g => g.kind !== 'wish');
-  const mappedGoal = plainGoals.find(goal => goal.id === goalMapId);
-  const editingGoal = plainGoals.find(goal => goal.id === goalEditor?.id);
+  const mappedGoal = goals.find(goal => goal.id === goalMapId);
+  const editingGoal = goals.find(goal => goal.id === goalEditor?.id);
   async function saveGoalPlan(input: { title: string; description: string; nodes: GoalNode[] }): Promise<boolean> {
     if (!goalEditor) return false;
     const { id } = goalEditor;
@@ -52,12 +51,10 @@ export default function LongTermGoalsPage() {
       <section className="goal-section">
         <div className="section-title">
           <Target size={14} /> 长期目标
-          <span className="section-count">{plainGoals.length}</span>
+          <span className="section-count">{goals.length}</span>
         </div>
 
-        {plainGoals.length === 0 ? (
-          <p className="wish-empty-hint">把想做到的事拆成能推进的目标。</p>
-        ) : plainGoals.map(goal => {
+        {goals.map(goal => {
           const nodes = effectiveNodes(goal);
           const percent = percentLabel(treeProgress(nodes));
           const stats = treeStats(nodes);

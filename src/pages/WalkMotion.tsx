@@ -6,7 +6,6 @@ import { Headphones, Image as Picture, Shuffle } from 'lucide-react';
 
 const mod = (n: number, length: number) => (n % length + length) % length;
 function Preview({ item }: {item: Memory}) {
-  if (item.kind === '灵感') return <p>{item.text}</p>;
   return <>{item.blocks.slice(0, 4).map(b => b.kind === 'text' ? <p key={b.id}>{b.text}</p> : b.kind === 'image' ? <img key={b.id} alt="卡片图片" src={b.data} draggable={false}/> : <p key={b.id}><Headphones size={18}/> {b.fileName || '录音'}</p>)}{!item.blocks.length && <Picture aria-label="暂无正文" size={20}/>}</>;
 }
 /** The unbounded slot index is the DOM key: moving to the foreground never remounts a side card. */

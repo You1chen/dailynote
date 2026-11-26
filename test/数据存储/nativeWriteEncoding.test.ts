@@ -43,8 +43,9 @@ import {
   initStore,
   setStoragePath,
   flush,
-  exportBackupFile,
   _resetForTest,
+  getPreferences,
+  updatePreferences,
 } from '../../src/services/store';
 import * as db from '../../src/db';
 import type { DailyPlan, LongTermGoal } from '../../src/types';
@@ -74,6 +75,22 @@ beforeEach(async () => {
 });
 
 describe('Android 原生写入编码', () => {
+  it('把旧的本地偏好写成 UTF-8 preferences.json，并且只有偏好的目录也能启动', async () => {
+    const legacy = { hourHeight: 72, defaultDuration: 45 };
+    localStorage.setItem('dailynote_preferences', JSON.stringify(legacy));
+    expect(await initStore()).toBe(0);
+    expect(localStorage.getItem('dailynote_preferences')).toBeNull();
+    expect(writeFileCalls.at(-1)).toMatchObject({ path: 'DailyNote/preferences.json', encoding: 'utf8' });
+    expect(JSON.parse(memFiles.get('DailyNote/preferences.json')!)).toMatchObject(legacy);
+
+    // 自定义路径兼容：换到只有 preferences.json 的目录，直接读该目录的偏好
+    memFiles.set('OtherNotes/preferences.json', JSON.stringify({ hourHeight: 90 }));
+    setStoragePath('OtherNotes');
+    expect(await initStore()).toBe(0);
+    expect(getPreferences()).toMatchObject({ hourHeight: 90 });
+    expect(await updatePreferences({ defaultDuration: 60 })).toBe(true);
+    expect(JSON.parse(memFiles.get('OtherNotes/preferences.json')!)).toMatchObject({ hourHeight: 90, defaultDuration: 60 });
+  });
   it('增量写盘必须带 encoding: utf8，且 data 是 JSON 文本本身（不是 base64）', async () => {
     await db.saveGoal(makeGoal('编码回归'));
     await flush();
@@ -88,19 +105,6 @@ describe('Android 原生写入编码', () => {
     expect(data.startsWith('[')).toBe(true);
     const parsed = JSON.parse(data) as Array<{ title: string }>;
     expect(parsed[0].title).toBe('编码回归');
-  });
-
-  it('导出备份文件同样带 encoding: utf8', async () => {
-    const name = await exportBackupFile();
-    expect(name).toMatch(/^Documents\/DailyNote\/dailynote-backup-.*\.json$/);
-
-    expect(writeFileCalls.length).toBeGreaterThan(0);
-    const call = writeFileCalls[writeFileCalls.length - 1];
-    expect(call.encoding).toBe('utf8');
-
-    const data = call.data as string;
-    expect(data.startsWith('{')).toBe(true);
-    expect(JSON.parse(data)).toHaveProperty('version', 1);
   });
 
   it('原生后端完整往返：写盘 → 重置内存 → 从「磁盘」读回数据一致', async () => {

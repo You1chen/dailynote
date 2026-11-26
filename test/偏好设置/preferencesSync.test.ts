@@ -1,26 +1,51 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-const hooks = vi.hoisted(() => ({ values: [] as any[], cursor: 0, effects: [] as (()=>void)[] }));
-vi.mock('react', () => ({
-  useState: (initial: any) => { const index=hooks.cursor++; if(!(index in hooks.values)) hooks.values[index]=typeof initial==='function'?initial():initial; return [hooks.values[index], (value:any)=>{hooks.values[index]=typeof value==='function'?value(hooks.values[index]):value;}]; },
-  useCallback: (fn:any)=>fn,
-  useEffect: (fn:()=>void)=>{hooks.effects.push(fn);},
+import 'fake-indexeddb/auto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const hooks = vi.hoisted(() => ({ subscriptions: [] as (() => void)[] }));
+vi.mock('react', async importOriginal => ({
+  ...(await importOriginal<typeof import('react')>()),
+  useSyncExternalStore: <T>(subscribe: (listener: () => void) => () => void, getSnapshot: () => T) => {
+    const listener = vi.fn(() => getSnapshot());
+    hooks.subscriptions.push(subscribe(listener));
+    return { snapshot: getSnapshot(), listener };
+  },
 }));
 import { usePreferences } from '../../src/hooks/usePreferences';
-let memory: Record<string,string>;
-beforeEach(()=>{memory={};hooks.values=[];hooks.cursor=0;hooks.effects=[];vi.stubGlobal('localStorage',{getItem:(k:string)=>memory[k]??null,setItem:(k:string,v:string)=>{memory[k]=v;}});vi.stubGlobal('window',new EventTarget());});
-const render=(start:number)=>{hooks.cursor=start;return usePreferences();};
-describe('shared preferences',()=>{
- it('broadcasts settings updates to mounted consumers and preserves separately updated fields',()=>{
-  const first=render(0),second=render(1);hooks.effects.forEach(f=>f());
-  first.updatePrefs({theme:'dark'});
-  expect(render(1).prefs.theme).toBe('dark');
-  second.updatePrefs({defaultDuration:45});
-  expect(render(0).prefs.theme).toBe('dark');
-  expect(render(0).prefs.defaultDuration).toBe(45);
- });
- it('reset broadcasts defaults to other mounted consumers',()=>{
-  const first=render(0);render(1);hooks.effects.forEach(f=>f());
-  first.updatePrefs({theme:'dark',futureOnly:true});first.resetPrefs();
-  expect(render(1).prefs.theme).toBe('system');expect(render(1).prefs.futureOnly).toBe(false);
- });
+import { _resetForTest, initStore } from '../../src/services/store';
+import type { UserPreferences } from '../../src/types/preferences';
+
+beforeEach(async () => {
+  vi.stubGlobal('localStorage', { getItem: () => null });
+  await _resetForTest();
+  await initStore();
+});
+afterEach(() => {
+  for (const unsubscribe of hooks.subscriptions.splice(0)) unsubscribe();
+  vi.unstubAllGlobals();
+});
+
+function renderPreferences() {
+  const { prefs, updatePrefs, resetPrefs } = usePreferences();
+  const { snapshot, listener } = prefs as unknown as { snapshot: UserPreferences; listener: ReturnType<typeof vi.fn> };
+  return { prefs: snapshot, listener, updatePrefs, resetPrefs };
+}
+
+describe('shared preferences', () => {
+  it('notifies every mounted consumer and merges updates from independent callers', async () => {
+    const first = renderPreferences();
+    const second = renderPreferences();
+    const firstWrite = first.updatePrefs({ defaultDuration: 30, hourHeight: 48 });
+    expect(second.listener).toHaveLastReturnedWith(expect.objectContaining({ defaultDuration: 30, hourHeight: 48 }));
+    const secondWrite = second.updatePrefs({ futureOnly: true });
+    expect(first.listener).toHaveLastReturnedWith(expect.objectContaining({ defaultDuration: 30, futureOnly: true }));
+    expect(await Promise.all([firstWrite, secondWrite])).toEqual([true, true]);
+  });
+
+  it('publishes the default settings on reset', async () => {
+    const first = renderPreferences();
+    const second = renderPreferences();
+    await first.updatePrefs({ futureOnly: true, defaultDuration: 15 });
+    await first.resetPrefs();
+    expect(second.listener).toHaveLastReturnedWith(expect.objectContaining({ futureOnly: false, defaultDuration: 60 }));
+  });
 });

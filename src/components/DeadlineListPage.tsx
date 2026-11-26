@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouteBack } from '../hooks/useRouteBack';
 import { format } from 'date-fns';
 import { ArrowLeft, Plus, Trash2, X, MapPin, ScanText, ShieldCheck, RotateCcw, type LucideIcon } from 'lucide-react';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { minutesUntilDeadline, ddlRemainText, splitDeadlineItems, splitDismissed } from '../utils/ddl';
 import { renderMarkdown } from '../utils/markdown';
 import {
@@ -15,7 +16,7 @@ import {
   type PlannedRow,
 } from '../utils/extract';
 import { linkIcon, linkKey, linkText, normalizeLinks } from '../utils/ddlLinks';
-import { fileToCompressedDataURL } from '../utils/avatarCrop';
+import { fileToCompressedDataURL } from '../utils/imageCompression';
 import { recognizeImage, ocrAvailable } from '../services/ocr';
 import ConfirmDialog from './ConfirmDialog';
 import Lightbox from './Lightbox';
@@ -93,7 +94,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   icon: Icon,
   api,
 }: DeadlineListProps<T>) {
-  const navigate = useNavigate();
+  const routeBack = useRouteBack();
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   // 弹窗：undefined=关闭，null=新建，T=编辑
@@ -134,14 +135,16 @@ export default function DeadlineListPage<T extends DeadlineBase>({
     setPickerOpen(false);
   }, []);
 
+  const formSheet = useSheetDrag(closeModal, editing !== undefined && !busyImages && !viewer && !recog && !pickerOpen);
+
   // Android 返回键：先关查看器/弹窗，再退出页面
   useRegisterBackHandler(() => {
     if (viewer) { setViewer(null); return true; }
     if (recog) { setRecog(null); return true; }
     if (editing !== undefined) { closeModal(); return true; }
-    navigate('/');
+    routeBack();
     return true;
-  }, [editing, closeModal, viewer, recog, navigate]);
+  }, [editing, closeModal, viewer, recog, routeBack]);
 
   const openCreate = () => {
     setForm({ name: '', deadlineDate: '', deadlineTime: '', location: '', notes: '', images: [], links: [] });
@@ -422,7 +425,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
   return (
     <div className="app-container">
       <div className="page-header">
-        <button className="btn btn-ghost btn-icon" onClick={() => navigate('/')}>
+        <button className="btn btn-ghost btn-icon" aria-label="返回" onClick={routeBack}>
           <ArrowLeft size={22} />
         </button>
         <h1 className="page-title">{title}</h1>
@@ -479,7 +482,8 @@ export default function DeadlineListPage<T extends DeadlineBase>({
       {/* 新建/编辑弹窗 */}
       {editing !== undefined && form && (
         <div className="modal-overlay" onClick={() => !busyImages && closeModal()}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal" style={formSheet.style} onClick={e => e.stopPropagation()}>
+            <div className="sheet-grip" {...formSheet.handlers} aria-hidden="true" />
             <h3 className="modal-title">{editing ? '编辑' : addLabel}</h3>
 
             <div className="ddl-field">
@@ -547,9 +551,7 @@ export default function DeadlineListPage<T extends DeadlineBase>({
                       </span>
                     ))}
                   </div>
-                ) : (
-                  <p className="ddl-hint">可关联本学期在上的课程，或自定义分组里的条目</p>
-                )}
+                ) : null}
               </div>
             )}
 

@@ -1,4 +1,4 @@
-# DailyNote APK Build Script (PowerShell)
+﻿# 记 APK Build Script (PowerShell)
 # Usage: .\scripts\build-apk.ps1            -> Full build (web + sync + APK)
 #        .\scripts\build-apk.ps1 -SyncOnly  -> Web build + sync only (no APK)
 #        .\scripts\build-apk.ps1 -Release   -> Signed release APK
@@ -20,7 +20,7 @@ if ($Release -and -not $SyncOnly -and -not (Test-Path (Join-Path $AndroidDir 'ke
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  DailyNote APK Build" -ForegroundColor Cyan
+Write-Host "  记 APK Build" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -68,7 +68,7 @@ if (-not $SyncOnly) {
     Write-Host ""
 
     $buildType = if ($Release) { "release" } else { "debug" }
-    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\$buildType\dailynote.apk"
+    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\$buildType\记.apk"
     if (Test-Path $apkPath) {
         $size = (Get-Item $apkPath).Length / 1MB
         Write-Host "========================================" -ForegroundColor Green

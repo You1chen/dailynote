@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DailyNote Android build for macOS/Linux.
+# 记 Android build for macOS/Linux.
 # Usage: bash scripts/build-apk.sh [--release]
 # Requires JAVA_HOME (JDK 17) and an Android SDK (compileSdk 36).
 
@@ -24,7 +24,7 @@ npx vite build
 npx cap sync android
 ./android/gradlew -p android --no-daemon "$TASK"
 
-APK="android/app/build/outputs/apk/$TYPE/dailynote.apk"
+APK="android/app/build/outputs/apk/$TYPE/记.apk"
 if [ ! -f "$APK" ]; then
   echo "APK not found: $APK" >&2
   exit 1

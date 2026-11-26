@@ -16,8 +16,8 @@ export default defineConfig({
             registerType: 'autoUpdate',
             includeAssets: ['icons/icon.svg'],
             manifest: {
-              name: 'DailyNote - 日程计划管理',
-              short_name: 'DailyNote',
+              name: '记',
+              short_name: '记',
               description: '计划·反思·收获 — 三位一体的日程管理系统',
               theme_color: '#1a1a2e',
               background_color: '#ffffff',

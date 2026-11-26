@@ -3,13 +3,13 @@
  *
  * 约定：
  *   - 标准文本结构：每行以 `- ` 开头，Tab 递进一层（只认这种）
- *   - 内部 key 用标题链（"实验/近代物理学实验/实验报告"）——
- *     必须用完整链，不能只用"父-子"，否则两个实验下同名的「实验报告」会串状态
+ *   - 执行清单以节点 ID 为 key；旧版标题链（"实验/近代物理学实验/实验报告"）仍可读取
  *   - 列表显示只取末级：`父-子`；一级节点本身是末级时不带前缀
  */
 
 import type { TaskLeaf, TaskNode } from '../types';
 import { genId } from '../types';
+import { elapsedTaskMs } from './taskTiming';
 
 export interface TaskLine {
   title: string;
@@ -154,37 +154,49 @@ export function walkLeaves(
   }
 }
 
-/**
- * 取末级并列列表。
- * `order` 是用户拖动后的顺序（完整链数组）；不在 order 里的按树的顺序追加到末尾。
- */
+// This prefix separates generated IDs from previously persisted title paths.
+const NODE_KEY_PREFIX = 'task-id:';
+
+function executionKey(node: TaskNode, chain: string[]): string {
+  return node.id ? `${NODE_KEY_PREFIX}${node.id}` : leafKey(chain);
+}
+
+/** 旧版末级列表调用方仍可按标题链识别条目。 */
 export function leavesOf(nodes: TaskNode[], order: string[] = []): TaskLeaf[] {
+  return executionLeavesOf(nodes, order).map(leaf => ({ ...leaf, key: leafKey(leaf.chain) }));
+}
+
+/** 执行清单：输出节点 ID key，兼容标题链顺序，未排序的末级按树顺序追加。 */
+export function executionLeavesOf(nodes: TaskNode[], order: string[] = []): TaskLeaf[] {
   const raw: TaskLeaf[] = [];
+  const byKey = new Map<string, TaskLeaf>();
+  const byPath = new Map<string, TaskLeaf[]>();
   walkLeaves(nodes, (node, chain) => {
-    raw.push({
-      key: leafKey(chain),
+    const leaf: TaskLeaf = {
+      key: executionKey(node, chain),
       label: leafLabel(chain),
       chain,
       done: node.done,
       shelved: !!node.shelved,
       doneAt: node.doneAt,
-    });
+      ...(node.taskTiming ? { taskTiming: node.taskTiming } : {}),
+    };
+    raw.push(leaf);
+    byKey.set(leaf.key, leaf);
+    const path = leafKey(chain);
+    const matches = byPath.get(path);
+    if (matches) matches.push(leaf);
+    else byPath.set(path, [leaf]);
   });
 
-  const idx = new Map<string, number>();
-  order.forEach((k, i) => idx.set(k, i));
-
-  return raw
-    .map((leaf, i) => ({ leaf, i }))
-    .sort((a, b) => {
-      const ai = idx.get(a.leaf.key);
-      const bi = idx.get(b.leaf.key);
-      if (ai === undefined && bi === undefined) return a.i - b.i;
-      if (ai === undefined) return 1;
-      if (bi === undefined) return -1;
-      return ai - bi;
-    })
-    .map(x => x.leaf);
+  const ordered = new Set<TaskLeaf>();
+  for (const key of order) {
+    const leaf = byKey.get(key);
+    if (leaf) ordered.add(leaf);
+    else for (const match of byPath.get(key) ?? []) ordered.add(match);
+  }
+  for (const leaf of raw) ordered.add(leaf);
+  return [...ordered];
 }
 
 /** 未结束条数（球上的数字） */
@@ -204,42 +216,49 @@ export function completesAll(leaves: TaskLeaf[], key: string): boolean {
 
 // ============ 变更（不可变） ============
 
-/** 按完整链翻转末级的完成状态 */
-export function toggleLeafDone(nodes: TaskNode[], key: string): TaskNode[] {
-  const parts = key.split('/');
-  const rec = (list: TaskNode[], depth: number): TaskNode[] =>
-    list.map(n => {
-      if (n.title !== parts[depth]) return n;
-      if (depth === parts.length - 1) {
-        const done = !n.done;
-        return { ...n, done, doneAt: done ? Date.now() : undefined };
+export function updateLeaf(
+  nodes: TaskNode[], key: string, update: (node: TaskNode) => TaskNode | null, chain: string[] = [],
+): TaskNode[] {
+  const byId = key.startsWith(NODE_KEY_PREFIX);
+  const rec = (list: TaskNode[], path: string[], matchId: boolean): TaskNode[] => {
+    let changed = false;
+    const next: TaskNode[] = [];
+    for (const node of list) {
+      const nextPath = [...path, node.title];
+      let result: TaskNode | null = node;
+      if (!node.children.length) {
+        const candidate = matchId ? executionKey(node, nextPath) : leafKey(nextPath);
+        if (candidate === key) result = update(node);
+      } else {
+        const children = rec(node.children, nextPath, matchId);
+        if (children !== node.children) result = children.length ? { ...node, children } : null;
       }
-      return { ...n, children: rec(n.children, depth + 1) };
-    });
-  return rec(nodes, 0);
-}
-
-/** 按完整链删掉一个末级；删空的父节点一并清理（不留空壳） */
-export function removeLeaf(nodes: TaskNode[], key: string): TaskNode[] {
-  const parts = key.split('/');
-
-  const rec = (list: TaskNode[], depth: number): TaskNode[] => {
-    const out: TaskNode[] = [];
-    for (const n of list) {
-      if (n.title !== parts[depth]) { out.push(n); continue; }
-      // 命中链上节点
-      if (depth === parts.length - 1 && n.children.length === 0) continue; // 末级：丢掉
-      const children = rec(n.children, depth + 1);
-      if (children.length > 0) out.push({ ...n, children });               // 父节点还有别的孩子就保留
-      // 否则父节点变成空壳，一并丢掉
+      if (result !== node) changed = true;
+      if (result) next.push(result);
     }
-    return out;
+    return changed ? next : list;
   };
-
-  return rec(nodes, 0);
+  const result = rec(nodes, chain, byId);
+  // A legacy title may itself begin with the prefix.
+  return byId && result === nodes ? rec(nodes, chain, false) : result;
 }
 
-/** 拖动排序：把 from 移到 to 的位置 */
+/** 按节点 ID 或旧版标题链翻转末级的完成状态 */
+export function toggleLeafDone(nodes: TaskNode[], key: string, now = Date.now()): TaskNode[] {
+  return updateLeaf(nodes, key, node => {
+    const done = !node.done;
+    const next = { ...node, done, doneAt: done ? now : undefined };
+    if (done && node.taskTiming?.startedAt !== undefined) next.taskTiming = { elapsedMs: elapsedTaskMs(node.taskTiming, now) };
+    return next;
+  });
+}
+
+/** 删除指定末级；删空的父节点一并清理（不留空壳） */
+export function removeLeaf(nodes: TaskNode[], key: string): TaskNode[] {
+  return updateLeaf(nodes, key, () => null);
+}
+
+/** 旧版排序：将 from 插在 to 前面 */
 export function moveKey(order: string[], from: string, to: string): string[] {
   if (from === to) return order;
   const next = order.filter(k => k !== from);
@@ -249,12 +268,36 @@ export function moveKey(order: string[], from: string, to: string): string[] {
   return next;
 }
 
-/** 保证 order 覆盖当前所有末级：去掉已消失的，补上新出现的（按树顺序追加） */
+/** Move to the destination's original slot, including when moving down. */
+export function moveKeyToTargetSlot(order: string[], from: string, to: string): string[] {
+  const fromIndex = order.indexOf(from);
+  const toIndex = order.indexOf(to);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return order;
+  const next = [...order];
+  next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, from);
+  return next;
+}
+
+/** 保留旧版标题链输出，便于旧调用方继续使用。 */
 export function normalizeOrder(nodes: TaskNode[], order: string[]): string[] {
-  const keys = leavesOf(nodes).map(l => l.key);
-  const keep = order.filter(k => keys.includes(k));
-  for (const k of keys) if (!keep.includes(k)) keep.push(k);
-  return keep;
+  return [...new Set(leavesOf(nodes, order).map(leaf => leaf.key))];
+}
+
+/** 将旧版标题链转换为 ID key，去掉已消失的末级，补上新末级。 */
+export function normalizeExecutionOrder(nodes: TaskNode[], order: string[]): string[] {
+  return executionLeavesOf(nodes, order).map(leaf => leaf.key);
+}
+
+/** Resolve legacy action keys against current leaves; stale keys are no-ops. */
+export function reorderExecutionLeaves(nodes: TaskNode[], order: string[], from: string, to: string): string[] {
+  const leaves = executionLeavesOf(nodes, order);
+  const resolve = (key: string) => leaves.find(leaf => leaf.key === key)
+    ?? leaves.find(leaf => leafKey(leaf.chain) === key);
+  const source = resolve(from);
+  const target = resolve(to);
+  if (!source || !target || source === target) return order;
+  return moveKeyToTargetSlot(leaves.map(leaf => leaf.key), source.key, target.key);
 }
 
 /** 搁置 / 撤销搁置某个末级（保持链结构不动，只改标记） */
@@ -264,26 +307,34 @@ export function setLeafShelved(
   shelved: boolean,
   chain: string[] = [],
 ): TaskNode[] {
-  return nodes.map(node => {
-    const nextChain = [...chain, node.title];
-    if (node.children.length === 0) {
-      if (leafKey(nextChain) !== key) return node;
-      return { ...node, shelved };
-    }
-    const children = setLeafShelved(node.children, key, shelved, nextChain);
-    return children === node.children ? node : { ...node, children };
-  });
+  return updateLeaf(nodes, key, node => node.shelved === shelved ? node : { ...node, shelved }, chain);
 }
 /**
  * 清掉已完成的末级；父节点因此变空壳的也一并清掉。
  * 全部完成时返回空数组（调用方据此把清单清空）。
  */
-export function pruneDoneLeaves(nodes: TaskNode[]): TaskNode[] {
-  return nodes
-    .map(node => {
-      if (node.children.length === 0) return node.done ? null : node;
-      const children = pruneDoneLeaves(node.children);
-      return children.length === 0 ? null : { ...node, children };
-    })
-    .filter((n): n is TaskNode => n !== null);
+export function pruneDoneLeaves(nodes: TaskNode[], shouldRemove = (node: TaskNode) => node.done): TaskNode[] {
+  let changed = false;
+  const kept: TaskNode[] = [];
+  for (const node of nodes) {
+    if (node.children.length === 0) {
+      if (shouldRemove(node)) changed = true;
+      else kept.push(node);
+      continue;
+    }
+    const children = pruneDoneLeaves(node.children, shouldRemove);
+    if (children !== node.children) changed = true;
+    if (children.length) kept.push(children === node.children ? node : { ...node, children });
+  }
+  return changed ? kept : nodes;
+}
+
+export const TASK_UNDO_MS = 30_000;
+
+export function isExpiredTask(node: TaskNode, now: number): boolean {
+  return node.done && (node.doneAt === undefined || node.doneAt + TASK_UNDO_MS <= now);
+}
+
+export function pruneExpiredTasks(nodes: TaskNode[], now = Date.now()): TaskNode[] {
+  return pruneDoneLeaves(nodes, node => isExpiredTask(node, now));
 }

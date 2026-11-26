@@ -3,21 +3,14 @@ import ReactDOM from 'react-dom/client';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import AppRoot from './App';
-import SetupPage from './pages/SetupPage';
-import {
-  loadFromFile,
-  setStoragePath,
-  getDisplayPath,
-  flush,
-  isCapacitor,
-  storageAccessBlocked,
-  requestAllFilesAccess,
-  INIT_STORAGE_BLOCKED,
-} from './services/storage';
+import { flush, requestAllFilesAccess } from './services/storage';
+import { initializeStartup } from './services/startup';
+
+const isAndroid = Capacitor.getPlatform() === 'android';
 
 // Android 15+ applies window insets to the native content root. Keep the CSS
 // safe-area variables at zero there so the two layers do not double-pad.
-if (Capacitor.getPlatform() === 'android') {
+if (isAndroid) {
   const root = document.documentElement;
   root.style.setProperty('--safe-top', '0px');
   root.style.setProperty('--safe-right', '0px');
@@ -31,178 +24,108 @@ const bootCenter: React.CSSProperties = {
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  background: '#f5f5f7',
-  color: '#6b7280',
+  background: 'var(--color-bg)',
+  color: 'var(--color-text-secondary)',
   fontSize: '0.875rem',
   gap: 12,
 };
 
-const permBtn: React.CSSProperties = {
-  marginTop: 8,
-  padding: '12px 28px',
-  borderRadius: 10,
-  border: 'none',
-  background: '#4f46e5',
-  color: '#fff',
-  fontSize: '0.95rem',
-  cursor: 'pointer',
-};
-
-const permBtnGhost: React.CSSProperties = {
-  ...permBtn,
-  background: 'transparent',
-  color: '#4f46e5',
-  border: '1px solid #4f46e5',
-  marginTop: 0,
-};
-
 function Boot() {
-  const [phase, setPhase] = useState<'loading' | 'setup' | 'storagePermission' | 'ready'>('loading');
-  const [statusMsg, setStatusMsg] = useState('正在初始化...');
+  const [phase, setPhase] = useState<'loading' | 'storagePermission' | 'ready' | 'error'>('loading');
   const [appVersion, setAppVersion] = useState('');
   const busyRef = useRef(false);
 
-  // 显示安装的版本号（Android 取 APK versionName），便于确认手机上运行的是哪个版本
   useEffect(() => {
-    (async () => {
-      try {
-        const info = await App.getInfo();
-        setAppVersion(info.version);
-      } catch {
-        /* 取不到就隐藏版本号 */
-      }
-    })();
+    if (isAndroid) App.getInfo().then(info => setAppVersion(info.version)).catch(() => {});
   }, []);
 
-  /** 权限就绪后加载数据：被阻塞 → 授权页；成功 → 进入应用 */
-  const tryLoad = useCallback(async (): Promise<void> => {
+  const tryLoad = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
     try {
-      if (await storageAccessBlocked()) {
+      const result = await initializeStartup();
+      if (result.phase === 'storagePermission') {
         setPhase('storagePermission');
         return;
       }
-
-      setStatusMsg('正在读取数据...');
-      const count = await loadFromFile();
-
-      if (count === INIT_STORAGE_BLOCKED) {
-        setPhase('storagePermission');
-        return;
-      }
-      if (count > 0) {
-        // Move any legacy embedded cards into the independent collector before rendering.
+      if (result.count > 0) {
+        // Move legacy embedded cards to the independent collector before rendering.
         const { initializeKnowledgeCards } = await import('./db/knowledgeCards');
         await initializeKnowledgeCards();
-        setStatusMsg(`已从 ${getDisplayPath()} 恢复 ${count} 条记录`);
-      } else if (count === -1) {
-        setStatusMsg('首次使用，数据将在保存时创建');
       }
-
-      // 数据就绪就直接进入应用；启动快照命中时不再人为等待。
       setPhase('ready');
+    } catch (error) {
+      console.error('读取启动数据失败:', error);
+      setPhase('error');
     } finally {
       busyRef.current = false;
     }
   }, []);
 
+  useEffect(() => { void tryLoad(); }, [tryLoad]);
+
+  // Don't write an empty startup snapshot while waiting for access to existing data.
   useEffect(() => {
-    (async () => {
-      const storagePath = localStorage.getItem('dailynote_storage_path');
-
-      if (!storagePath) {
-        // 首次使用，需要用户选择存储位置
-        setPhase('setup');
-        return;
-      }
-
-      // 已有存储路径：从文件加载数据到内存（file-authoritative）
-      setStatusMsg('正在读取数据...');
-      await tryLoad();
-    })();
-  }, [tryLoad]);
-
-  // 生命周期兜底：切后台/退到桌面时冲刷未完成写入
-  useEffect(() => {
-    const onHide = () => { flush(); };
+    if (phase !== 'ready') return;
+    const onHide = () => { if (document.visibilityState === 'hidden') void flush(); };
     document.addEventListener('visibilitychange', onHide);
-    let appListener: { remove: () => void } | null = null;
-    if (isCapacitor()) {
-      App.addListener('pause', onHide).then(l => { appListener = l; });
-    }
+    const listener = isAndroid ? App.addListener('pause', () => { void flush(); }) : null;
     return () => {
       document.removeEventListener('visibilitychange', onHide);
-      appListener?.remove();
+      void listener?.then(handle => handle.remove());
     };
-  }, []);
+  }, [phase]);
 
-  // 授权页：用户去系统设置开启「所有文件访问」返回后，自动重新检测并加载
+  // Check again after the user returns from Android's system settings.
   useEffect(() => {
     if (phase !== 'storagePermission') return;
-    let cancelled = false;
-    const check = () => { if (!cancelled) tryLoad(); };
-    const onVisibility = () => { if (document.visibilityState === 'visible') check(); };
-    document.addEventListener('visibilitychange', onVisibility);
-    let appListener: { remove: () => void } | null = null;
-    if (isCapacitor()) {
-      App.addListener('appStateChange', state => { if (state.isActive) check(); }).then(l => { appListener = l; });
-    }
+    const onVisible = () => { if (document.visibilityState === 'visible') void tryLoad(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const listener = isAndroid ? App.addListener('appStateChange', state => { if (state.isActive) void tryLoad(); }) : null;
     return () => {
-      cancelled = true;
-      document.removeEventListener('visibilitychange', onVisibility);
-      appListener?.remove();
+      document.removeEventListener('visibilitychange', onVisible);
+      void listener?.then(handle => handle.remove());
     };
   }, [phase, tryLoad]);
 
-  const handleSetupComplete = async (path: string) => {
-    setStoragePath(path);
-
-    // 检查该路径是否已有数据文件（例如之前用过）；权限被阻塞则先引导授权
-    setStatusMsg('正在检查已有数据...');
-    await tryLoad();
-  };
-
-  const handleGrantAccess = async () => {
-    await requestAllFilesAccess();
-  };
-
   if (phase === 'loading') {
     return (
-      <div style={bootCenter}>
+      <div style={bootCenter} role="status">
         <div style={{
           width: 32, height: 32,
-          border: '3px solid #e5e7eb',
-          borderTopColor: '#4f46e5',
+          border: '3px solid var(--color-border)',
+          borderTopColor: 'var(--color-primary)',
           borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite',
+          animation: 'boot-spin 0.8s linear infinite',
         }} />
-        <span>{statusMsg}</span>
-        {appVersion && <span style={{ fontSize: '0.75rem', opacity: 0.55 }}>DailyNote v{appVersion}</span>}
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <span>正在读取数据…</span>
+        {appVersion && <small>记 v{appVersion}</small>}
+        <style>{`@keyframes boot-spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
-  if (phase === 'setup') {
-    return <SetupPage onComplete={handleSetupComplete} />;
+  if (phase === 'error') {
+    return (
+      <div style={bootCenter}>
+        <p role="alert">无法读取 记 数据。</p>
+        <button type="button" className="btn btn-primary" onClick={() => { setPhase('loading'); void tryLoad(); }}>重试</button>
+      </div>
+    );
   }
 
   if (phase === 'storagePermission') {
     return (
-      <div style={{ ...bootCenter, padding: 24, textAlign: 'center', color: '#374151', fontSize: '0.9rem' }}>
-        <span style={{ fontSize: 44 }}>🔓</span>
-        <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>需要存储权限</h2>
-        <p style={{ margin: 0, maxWidth: 420, lineHeight: 1.7 }}>
-          数据保存在公共 Documents 目录，需要「所有文件访问」权限。数据仅存本机。
-        </p>
-        <p style={{ margin: 0, maxWidth: 420, lineHeight: 1.7, color: '#6b7280', fontSize: '0.8rem' }}>
-          点击下方按钮去系统设置开启「允许管理所有文件」，返回后自动重新检测。
-        </p>
-        <button style={permBtn} onClick={handleGrantAccess}>去开启权限</button>
-        <button style={permBtnGhost} onClick={() => tryLoad()}>已开启，重新检测</button>
-        {appVersion && <span style={{ fontSize: '0.75rem', opacity: 0.55 }}>DailyNote v{appVersion}</span>}
-      </div>
+      <main style={{ ...bootCenter, padding: 24, textAlign: 'center' }}>
+        <h1 style={{ fontSize: '1.25rem', color: 'var(--color-text)' }}>需要存储权限</h1>
+        <p style={{ maxWidth: 400 }}>记 将数据保存在本机公共 Documents 目录，需要「所有文件访问」权限。</p>
+        <p style={{ maxWidth: 400 }}>请在系统设置中打开「允许管理所有文件」，返回后会自动重新检测。</p>
+        <button type="button" className="btn btn-primary" onClick={async () => {
+          if (await requestAllFilesAccess()) void tryLoad();
+        }}>打开系统设置</button>
+        <button type="button" className="btn btn-outline" onClick={() => void tryLoad()}>重新检测权限</button>
+        {appVersion && <small>记 v{appVersion}</small>}
+      </main>
     );
   }
 

@@ -1,10 +1,11 @@
 import { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Maximize2, Settings } from 'lucide-react';
+import PlanTimeGrid from './PlanTimeGrid';
 import DayNavigator from './DayNavigator';
 import { todayStr, type TimeBlock, type Course } from '../types';
 import type { UserPreferences } from '../hooks/usePreferences';
-import { timeToMinutes, isInSleepPeriod, sleepLabel, gridClickY, blockRenderRect } from '../utils/time';
+import { timeToMinutes, isInSleepPeriod, sleepLabel, topToMinutes, minutesToTop as dayMinutesToTop, blockRenderRect } from '../utils/time';
 import './FullscreenSchedule.css';
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
   prefs: UserPreferences;
   onDateChange: (d: string) => void;
   onBlockClick: (block: TimeBlock) => void;
-  onGridClick: (startTime: string) => void;
+  onGridSelect: (start: number, end?: number) => void;
   onPrefsClick: () => void;
   onClose: () => void;
   /** 当天课程（只读展示，调用方用 computeDayCourses 算好传入） */
@@ -24,7 +25,7 @@ interface Props {
 
 export default function FullscreenSchedule({
   visible, date, blocks, prefs,
-  onDateChange, onBlockClick, onGridClick, onPrefsClick, onClose,
+  onDateChange, onBlockClick, onGridSelect, onPrefsClick, onClose,
   courses, onCourseClick,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -43,9 +44,9 @@ export default function FullscreenSchedule({
   const eMin = timeToMinutes(sleepEnd);
   const sleepCrosses = eMin < sMin;
   const sleepDurationMin = sleepCrosses ? (1440 - sMin) + eMin : eMin - sMin;
-  const visibleHours = hideSleep ? 24 - Math.round(sleepDurationMin / 60) : 24;
-
-  const gridHeight = visibleHours * hourHeight + (hideSleep ? 28 : 0); // 28px for collapsed bar
+  const barHeight = hideSleep ? 28 : 0;
+  const gridHeight = ((1440 - (hideSleep ? sleepDurationMin : 0)) / 60) * hourHeight + barHeight;
+  const geometry = { hideSleep, sleepStart, sleepEnd, hourHeight, barHeight, gridHeight };
 
   // 自动滚动到当前时间（使用 minutesToTop 正确映射睡眠偏移）
   useEffect(() => {
@@ -66,105 +67,18 @@ export default function FullscreenSchedule({
   const isToday = date === todayStr();
   const showNowLine = isToday && !(hideSleep && isInSleepPeriod(nowMinutes, sleepStart, sleepEnd));
 
-  // 将实际分钟映射到网格 top 位置
-  function minutesToTop(minutes: number): number {
-    if (!hideSleep) return (minutes / 60) * hourHeight;
-
-    const s = timeToMinutes(sleepStart);
-    const e = timeToMinutes(sleepEnd);
-
-    if (sleepCrosses) {
-      // 跨夜：睡眠 23:00-07:00，可见 07:00-23:00
-      if (minutes >= e && minutes < s) {
-        // 在可见范围内（07:00-23:00）
-        return ((minutes - e) / 60) * hourHeight + 28; // +28 弥补顶部睡眠条的偏移
-      } else {
-        return -1; // 在睡眠时段
-      }
-    } else {
-      // 不跨夜：睡眠在中间（罕见）
-      if (minutes < s) {
-        return (minutes / 60) * hourHeight + 28;
-      } else if (minutes >= e) {
-        return ((minutes - (e - s)) / 60) * hourHeight + 28;
-      } else {
-        return -1; // 在睡眠时段
-      }
-    }
+  function minutesToTop(minute: number) {
+    return dayMinutesToTop(minute, geometry);
   }
 
-  function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
-    if ((e.target as HTMLElement).closest('.fs-time-block')) return;
-    if ((e.target as HTMLElement).closest('.fs-course-block')) return;
-    if ((e.target as HTMLElement).closest('.fs-sleep-bar')) return;
-
-    // 滚动容器（.fs-grid-container）的 rect.top 不随内部滚动变化；
-    // 若取 e.currentTarget（.fs-grid）的 rect.top，会随滚动偏移，再加 scrollTop 会双重补偿
-    const rect = scrollRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const y = gridClickY(e.clientY, rect.top, scrollRef.current?.scrollTop ?? 0);
-
-    // 精确逆映射：minutesToTop 的反函数
-    let actualMinutes: number;
-    if (hideSleep) {
-      const adjustedY = y - 28;
-      if (adjustedY < 0) return; // 点击在折叠条上
-
-      if (sleepCrosses) {
-        // 跨夜：逆公式 visualMinutes = adjustedY * 60 / hourHeight, 然后 + eMin
-        actualMinutes = (adjustedY * 60) / hourHeight + eMin;
-        if (actualMinutes >= 1440) actualMinutes -= 1440;
-        // 边界保护：不超过 sleepStart
-        if (actualMinutes >= sMin) actualMinutes = sMin - 5;
-      } else {
-        // 不跨夜：压缩空间中 >= sMin 意味着已越过睡眠间隙
-        actualMinutes = (adjustedY * 60) / hourHeight;
-        if (actualMinutes >= sMin) actualMinutes += sleepDurationMin;
-      }
-    } else {
-      actualMinutes = (y * 60) / hourHeight;
-    }
-
-    actualMinutes = Math.max(0, Math.min(1430, Math.round(actualMinutes / 5) * 5));
-    onGridClick(
-      `${String(Math.floor(actualMinutes / 60)).padStart(2, '0')}:${String(actualMinutes % 60).padStart(2, '0')}`
-    );
+  function gridMinute(y: number, endBoundary = false) {
+    if (hideSleep && sleepCrosses && y >= gridHeight - 0.01) return sMin;
+    if (hideSleep && !sleepCrosses && endBoundary && Math.abs(y - (barHeight + sMin * hourHeight / 60)) < 0.01) return sMin;
+    return topToMinutes(y, geometry) ?? 0;
   }
 
-  // 生成可见的小时标签
-  function getVisibleHourLabels(): { hour: number; top: number }[] {
-    const labels: { hour: number; top: number }[] = [];
-    if (!hideSleep) {
-      for (let h = 0; h < 24; h++) {
-        labels.push({ hour: h, top: h * hourHeight });
-      }
-    } else {
-      // 从 sleepEnd 开始，到 sleepStart 结束
-      const seH = Math.floor(eMin / 60);
-      const ssH = Math.floor(sMin / 60);
-      let offset = 28; // 折叠条高度
-      if (sleepCrosses) {
-        // e.g., 07:00-23:00
-        let h = seH;
-        let visualH = 0;
-        while (h !== ssH || visualH === 0) {
-          labels.push({ hour: h, top: offset + visualH * hourHeight });
-          h = (h + 1) % 24;
-          visualH++;
-        }
-      } else {
-        // e.g., sleep at 03:00-06:00
-        for (let h = 0; h < 24; h++) {
-          if (h >= sMin / 60 && h < eMin / 60) continue; // skip sleep
-          const adjustedH = h >= eMin / 60 ? h - Math.round(sleepDurationMin / 60) : h;
-          labels.push({ hour: h, top: offset + adjustedH * hourHeight });
-        }
-      }
-    }
-    return labels;
-  }
-
-  const hourLabels = getVisibleHourLabels();
+  const hourLabels = Array.from({ length: 24 }, (_, hour) => ({ hour, top: minutesToTop(hour * 60) }))
+    .filter(label => label.top >= 0);
 
   if (!visible) return null;
 
@@ -184,7 +98,8 @@ export default function FullscreenSchedule({
 
         {/* 时间网格 */}
         <div className="fs-grid-container" ref={scrollRef}>
-          <div className="fs-grid" style={{ height: gridHeight }} onClick={handleGridClick}>
+          <PlanTimeGrid className="fs-grid" firstY={barHeight} height={gridHeight}
+            hourTops={hourLabels.map(label => label.top)} minuteAt={gridMinute} onSelect={onGridSelect}>
             {/* 睡眠折叠条 */}
             {hideSleep && (
               <div
@@ -210,14 +125,7 @@ export default function FullscreenSchedule({
 
             {/* 课程块（只读展示，z-index 低于任务块） */}
             {(courses ?? []).map(course => {
-              const rect = blockRenderRect(course.startTime, course.endTime, {
-                hideSleep,
-                sleepStart,
-                sleepEnd,
-                hourHeight,
-                barHeight: 28,
-                gridHeight,
-              });
+              const rect = blockRenderRect(course.startTime, course.endTime, geometry);
               if (!rect) return null;
               const { top, height } = rect;
               return (
@@ -245,14 +153,7 @@ export default function FullscreenSchedule({
 
             {/* 时间块 */}
             {blocks.map(block => {
-              const rect = blockRenderRect(block.startTime, block.endTime, {
-                hideSleep,
-                sleepStart,
-                sleepEnd,
-                hourHeight,
-                barHeight: 28,
-                gridHeight,
-              });
+              const rect = blockRenderRect(block.startTime, block.endTime, geometry);
               if (!rect) return null;
               const { top, height } = rect;
               const isDone = block.completed;
@@ -274,7 +175,7 @@ export default function FullscreenSchedule({
                       {block.startTime}-{block.endTime}
                     </span>
                     <span className="fs-time-block-title">
-                      {block.taskTitle || '点击编辑...'}
+                      {block.taskTitle}
                     </span>
                     {clTotal > 0 && (
                       <span className="fs-time-block-meta">
@@ -297,7 +198,7 @@ export default function FullscreenSchedule({
                 </div>
               );
             })()}
-          </div>
+          </PlanTimeGrid>
         </div>
       </div>
     </div>,

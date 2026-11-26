@@ -33,7 +33,6 @@
   --font-xl: 1.25rem;
   --font-2xl: 1.5rem;
 
-  --nav-w: 76px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -70,7 +69,7 @@ body {
 /* ============ 通用工具类 ============ */
 .app-container {
   flex: 1;
-  padding: 16px 16px calc(80px + var(--safe-bottom));
+  padding: 16px 16px calc(20px + var(--safe-bottom));
   max-width: 480px;
   margin: 0 auto;
   width: 100%;
@@ -289,7 +288,7 @@ body {
 /* ============ FAB 按钮 ============ */
 .fab {
   position: fixed;
-  bottom: calc(80px + var(--safe-bottom) + 16px);
+  bottom: calc(16px + var(--safe-bottom));
   right: max(16px, calc((100vw - 480px) / 2 + 16px));
   width: 52px;
   height: 52px;
@@ -310,40 +309,46 @@ body {
   transform: scale(0.92);
 }
 
-/* ============ 左侧导航栏布局 ============ */
+/* ============ 页面与导航入口 ============ */
+.app-page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--safe-top));
+}
+
 .app-main {
-  margin-left: var(--nav-w);
-  min-height: 100dvh;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
-.app-main.app-main--garden {
-  margin-left: 0;
+.app-gesture-shell {
+  --swipe-settle-duration: 240ms;
+  --swipe-easing: cubic-bezier(.2, .75, .25, 1);
+  touch-action: pan-y pinch-zoom;
 }
 
-/* ============ 深色主题 ============ */
-[data-theme="dark"] {
-  --color-bg: #0f0f1a;
-  --color-surface: #1a1a2e;
-  --color-primary: #818cf8;
-  --color-primary-light: #a5b4fc;
-  --color-primary-bg: #1e1b4b;
-  --color-text: #e2e8f0;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-  --color-border: #2d2d4a;
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-danger: #f87171;
-  --color-heatmap-1: #1e1b4b;
-  --color-heatmap-2: #3730a3;
-  --color-heatmap-3: #6366f1;
-  --color-heatmap-4: #a5b4fc;
+.app-quick-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  transform: translateX(var(--quick-card-offset, 0));
+}
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+.app-quick-panel[aria-hidden='true'] { pointer-events: none; }
+.app-gesture-shell[data-swipe='open-quick-note'] { --quick-card-offset: calc(100% - var(--swipe-distance, 0px)); }
+.app-gesture-shell[data-swipe='close-quick-note'] { --quick-card-offset: var(--swipe-distance, 0px); }
+.app-gesture-shell[data-swipe='open-quick-note'][data-swipe-phase='cancel'],
+.app-gesture-shell[data-swipe='close-quick-note'][data-swipe-phase='commit'] { --quick-card-offset: 100%; }
+.app-gesture-shell[data-swipe='open-quick-note'][data-swipe-phase='commit'],
+.app-gesture-shell[data-swipe='close-quick-note'][data-swipe-phase='cancel'] { --quick-card-offset: 0px; }
+.app-gesture-shell:is([data-swipe-phase='commit'], [data-swipe-phase='cancel']) .app-quick-panel {
+  transition: transform var(--swipe-settle-duration) var(--swipe-easing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-gesture-shell { --swipe-settle-duration: 0ms; }
 }
 
 /* ============ 动画 ============ */
@@ -357,13 +362,14 @@ body {
 }
 
 /* Grab area stays large enough for a fingertip; the visible bar is decorative only. */
-.bs-handle, .pref-handle, .mind-grip, .bk-grip {
+.bs-handle, .pref-handle, .bk-grip, .tb-grip, .sheet-grip {
   width: 100% !important; height: 30px !important; margin: 0 !important;
   background: transparent !important; border-radius: 0 !important;
   flex-shrink: 0; display: grid; place-items: center;
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
-.bs-handle::before, .pref-handle::before, .mind-grip::before, .bk-grip::before {
+.bs-handle::before, .pref-handle::before, .bk-grip::before,
+.tb-grip::before, .sheet-grip::before {
   content: ''; display: block; width: 38px; height: 4px; border-radius: 3px; background: var(--color-border);
 }
 
@@ -374,7 +380,7 @@ body {
 .app-update-bar {
   position: fixed;
   left: 50%;
-  bottom: calc(78px + var(--safe-bottom));
+  bottom: calc(16px + var(--safe-bottom));
   transform: translateX(-50%);
   z-index: 150;
   display: flex;

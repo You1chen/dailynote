@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { getSemester, saveCourse } from '../db';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import type { CourseSlot } from '../utils/courseTimetable';
 import { isValidCourseTime, loadCourseTimeCombinations } from '../utils/courseTimeCombinations';
 import type { Course } from '../types';
@@ -78,6 +79,8 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
       : { ...DEFAULT_FORM, ...initialSlot },
   );
   const [formError, setFormError] = useState('');
+  const backdropPressed = useRef(false);
+  const sheet = useSheetDrag(onClose);
   const combinations = loadCourseTimeCombinations();
   const changeStartTime = (startTime: string) => {
     const match = combinations.find(pair => pair.startTime === startTime);
@@ -125,8 +128,14 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay"
+      onPointerDown={event => { backdropPressed.current = event.target === event.currentTarget; }}
+      onClick={event => {
+        if (event.target === event.currentTarget && backdropPressed.current) onClose();
+        backdropPressed.current = false;
+      }}>
+      <div className="modal" style={sheet.style} onClick={e => e.stopPropagation()}>
+        <div className="sheet-grip" {...sheet.handlers} aria-hidden="true" />
         <h3 className="modal-title">{course ? '编辑课程' : '新建课程'}</h3>
         <div className="form-group">
           <label className="label">课程名 *</label>
@@ -144,7 +153,7 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
             className="input"
             value={form.teacher}
             onChange={e => setForm({ ...form, teacher: e.target.value })}
-            placeholder="可留空"
+            placeholder="教师姓名"
             maxLength={30}
           />
         </div>
@@ -182,9 +191,6 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
               );
             })}
           </div>
-          <p className="settings-field-hint" style={{ marginTop: 6 }}>
-            多星期有课可多选，无需重复创建
-          </p>
         </div>
         <div className="form-group">
           <label className="label">上课时间</label>
@@ -219,7 +225,6 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
             />
           </div>
         </div>
-        <p className="settings-field-hint">选择组合或输入匹配的开始时间会自动填写结束时间，之后仍可手动调整。组合可在设置中管理。</p>
         <div className="form-group">
           <label className="label">单双周</label>
           <div className="settings-chip-row">
@@ -237,12 +242,13 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
         <div className="form-group">
           <label className="label">周数范围</label>
           <div className="courses-week-row">
-            <span className="courses-week-label">从第</span>
+            <span className="courses-week-label">第</span>
             <input
               className="input input-sm courses-week-input"
               type="number"
               min={1}
               max={30}
+              aria-label="起始周"
               value={form.startWeek}
               onChange={e => setForm({ ...form, startWeek: parseInt(e.target.value, 10) })}
             />
@@ -252,6 +258,7 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
               type="number"
               min={1}
               max={30}
+              aria-label="周数"
               value={form.weekCount}
               onChange={e => setForm({ ...form, weekCount: parseInt(e.target.value, 10) })}
             />

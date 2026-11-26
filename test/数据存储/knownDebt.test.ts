@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { _resetForTest, initStore, flush, persist, getStore, exportJSON, importJSONIntoStore } from '../../src/services/store';
+import { _resetForTest, initStore, flush, persist, getStore } from '../../src/services/store';
 import { clearSnapshot } from '../../src/services/snapshot';
 import * as db from '../../src/db';
 
@@ -35,17 +35,17 @@ beforeEach(async () => {
 });
 
 describe('已知债务回归：真实 CRUD → 持久化 → 重载', () => {
-  it('仓库现有备份导入、全量保存、清快照重载保持全部内容', async () => {
+  it('仓库样例数据全量保存、清快照重载保持全部内容', async () => {
     const fs = (globalThis as any).process.getBuiltinModule('node:fs');
     const sample = JSON.parse(fs.readFileSync('dailynote-data.json', 'utf8'));
-    await importJSONIntoStore(JSON.stringify(sample));
+    const tables = ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines'] as const;
+    for (const key of tables) (getStore() as any)[key] = sample[key];
     expect(await persist()).toBe(true);
     await flush();
     await clearSnapshot();
     await initStore();
-    const restored = JSON.parse(exportJSON());
-    for (const key of ['dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines']) {
-      expect(restored[key].map(({ id: _id, ...record }: any) => record))
+    for (const key of tables) {
+      expect((getStore() as any)[key].map(({ id: _id, ...record }: any) => record))
         .toEqual(sample[key].map(({ id: _id, ...record }: any) => record));
     }
   });
@@ -61,23 +61,15 @@ describe('已知债务回归：真实 CRUD → 持久化 → 重载', () => {
     expect((await db.getAllGoals()).map(item => item.title).sort()).toEqual(['新目标', '旧目标'].sort());
   });
 
-  it('同一会话导入后不降低已分配过的 ID', async () => {
-    const id = await db.saveGoal(goal('旧目标'));
-    await db.deleteGoal(id);
-    await db.clearAllTrash();
-    await importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [] }));
-    expect(await db.saveGoal(goal('新目标'))).toBeGreaterThan(id);
-  });
-
-  it('全量 persist 包含杂念，清快照后仍能恢复', async () => {
-    getStore().ideas.push({ id: 1, kind: 'wish', text: '周末看海', date: '2026-10-28', createdAt: 0, updatedAt: 0 });
+  it('全量 persist 包含自动关联分组，清快照后仍能恢复', async () => {
+    getStore().linkGroups.push({ id: 1, name: '读书', items: [{ id: 'i1', name: '课本章节' }], createdAt: 0, updatedAt: 0 });
     expect(await persist()).toBe(true);
     await flush();
-    expect(JSON.parse((await kv('ideas.json'))!)[0].text).toBe('周末看海');
+    expect(JSON.parse((await kv('linkGroups.json'))!)[0].items[0].name).toBe('课本章节');
     await clearSnapshot();
-    getStore().ideas = [];
+    getStore().linkGroups = [];
     await initStore();
-    expect(getStore().ideas[0].text).toBe('周末看海');
+    expect(getStore().linkGroups[0].items[0].name).toBe('课本章节');
   });
 
   it('全量保存清理孤儿日期文件，保留其他文件与备份', async () => {
@@ -128,9 +120,11 @@ describe('已知债务回归：真实 CRUD → 持久化 → 重载', () => {
     expect(getStore().courses[0].semesterStartDate).toBe('2026-03-02');
   });
 
-  it('导入旧备份按备份学期补归属，并在导出中保留', async () => {
+  it('课程读入时按当时学期补归属，保存后仍在', async () => {
     await db.saveSemester(semester('2026-09-07'));
-    await importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [], courses: [{ ...course('旧备份课程'), id: 4 }], semester: [semester('2026-03-02')] }));
-    expect(JSON.parse(exportJSON()).courses[0].semesterStartDate).toBe('2026-03-02');
+    await kv('courses.json', JSON.stringify([{ ...course('旧备份课程'), id: 4 }]));
+    await clearSnapshot();
+    await initStore();
+    expect(getStore().courses.find(item => item.id === 4)?.semesterStartDate).toBe('2026-09-07');
   });
 });

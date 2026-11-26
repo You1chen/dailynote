@@ -22,7 +22,7 @@ async function transaction(change: () => void): Promise<void> {
     const ok = await mutate(() => {
       before = deepClone({ knowledgeCards: store.knowledgeCards, knowledgeMaps: store.knowledgeMaps });
       change();
-    }, { writeOrder: ['knowledgeCards', 'knowledgeMaps'], skipActivity: true });
+    }, { writeOrder: ['knowledgeCards', 'knowledgeMaps'] });
     if (!ok) throw new Error('Failed to save knowledge cards');
   } catch (error) {
     if (before) {

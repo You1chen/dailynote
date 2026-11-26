@@ -15,9 +15,6 @@ export interface TimeBlock {
   taskTitle: string;       // 任务名称
   plannedContent: string;  // 计划做什么（整块内容模式使用）
   checklist?: ChecklistItem[]; // 清单模式使用的子任务列表（可选，向后兼容）
-  actualExecution: string; // 实际执行情况
-  focusScore: number;      // 0-10 专注度，0 = 未评分
-  efficiencyScore: number; // 0-10 效率，0 = 未评分
   completed: boolean;      // 是否完成
   notes: string;           // 备注
 }
@@ -31,7 +28,7 @@ export interface DailyPlan {
   updatedAt: number;
 }
 
-/** 子任务（大愿望的里程碑） */
+/** 旧版目标的扁平子任务 */
 export interface GoalTask {
   id: string;
   title: string;
@@ -55,33 +52,12 @@ export interface GoalNode {
   createdAt?: number;
 }
 
-/** 长期目标 / 大愿望共用一张表，用 kind 区分 */
-export type GoalKind = 'goal' | 'wish';
-
-/** 大愿望的状态 */
-export type WishStatus = 'active' | 'done' | 'paused';
-
-/**
- * 长期目标（可拆任务）与大愿望（更正式：愿景、期望日期、状态）共用结构。
- * kind 缺省视为 'goal'，旧的长期目标数据不需要迁移。
- */
 export interface LongTermGoal {
-  /** Encrypted wish content; other content fields are empty in persisted envelopes. */
-  encrypted?: import('./garden').GardenCipher;
   id?: number;
-  kind?: GoalKind;
-  /** Private garden subtype; stored only inside encrypted content, never the shell. */
-  gardenEntry?: 'wish' | 'confession';
   title: string;
   description: string;
   category: string;        // 分类（学科/技能/其他）
-  /** 大愿望：愿景——达成时的样子（一句话） */
-  vision?: string;
-  /** 大愿望：期望完成的日期 */
-  targetDate?: string;
-  /** 大愿望：进行中 / 已实现 / 暂缓 */
-  status?: WishStatus;
-  tasks: GoalTask[];       // 大愿望下即「里程碑」
+  tasks: GoalTask[];
   /**
    * 长期目标：树状拆解。
    * 缺省（undefined）= 旧数据，用 `tasks` 惰性投影；空数组表示用户已明确清空。
@@ -225,29 +201,6 @@ export interface LinkGroup {
   updatedAt: number;
 }
 
-/** 杂念的三种：小愿望 / 琐事 / 灵感 */
-export type MindKind = 'wish' | 'chore' | 'idea';
-
-/**
- * 杂念：一句话的愿望与琐事、带标题详情的灵感，共用一张表。
- * kind 缺省视为 'idea'（兼容只有灵感的旧数据）。
- */
-export interface Idea {
-  id?: number;
-  kind?: MindKind;
-  title?: string;            // 灵感标题（愿望/琐事不用）
-  text: string;              // 详情 / 一句话
-  date: string;              // "YYYY-MM-DD"，记下它的日子
-  source?: 'todo' | 'harvest' | 'plan' | 'other';
-  tags?: string[];           // 自定义标签（灵感用）
-  createdAt: number;
-  updatedAt: number;
-}
-
-/** 把旧数据补齐成新形状 */
-export function normalizeIdea(idea: Idea): Idea {
-  return { ...idea, kind: idea.kind ?? 'idea', tags: idea.tags ?? [] };
-}
 /** DDL 事件（专门收录带截止时间的事项） */
 export interface DdlItem {
   id?: number;
@@ -263,16 +216,7 @@ export interface DdlItem {
   updatedAt: number;
 }
 
-// ============ 统计相关 ============
-
-export interface DayStats {
-  date: string;
-  avgFocus: number;
-  avgEfficiency: number;
-  completionRate: number;   // 0-1
-  totalBlocks: number;
-  completedBlocks: number;
-}
+// ============ 时段标签 ============
 
 export interface PeriodLabel {
   value: Period;
@@ -321,6 +265,7 @@ export interface TaskNode {
   shelved?: boolean;
   /** 完成时刻：完成 30 秒后从清单里隐去 */
   doneAt?: number;
+  taskTiming?: import('../utils/taskTiming').TaskTiming;
 }
 
 /** 任务板（单记录数组表，id 恒 1） */
@@ -340,48 +285,12 @@ export interface TaskLeaf {
   done: boolean;
   shelved?: boolean; // 是否已搁置
   doneAt?: number;   // 完成时刻（用于 30 秒后隐去）
+  taskTiming?: import('../utils/taskTiming').TaskTiming;
 }
-
-// ============ 遗留问题（backlog） ============
-
-/** 起始时间的三种填法：距今 / 具体日期 / 文字（不可量化） */
-export type BacklogStartMode = 'age' | 'date' | 'text';
-
-/** 遗留问题状态 */
-export type BacklogStatus = 'blocked' | 'ready' | 'resolved' | 'dropped';
-
-/**
- * 遗留问题：现在解决不了、等条件成熟再处理的事项。
- * - `startMode='age' | 'date'`：用 `startAt`（起点时间戳）算历时
- * - `startMode='text'`：不可量化（如"小时候"），只存 `startText`，不算历时
- */
-export interface BacklogItem {
-  id?: number;
-  title: string;
-  startMode: BacklogStartMode;
-  startAt: number | null;
-  startText: string;
-  blocker: string;       // 困难：为什么做不到
-  detail: string;        // 详情
-  status: BacklogStatus;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export const BACKLOG_STATUS_LABELS: Record<BacklogStatus, string> = {
-  blocked: '阻塞中',
-  ready: '可推进',
-  resolved: '已解决',
-  dropped: '已终止',
-};
-
-/** 困难推荐词：仅作手填时的追加建议，不是选项 */
-export const BACKLOG_BLOCKER_HINTS = ['能力不足', '资源不足', '时间不足', '信息不足'];
 
 // ============ 回收站 ============
 
 export interface TrashItem {
-  encrypted?: import('./garden').GardenCipher;
   id?: number;
   originalTable: string;     // 来源表名
   originalId: number | string; // 原记录 ID

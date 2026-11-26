@@ -142,10 +142,6 @@ describe('旧数据投影', () => {
     expect(effectiveNodes(emptied).map(n => n.id)).toEqual(['n1']);
   });
 
-  it('大愿望不使用树，里程碑继续留在 tasks', () => {
-    const wish = goal({ kind: 'wish', tasks: [{ id: 'm1', title: '里程碑', completed: true, createdAt: 1 }] });
-    expect(effectiveNodes(wish)).toEqual([]);
-  });
 });
 
 describe('标准文本互转', () => {

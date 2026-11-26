@@ -1,18 +1,4 @@
-import { useEffect, useState } from 'react';
 import './CelebrationDialog.css';
-
-/**
- * 清单全部完成时的庆祝弹窗。
- * 文案每次随机一条，不走"你真棒"的套话，只说这一刻真实发生的事情。
- */
-const MESSAGES = [
-  '这一刻没有声响，但你自己知道——今天你没有把自己交给拖延。',
-  '一件事一件事做完，看起来慢，其实是最快的那条路。今天你走完了它。',
-  '你把这些事从「要做」变成了「做完」。中间那些忍住没放弃的瞬间，没人看见，但它确实发生了。',
-  '手可以放下了，脑子也可以歇一会儿了。剩下的时间归你，不归清单。',
-  '本以为要拖到明天的事，今天就被你解决掉了。差别就是这样一天一天拉开的。',
-  '今天的你，比昨天更可靠了一点。这就够了。',
-];
 
 /** 撒落的小纸片（纯装饰） */
 const CONFETTI: { left: string; delay: string; duration: string; color: string; rotate: string; size: number }[] = [
@@ -87,19 +73,10 @@ interface Props {
   open: boolean;
   /** 完成的任务条数 */
   count: number;
-  /** 用户昵称（可空），用于把话说到人身上 */
-  username?: string;
   onClose: () => void;
 }
 
-export default function CelebrationDialog({ open, count, username, onClose }: Props) {
-  const [message, setMessage] = useState(MESSAGES[0]);
-
-  // 每次打开都换一句
-  useEffect(() => {
-    if (open) setMessage(MESSAGES[Math.floor(Math.random() * MESSAGES.length)]);
-  }, [open]);
-
+export default function CelebrationDialog({ open, count, onClose }: Props) {
   if (!open) return null;
 
   return (
@@ -131,9 +108,7 @@ export default function CelebrationDialog({ open, count, username, onClose }: Pr
         <CelebrationArt />
 
         <h3 className="celebration-title">全部完成</h3>
-        <p className="celebration-lead">{username ? `${username}，` : ''}清单清零了。</p>
-        <p className="celebration-msg">{message}</p>
-        <p className="celebration-count">共 {count} 件 · 一件没落下</p>
+        <p className="celebration-count">共 {count} 件</p>
 
         <button className="celebration-btn" onClick={onClose}>收下这份庆祝</button>
       </div>

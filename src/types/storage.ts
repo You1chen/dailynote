@@ -1,10 +1,9 @@
-import type { ActivityEvent } from './settlement';
-import type { GardenKeyEnvelope } from './garden';
 import type { KnowledgeMap, KnowledgeCardLibrary } from './knowledge';
+import type { PreferencesPatch } from './preferences';
 import type {
   DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem,
   TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, ImportantItem,
-  BacklogItem, Idea, TaskBoard, LinkGroup,
+  TaskBoard, LinkGroup,
 } from './index';
 
 /** 持久化领域数据；不依赖存储实现，供搜索、迁移和存储共同使用。 */
@@ -21,12 +20,8 @@ export interface StoreShape {
   semester: SemesterRecord[];
   ddls: DdlItem[];
   important: ImportantItem[];
-  backlog: BacklogItem[];
-  ideas: Idea[];
   taskBoard: TaskBoard[];
   linkGroups: LinkGroup[];
-  activityEvents: ActivityEvent[];
-  gardenKeys: GardenKeyEnvelope[];
   knowledgeMaps: KnowledgeMap[];
   knowledgeCards: KnowledgeCardLibrary[];
 }
@@ -34,6 +29,8 @@ export interface StoreShape {
 export interface StorageData extends StoreShape {
   version: 1;
   savedAt: number;
+  /** Optional preferences embedded in legacy single-file saves. */
+  preferences?: PreferencesPatch;
 }
 
 export type AnyStoreTable = keyof StoreShape;

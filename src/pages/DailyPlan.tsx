@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import PlanTimeGrid from '../components/PlanTimeGrid';
 import { Plus, X, Save, Trash2, CheckCircle2, Settings, Maximize2, ClipboardList, CalendarDays, SkipForward } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import DayNavigator from '../components/DayNavigator';
 import FullscreenSchedule from '../components/FullscreenSchedule';
-import MindSheet from '../components/MindSheet';
-import { useIdeas } from '../hooks/useIdeas';
 import PreferencePanel from '../components/PreferencePanel';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useSheetDrag } from '../hooks/useSheetDrag';
@@ -13,7 +12,7 @@ import { usePreferences } from '../hooks/usePreferences';
 import { getAllRoutines, getAllTaskTemplates, savePlan, getAllCourses, getSemester, getAllPlans } from '../db';
 import { todayStr, genId, appendTemplateItems } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
-import { timeToMinutes, minutesToTime, isInSleepPeriod, sleepLabel, gridClickY, blockRenderRect, futureFoldStart, futureWindow } from '../utils/time';
+import { timeToMinutes, minutesToTime, isInSleepPeriod, sleepLabel, blockRenderRect, futureFoldStart, futureWindow, topToMinutes } from '../utils/time';
 import type { FutureWindowGeometry } from '../utils/time';
 import { computeDayCourses, weekIndex } from '../utils/courseSchedule';
 import type { TimeBlock, TaskTemplate, Course, SemesterRecord } from '../types';
@@ -21,13 +20,15 @@ import './DailyPlan.css';
 
 /** 星期几 → 中文（0=周日，与课程表约定一致） */
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const GRID_DRAG_THRESHOLD = 6;
+const GRID_INTERACTIVE = '.time-block, .course-block, .sleep-bar, .future-bar';
 const WEEK_TYPE_LABELS: Record<Course['weekType'], string> = {
   all: '每周',
   odd: '单周',
   even: '双周',
 };
 
-/** 是否为清单型任务（有子任务清单 = 轻量任务：不验收、不评分） */
+/** 是否为清单型任务（有子任务清单 = 轻量任务，完成状态由子项决定） */
 function isChecklistTask(b: TimeBlock): boolean {
   return Array.isArray(b.checklist) && b.checklist.length > 0;
 }
@@ -61,7 +62,7 @@ function futureHourLabels(g: FutureWindowGeometry): { hour: number; top: number 
   return labels;
 }
 
-export default function DailyPlanPage() {
+export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [date, setDate] = useState(searchParams.get('date') || todayStr());
@@ -84,18 +85,14 @@ export default function DailyPlanPage() {
   const blockSheet = useSheetDrag(() => setEditingBlock(null), !!editingBlock);
   const [showPrefs, setShowPrefs] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [showNewMenu, setShowNewMenu] = useState(false);
-  const [newStartTime, setNewStartTime] = useState('08:00');
-  const [timeMode, setTimeMode] = useState<'range' | 'duration'>('range');
-  const [durationMinutes, setDurationMinutes] = useState(prefs.defaultDuration);
-  const [mindKind, setMindKind] = useState<'wish' | 'chore' | null>(null);
-  const { byKind: minds } = useIdeas();
+  const gesture = useRef<{ pointerId: number; clientY: number; y: number; dragging: boolean } | null>(null);
+  const [selection, setSelection] = useState<{ top: number; height: number } | null>(null);
+  const sheetPointerDown = useRef(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [templateList, setTemplateList] = useState<TaskTemplate[]>([]);
   const [hasLegacyRoutines, setHasLegacyRoutines] = useState(false);
   useEffect(() => { void getAllRoutines().then(items => setHasLegacyRoutines(items.length > 0)); }, []);
-  const [acceptingBlock, setAcceptingBlock] = useState<TimeBlock | null>(null);
   // 课程表（只读展示：渲染时按日期实时计算，不写入当天计划）
   const [courses, setCourses] = useState<Course[]>([]);
   const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
@@ -117,9 +114,12 @@ export default function DailyPlanPage() {
   const sleepDurationMin = sleepCrosses
     ? (1440 - sleepMinStart) + sleepMinEnd
     : sleepMinEnd - sleepMinStart;
-  const visibleHours = hideSleep ? 24 - Math.round(sleepDurationMin / 60) : 24;
   const SLEEP_BAR_H = hideSleep ? 28 : 0;
-  const GRID_HEIGHT = visibleHours * HOUR_HEIGHT + SLEEP_BAR_H;
+  const GRID_HEIGHT = ((1440 - (hideSleep ? sleepDurationMin : 0)) / 60) * HOUR_HEIGHT + SLEEP_BAR_H;
+  const dayGeometry = {
+    hideSleep, sleepStart: prefs.sleepStart, sleepEnd: prefs.sleepEnd,
+    hourHeight: HOUR_HEIGHT, barHeight: SLEEP_BAR_H, gridHeight: GRID_HEIGHT,
+  };
 
   // ---- 只看未来（仅今天）：折叠当前小时之前的时段 ----
   const isToday = date === todayStr();
@@ -140,11 +140,10 @@ export default function DailyPlanPage() {
   useRegisterBackHandler(() => {
     if (fullscreen) { setFullscreen(false); return true; }
     if (showPrefs) { setShowPrefs(false); return true; }
-    if (acceptingBlock) { setAcceptingBlock(null); return true; }
     if (editingBlock) { setEditingBlock(null); return true; }
     if (viewingCourse) { setViewingCourse(null); return true; }
     return false;
-  }, [editingBlock, acceptingBlock, fullscreen, showPrefs, viewingCourse]);
+  }, [editingBlock, fullscreen, showPrefs, viewingCourse]);
 
   // 当前时间每分钟更新
   useEffect(() => {
@@ -193,31 +192,29 @@ export default function DailyPlanPage() {
     const labels: { hour: number; top: number }[] = [];
     if (!hideSleep) {
       for (let h = 0; h < 24; h++) labels.push({ hour: h, top: h * HOUR_HEIGHT });
-    } else if (sleepCrosses) {
-      let h = Math.floor(sleepMinEnd / 60);
-      let v = 0;
-      while (h !== Math.floor(sleepMinStart / 60) || v === 0) {
-        labels.push({ hour: h, top: SLEEP_BAR_H + v * HOUR_HEIGHT });
-        h = (h + 1) % 24;
-        v++;
-      }
     } else {
       for (let h = 0; h < 24; h++) {
-        if (h >= sleepMinStart / 60 && h < sleepMinEnd / 60) continue;
-        const adjustedH = h >= sleepMinEnd / 60 ? h - Math.round(sleepDurationMin / 60) : h;
-        labels.push({ hour: h, top: SLEEP_BAR_H + adjustedH * HOUR_HEIGHT });
+        const top = minutesToTop(h * 60);
+        if (top >= 0) labels.push({ hour: h, top });
       }
     }
     return labels;
   }
 
-  // --- 在指定分钟处新建任务块（点空白 / FAB / 只看未来 共用） ---
-  const startNewBlockAt = useCallback((minutes: number) => {
-    const actualMinutes = Math.max(0, Math.min(1430, Math.round(minutes / 5) * 5));
-    const startTime = minutesToTime(actualMinutes);
-    const endTime = minutesToTime(Math.min(1440, actualMinutes + prefs.defaultDuration) % 1440);
+  // 点空白使用默认时长；拖选直接填入起止时间。
+  const startNewBlockAt = useCallback((minutes: number, endMinutes?: number) => {
+    const from = Math.round(minutes / 5) * 5;
+    const start = endMinutes === undefined
+      ? Math.max(0, Math.min(1430, from))
+      : Math.max(0, Math.min(1435, from));
+    // 原生 time input 不接受 24:00；拖到当天末端时使用最后一个可编辑的分钟。
+    const end = endMinutes === undefined
+      ? Math.min(1440, start + prefs.defaultDuration)
+      : Math.min(1439, Math.max(start + 5, Math.round(endMinutes / 5) * 5));
+    const startTime = minutesToTime(start);
+    const endTime = minutesToTime(end);
 
-    setNewStartTime(startTime);
+    sheetPointerDown.current = false;
     setEditingBlock({
       id: '',
       startTime,
@@ -225,87 +222,26 @@ export default function DailyPlanPage() {
       taskTitle: '',
       plannedContent: '',
       checklist: [],
-      actualExecution: '',
-      focusScore: 0,
-      efficiencyScore: 0,
       completed: false,
       notes: '',
     });
-    setShowNewMenu(false);
   }, [prefs.defaultDuration]);
 
-  // --- 网格点击处理 ---
-  const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('.time-block')) return;
-    if ((e.target as HTMLElement).closest('.course-block')) return;
-    if ((e.target as HTMLElement).closest('.sleep-bar')) return;
-    if ((e.target as HTMLElement).closest('.future-bar')) return;
-
-    // 滚动容器（.time-grid-container）的 rect.top 不随内部滚动变化；
-    // 若取 e.currentTarget（.time-grid）的 rect.top，会随滚动偏移，再加 scrollTop 会双重补偿
-    const rect = scrollRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const y = gridClickY(e.clientY, rect.top, scrollRef.current?.scrollTop ?? 0);
-
-    // 只看未来：折叠条以上无效，其余按折叠窗口直接反映射
-    if (futureGeo) {
-      if (y < FUTURE_BAR_H) return;
-      startNewBlockAt(futureGeo.topToMinutes(y));
-      return;
+  const firstGridY = futureGeo?.barHeight ?? SLEEP_BAR_H;
+  function gridMinute(y: number, endBoundary = false) {
+    if (futureGeo) return futureGeo.topToMinutes(y);
+    if (hideSleep) {
+      // A range can end exactly at the displayed boundary of a folded period.
+      if (sleepCrosses && y >= gridHeight - 0.01) return sleepMinStart;
+      if (!sleepCrosses && endBoundary && Math.abs(y - (SLEEP_BAR_H + sleepMinStart * HOUR_HEIGHT / 60)) < 0.01) return sleepMinStart;
     }
+    return topToMinutes(y, dayGeometry) ?? 0;
+  }
 
-    // 精确逆映射：minutesToTop 的反函数
-    let actualMinutes: number;
-    if (hideSleep && sleepCrosses) {
-      const adjustedY = y - SLEEP_BAR_H;
-      if (adjustedY < 0) return;
-      actualMinutes = (adjustedY * 60) / HOUR_HEIGHT + sleepMinEnd;
-      if (actualMinutes >= 1440) actualMinutes -= 1440;
-      if (actualMinutes >= sleepMinStart) actualMinutes = sleepMinStart - 5;
-    } else if (hideSleep) {
-      // 不跨夜但隐藏睡眠（罕见情况）
-      const adjustedY = y - SLEEP_BAR_H;
-      if (adjustedY < 0) return;
-      actualMinutes = (adjustedY * 60) / HOUR_HEIGHT;
-      // 压缩空间中 >= sleepMinStart 意味着已越过睡眠间隙，需补回 sleepDurationMin
-      if (actualMinutes >= sleepMinStart) actualMinutes += sleepDurationMin;
-    } else {
-      actualMinutes = (y * 60) / HOUR_HEIGHT;
-    }
-    startNewBlockAt(actualMinutes);
-  }, [hideSleep, HOUR_HEIGHT, SLEEP_BAR_H, sleepCrosses, sleepMinEnd, sleepMinStart, sleepDurationMin, futureGeo, startNewBlockAt]);
-
-  // --- 全屏模式下的网格点击回调（不再退出全屏） ---
-  const handleFullscreenGridClick = useCallback((startTime: string) => {
-    const endMin = Math.min(1440, timeToMinutes(startTime) + prefs.defaultDuration);
-    const hh = Math.floor(endMin / 60) % 24;
-    const mm = endMin % 60;
-    const endTime = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-
-    setEditingBlock({
-      id: '',
-      startTime,
-      endTime,
-      taskTitle: '',
-      plannedContent: '',
-      checklist: [],
-      actualExecution: '',
-      focusScore: 0,
-      efficiencyScore: 0,
-      completed: false,
-      notes: '',
-    });
-    // 保持全屏打开，不退出
-  }, [prefs.defaultDuration]);
-
-  // --- 新建/编辑保存（保存前钳制数值范围） ---
+  // --- 新建/编辑保存（展开保留历史块上的旧字段，不清洗存储） ---
   const handleSaveBlock = async () => {
     if (!editingBlock) return;
-    const safe = {
-      ...editingBlock,
-      focusScore: Math.min(10, Math.max(0, editingBlock.focusScore ?? 0)),
-      efficiencyScore: Math.min(10, Math.max(0, editingBlock.efficiencyScore ?? 0)),
-    };
+    const safe = { ...editingBlock };
     // 兼容历史清单块：完成状态仍由子项决定，不再自动改写时间范围。
     if (isChecklistTask(safe)) safe.completed = safe.checklist!.every(item => item.done);
     if (safe.id) {
@@ -323,32 +259,6 @@ export default function DailyPlanPage() {
     setEditingBlock(null);
   };
 
-  // --- 验收：独立弹窗，仅对已存在的时间块开放；保存后视为任务完成 ---
-  const openAcceptance = () => {
-    if (!editingBlock || !editingBlock.id) return;
-    setAcceptingBlock({ ...editingBlock, checklist: editingBlock.checklist || [] });
-  };
-
-  const handleAcceptBlock = async () => {
-    if (!acceptingBlock || !acceptingBlock.id) return;
-    const safe = {
-      ...acceptingBlock,
-      focusScore: Math.min(10, Math.max(0, acceptingBlock.focusScore ?? 0)),
-      efficiencyScore: Math.min(10, Math.max(0, acceptingBlock.efficiencyScore ?? 0)),
-      completed: true,
-    };
-    await updateBlock(safe.id, safe);
-    setAcceptingBlock(null);
-    setEditingBlock(null);
-  };
-
-  const handleUnacceptBlock = async () => {
-    if (!acceptingBlock || !acceptingBlock.id) return;
-    await updateBlock(acceptingBlock.id, { completed: false });
-    setAcceptingBlock(null);
-    setEditingBlock(null);
-  };
-
   // 从模板导入
   const handleImportRoutine = async () => {
     const routines = await getAllRoutines();
@@ -363,9 +273,6 @@ export default function DailyPlanPage() {
       endTime: rb.endTime,
       taskTitle: rb.taskTitle,
       plannedContent: rb.plannedContent,
-      actualExecution: '',
-      focusScore: 0,
-      efficiencyScore: 0,
       completed: false,
       notes: '',
     }));
@@ -428,7 +335,6 @@ export default function DailyPlanPage() {
       const b = plan?.timeBlocks.find(x => x.id === blockId);
       if (b) setEditingBlock({ ...b, checklist: b.checklist || [] });
     } else if (newAt && /^\d{2}:\d{2}$/.test(newAt)) {
-      setNewStartTime(newAt);
       setEditingBlock({
         id: '',
         startTime: newAt,
@@ -436,9 +342,6 @@ export default function DailyPlanPage() {
         taskTitle: '',
         plannedContent: '',
         checklist: [],
-        actualExecution: '',
-        focusScore: 0,
-        efficiencyScore: 0,
         completed: false,
         notes: '',
       });
@@ -446,38 +349,11 @@ export default function DailyPlanPage() {
     navigate(`/?date=${date}`, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, plan, searchParams, date]);
-  /** 新建时间块（FAB / 空档点击共用） */
-  const openNewBlock = useCallback(() => {
-    const start = '08:00';
-    const end = '09:00';
-    setNewStartTime(start);
-    setEditingBlock({
-      id: '',
-      startTime: start,
-      endTime: end,
-      taskTitle: '',
-      plannedContent: '',
-      checklist: [],
-      actualExecution: '',
-      focusScore: 0,
-      efficiencyScore: 0,
-      completed: false,
-      notes: '',
-    });
-  }, []);
-
-  /** 顶部概览：块数 / 已验收 / 专注均值（只算已评分的块） */
-  const summary = useMemo(() => {
-    const blocks = plan?.timeBlocks ?? [];
-    const done = blocks.filter(b => b.completed).length;
-    const scored = blocks.filter(b => b.focusScore > 0);
-    const avg = scored.length
-      ? Math.round((scored.reduce((s, b) => s + b.focusScore, 0) / scored.length) * 10) / 10
-      : 0;
-    return { total: blocks.length, done, avg };
-  }, [plan]);
+  /** 顶部概览：当天时间块总数 */
+  const summary = useMemo(() => ({ total: plan?.timeBlocks.length ?? 0 }), [plan]);
   const showNowLine = isToday && (futureGeo !== null || !(hideSleep && isInSleepPeriod(nowMinutes, prefs.sleepStart, prefs.sleepEnd)));
   const hourLabels = futureGeo ? futureHourLabels(futureGeo) : getVisibleHourLabels();
+  const slotTops = [firstGridY, ...hourLabels.map(label => label.top).filter(top => top > firstGridY && top < gridHeight)];
 
   /** 时间块渲染矩形：只看未来走折叠窗口，否则走睡眠折叠 */
   const blockRect = (start: string, end: string) => futureGeo
@@ -511,12 +387,12 @@ export default function DailyPlanPage() {
           <span className="dp-date-sub">{WEEKDAY_LABELS[dateObj(date).getDay()]}</span>
         </button>
         <div className="dp-top-actions">
-          <button className="dp-today" onClick={() => navigate(`/settlement?date=${date}`)}>结算</button>
           <button className="dp-arrow" onClick={() => setDate(shiftDate(date, -1))} aria-label="前一天">‹</button>
           <button className="dp-arrow" onClick={() => setDate(shiftDate(date, 1))} aria-label="后一天">›</button>
           {date !== todayStr() && (
             <button className="dp-today" onClick={() => setDate(todayStr())}>今天</button>
           )}
+          {alarm}
         </div>
       </div>
 
@@ -550,10 +426,6 @@ export default function DailyPlanPage() {
       {/* 一行统计 + 工具 */}
       <div className="dp-stats">
         <span><b>{summary.total}</b> 块</span>
-        <span className="dp-sep">·</span>
-        <span><b>{summary.done}</b> 已验收</span>
-        <span className="dp-sep">·</span>
-        <span>专注 <b>{summary.avg || '—'}</b></span>
         <div className="dp-tools">
           {isToday && (
             <button
@@ -582,19 +454,12 @@ export default function DailyPlanPage() {
         </div>
       </div>
 
-      <div className="dp-minds">
-        <button className="dp-mind dp-mind--wish" onClick={() => setMindKind('wish')}>
-          <span className="dp-mind-dot" /> 小愿望 {minds.wish.length}
-        </button>
-        <button className="dp-mind dp-mind--chore" onClick={() => setMindKind('chore')}>
-          <span className="dp-mind-dash" /> 琐事 {minds.chore.length}
-        </button>
-      </div>
       </div>
 
       {/* 时间网格 */}
       <div className="time-grid-container" ref={scrollRef}>
-        <div className="time-grid" style={{ height: gridHeight }} onClick={handleGridClick}>
+        <PlanTimeGrid className="time-grid" firstY={firstGridY} height={gridHeight}
+          hourTops={hourLabels.map(label => label.top)} minuteAt={gridMinute} onSelect={startNewBlockAt}>
           {/* 只看未来的折叠条（当前小时之前全部收起） */}
           {futureGeo && (
             <div
@@ -644,7 +509,8 @@ export default function DailyPlanPage() {
             if (!rect) return null;
             const { top, height } = rect;
             return (
-              <div
+              <button
+                type="button"
                 key={`course-${course.id}`}
                 className="course-block"
                 style={{ top, height, left: 48, right: 10 }}
@@ -653,7 +519,7 @@ export default function DailyPlanPage() {
                   setViewingCourse(course);
                 }}
               >
-                <div className="course-block-inner">
+                <span className="course-block-inner">
                   <span className="course-block-time">
                     {course.startTime}-{course.endTime}
                   </span>
@@ -661,8 +527,8 @@ export default function DailyPlanPage() {
                   {course.location && (
                     <span className="course-block-loc">📍 {course.location}</span>
                   )}
-                </div>
-              </div>
+                </span>
+              </button>
             );
           })}
 
@@ -674,7 +540,8 @@ export default function DailyPlanPage() {
             const isDone = block.completed;
 
             return (
-              <div
+              <button
+                type="button"
                 key={block.id}
                 className={`time-block ${isDone ? 'time-block--done' : ''} ${!block.taskTitle ? 'time-block--empty' : ''}`}
                 style={{ top, height, left: 48, right: 10 }}
@@ -683,12 +550,12 @@ export default function DailyPlanPage() {
                   setEditingBlock({ ...block, checklist: block.checklist || [] });
                 }}
               >
-                <div className="time-block-inner">
+                <span className="time-block-inner">
                   <span className="time-block-time">
                     {block.startTime}-{block.endTime}
                   </span>
                   <span className="time-block-title">
-                    {block.taskTitle || '点击编辑...'}
+                    {block.taskTitle}
                   </span>
                   {(block.checklist?.length ?? 0) > 0 && (
                     <span className="time-block-checklist">
@@ -703,15 +570,11 @@ export default function DailyPlanPage() {
                       {block.checklist?.filter(c => c.done).length ?? 0}/{block.checklist?.length ?? 0}
                     </span>
                   )}
-                  {!isChecklistTask(block) && (
-                    <span className="time-block-scores">
-                      {block.focusScore > 0 || block.efficiencyScore > 0
-                        ? `专${block.focusScore} 效${block.efficiencyScore}`
-                        : '未验收'}
-                    </span>
+                  {!isChecklistTask(block) && block.completed && (
+                    <span className="time-block-status">已完成</span>
                   )}
-                </div>
-              </div>
+                </span>
+              </button>
             );
           })}
 
@@ -726,17 +589,8 @@ export default function DailyPlanPage() {
               </div>
             );
           })()}
-        </div>
+        </PlanTimeGrid>
       </div>
-
-      {mindKind && (
-        <MindSheet
-          initialKind={mindKind}
-          kinds={[mindKind]}
-          date={date}
-          onClose={() => setMindKind(null)}
-        />
-      )}
 
       {/* 全屏日程视图 */}
       <FullscreenSchedule
@@ -749,7 +603,7 @@ export default function DailyPlanPage() {
           setEditingBlock({ ...block });
           // 保持全屏打开，不退出
         }}
-        onGridClick={handleFullscreenGridClick}
+        onGridSelect={startNewBlockAt}
         onPrefsClick={() => { /* 直接打开偏好，不关闭全屏 */ setShowPrefs(true); }}
         onClose={() => setFullscreen(false)}
         courses={courseBlocks}
@@ -767,104 +621,55 @@ export default function DailyPlanPage() {
 
       {/* 底部编辑面板 (Bottom Sheet) */}
       {editingBlock && (
-        <div className="bs-overlay" onClick={() => setEditingBlock(null)}>
+        <div className="bs-overlay"
+          onPointerDownCapture={() => { sheetPointerDown.current = true; }}
+          onClickCapture={event => {
+            // A touch release can send its click to the sheet or backdrop that just opened.
+            const startedInside = sheetPointerDown.current;
+            sheetPointerDown.current = false;
+            if (event.detail && !startedInside) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          onClick={event => { if (event.target === event.currentTarget) setEditingBlock(null); }}>
           <div className="bs-sheet" style={blockSheet.style} onClick={e => e.stopPropagation()}>
             <div className="bs-handle" {...blockSheet.handlers} />
             <h3 className="bs-title">
-              {editingBlock.id ? '编辑任务' : '新建任务'}
+              {editingBlock.id ? '编辑任务' : '计划在这个时间做什么？'}
             </h3>
 
             <div className="bs-body">
-              {/* 时间设置 */}
-              <>
-                <div className="form-group">
-                  <label className="label">时间设置</label>
-                  <div className="bs-time-mode">
-                    <button
-                      className={`bs-mode-btn ${timeMode === 'range' ? 'bs-mode-btn--active' : ''}`}
-                      onClick={() => setTimeMode('range')}
-                    >起止时间</button>
-                    <button
-                      className={`bs-mode-btn ${timeMode === 'duration' ? 'bs-mode-btn--active' : ''}`}
-                      onClick={() => setTimeMode('duration')}
-                    >起止+时长</button>
-                  </div>
-                </div>
-
-                {/* 时间输入 */}
-                <div className="form-group">
-                  <label className="label">开始时间</label>
-                  <input
-                    className="input"
-                    type="time"
-                    value={editingBlock.startTime}
-                    onChange={e => {
-                      const start = e.target.value;
-                      const updates: Partial<TimeBlock> = { startTime: start };
-                      if (timeMode === 'duration') {
-                        updates.endTime = computeEndTime(start, durationMinutes);
-                      }
-                      setEditingBlock({ ...editingBlock, ...updates });
-                    }}
-                  />
-                </div>
-
-                {timeMode === 'range' ? (
-                  <div className="form-group">
-                    <label className="label">结束时间</label>
-                    <input
-                      className="input"
-                      type="time"
-                      value={editingBlock.endTime}
-                      onChange={e => setEditingBlock({ ...editingBlock, endTime: e.target.value })}
-                    />
-                  </div>
-                ) : (
-                  <div className="form-group">
-                    <label className="label">预计时长</label>
-                    <input
-                      className="input"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={durationMinutes || ''}
-                      onChange={e => {
-                        const raw = e.target.value;
-                        if (raw === '') { setDurationMinutes(0); return; }
-                        const n = parseInt(raw, 10);
-                        if (!isNaN(n)) {
-                          setDurationMinutes(n);
-                          setEditingBlock({
-                            ...editingBlock,
-                            endTime: computeEndTime(editingBlock.startTime, n),
-                          });
-                        }
-                      }}
-                      onBlur={() => {
-                        const clamped = Math.min(480, Math.max(5, durationMinutes || 30));
-                        if (clamped !== durationMinutes) {
-                          setDurationMinutes(clamped);
-                          setEditingBlock({
-                            ...editingBlock,
-                            endTime: computeEndTime(editingBlock.startTime, clamped),
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-                )}
-              </>
-
-              {/* 清单内容 */}
-              {/* 任务名称 */}
               <div className="form-group">
-                <label className="label">任务名称</label>
+                <label className="label" htmlFor="plan-block-title">计划名称</label>
                 <input
+                  id="plan-block-title"
                   className="input"
                   value={editingBlock.taskTitle}
                   onChange={e => setEditingBlock({ ...editingBlock, taskTitle: e.target.value })}
-                  placeholder="任务名称"
+                  placeholder="计划名称"
                 />
+              </div>
+
+              <div className="form-group">
+                <div className="label" id="plan-block-time">时间</div>
+                <div className="bs-time-range" role="group" aria-labelledby="plan-block-time">
+                  <input
+                    className="input"
+                    type="time"
+                    aria-label="开始时间"
+                    value={editingBlock.startTime}
+                    onChange={e => setEditingBlock({ ...editingBlock, startTime: e.target.value })}
+                  />
+                  <span aria-hidden="true">至</span>
+                  <input
+                    className="input"
+                    type="time"
+                    aria-label="结束时间"
+                    value={editingBlock.endTime}
+                    onChange={e => setEditingBlock({ ...editingBlock, endTime: e.target.value })}
+                  />
+                </div>
               </div>
 
               {/* 计划内容：清单模式 vs 整块模式 */}
@@ -972,11 +777,6 @@ export default function DailyPlanPage() {
 
             {/* 固定底部操作栏 */}
             <div className="bs-footer">
-              {editingBlock.id && !isChecklistTask(editingBlock) && (
-                <button className="btn btn-sm btn-outline" onClick={openAcceptance} title="验收并完成">
-                  <CheckCircle2 size={16} /> 验收
-                </button>
-              )}
               <button className="btn btn-primary" onClick={handleSaveBlock}>
                 <Save size={16} /> 保存
               </button>
@@ -992,107 +792,6 @@ export default function DailyPlanPage() {
           </div>
         </div>
       )}
-
-      {/* 验收弹窗（独立于编辑面板，保存后视为任务完成） */}
-      {acceptingBlock && (
-        <div className="accept-overlay" onClick={() => setAcceptingBlock(null)}>
-          <div className="accept-modal" onClick={e => e.stopPropagation()}>
-            <h3 className="accept-title">✅ 任务验收</h3>
-            {acceptingBlock.taskTitle && (
-              <div className="accept-task-title">{acceptingBlock.taskTitle}</div>
-            )}
-
-            <div className="form-group">
-              <label className="label">实际执行情况</label>
-              <textarea
-                className="input textarea"
-                value={acceptingBlock.actualExecution}
-                onChange={e => setAcceptingBlock({ ...acceptingBlock, actualExecution: e.target.value })}
-                placeholder="实际完成情况"
-                rows={3}
-              />
-            </div>
-
-            <div className="bs-scores">
-              <div className="form-group">
-                <label className="label">专注度</label>
-                <input
-                  className="input"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={acceptingBlock.focusScore || ''}
-                  placeholder="0=未评分"
-                  onChange={e => {
-                    const raw = e.target.value;
-                    if (raw === '') { setAcceptingBlock({ ...acceptingBlock, focusScore: 0 }); return; }
-                    const n = parseInt(raw, 10);
-                    if (!isNaN(n)) setAcceptingBlock({ ...acceptingBlock, focusScore: n });
-                  }}
-                  onBlur={() => {
-                    const clamped = Math.min(10, Math.max(0, acceptingBlock.focusScore || 0));
-                    if (clamped !== acceptingBlock.focusScore) {
-                      setAcceptingBlock({ ...acceptingBlock, focusScore: clamped });
-                    }
-                  }}
-                />
-              </div>
-              <div className="form-group">
-                <label className="label">效率</label>
-                <input
-                  className="input"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={acceptingBlock.efficiencyScore || ''}
-                  placeholder="0=未评分"
-                  onChange={e => {
-                    const raw = e.target.value;
-                    if (raw === '') { setAcceptingBlock({ ...acceptingBlock, efficiencyScore: 0 }); return; }
-                    const n = parseInt(raw, 10);
-                    if (!isNaN(n)) setAcceptingBlock({ ...acceptingBlock, efficiencyScore: n });
-                  }}
-                  onBlur={() => {
-                    const clamped = Math.min(10, Math.max(0, acceptingBlock.efficiencyScore || 0));
-                    if (clamped !== acceptingBlock.efficiencyScore) {
-                      setAcceptingBlock({ ...acceptingBlock, efficiencyScore: clamped });
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="label">备注</label>
-              <input
-                className="input"
-                value={acceptingBlock.notes}
-                onChange={e => setAcceptingBlock({ ...acceptingBlock, notes: e.target.value })}
-                placeholder="备注"
-              />
-            </div>
-
-            <div className="accept-actions">
-              {acceptingBlock.completed && (
-                <button className="btn btn-sm btn-ghost" onClick={handleUnacceptBlock} title="撤销验收">
-                  撤销验收
-                </button>
-              )}
-              <button className="btn btn-primary" onClick={handleAcceptBlock}>
-                <CheckCircle2 size={16} /> 验收完成
-              </button>
-              <button className="btn btn-ghost" onClick={() => setAcceptingBlock(null)}>
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 新建时间块（FAB） */}
-      <button className="dp-fab" onClick={openNewBlock} title="新建时间块" aria-label="新建时间块">
-        <Plus size={24} />
-      </button>
 
       <ConfirmDialog
         open={notice !== null}
@@ -1133,7 +832,6 @@ export default function DailyPlanPage() {
                 <span className="course-modal-label">当前</span>
                 <span>{week > 0 ? `第 ${week} 周` : '未开学或未设置开学时间'}</span>
               </div>
-              <p className="course-modal-hint">课程为只读展示，如需修改请到「课程表」页</p>
               <div className="course-modal-actions">
                 <button className="btn btn-ghost" onClick={() => setViewingCourse(null)}>关闭</button>
               </div>

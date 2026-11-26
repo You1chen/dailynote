@@ -1,16 +1,15 @@
 import type { AnyStoreTable, StoreShape } from '../types/storage';
 
-export type NumericTable = Exclude<AnyStoreTable, 'taskItems' | 'activityEvents'>;
+export type NumericTable = Exclude<AnyStoreTable, 'taskItems'>;
 
 export interface CategoryTableMeta {
-  table: Exclude<AnyStoreTable, 'dailyPlans' | 'reflections' | 'harvests' | 'taskItems' | 'activityEvents'>;
+  table: Exclude<AnyStoreTable, 'dailyPlans' | 'reflections' | 'harvests' | 'taskItems'>;
   file: string;
   numericId: true;
   writeOrder: number;
 }
 
 export const CATEGORY_TABLES = [
-  { table: 'gardenKeys', file: 'garden-keys.json', numericId: true, writeOrder: 3 },
   { table: 'knowledgeCards', file: 'knowledge-cards.json', numericId: true, writeOrder: 4 },
   { table: 'knowledgeMaps', file: 'knowledge-maps.json', numericId: true, writeOrder: 5 },
   { table: 'longTermGoals', file: 'goals.json', numericId: true, writeOrder: 6 },
@@ -20,8 +19,6 @@ export const CATEGORY_TABLES = [
   { table: 'semester', file: 'semester.json', numericId: true, writeOrder: 10 },
   { table: 'ddls', file: 'ddls.json', numericId: true, writeOrder: 11 },
   { table: 'important', file: 'important.json', numericId: true, writeOrder: 12 },
-  { table: 'backlog', file: 'backlog.json', numericId: true, writeOrder: 13 },
-  { table: 'ideas', file: 'ideas.json', numericId: true, writeOrder: 14 },
   { table: 'taskBoard', file: 'taskboard.json', numericId: true, writeOrder: 15 },
   { table: 'linkGroups', file: 'linkGroups.json', numericId: true, writeOrder: 15 },
   { table: 'trashItems', file: 'trash.json', numericId: true, writeOrder: 16 },
@@ -35,20 +32,20 @@ export const CATEGORY_FILES = Object.fromEntries(
 export const CATEGORY_NAMES = CATEGORY_TABLES.map(meta => meta.file);
 
 export const DEFAULT_WRITE_ORDER: AnyStoreTable[] = [
-  'dailyPlans', 'reflections', 'harvests', 'taskItems', 'activityEvents',
+  'dailyPlans', 'reflections', 'harvests', 'taskItems',
   ...[...CATEGORY_TABLES].sort((a, b) => a.writeOrder - b.writeOrder).map(meta => meta.table),
 ];
 
 export const NUMERIC_TABLES: NumericTable[] = [
   'dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines',
   'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls', 'important',
-  'backlog', 'ideas', 'taskBoard', 'linkGroups', 'gardenKeys', 'knowledgeMaps', 'knowledgeCards',
+  'taskBoard', 'linkGroups', 'knowledgeMaps', 'knowledgeCards',
 ];
 
 export const EMPTY_STORE: StoreShape = {
   dailyPlans: [], longTermGoals: [], reflections: [], harvests: [], fixedRoutines: [],
   taskItems: [], taskTemplates: [], trashItems: [], courses: [], semester: [],
-  ddls: [], important: [], backlog: [], ideas: [], taskBoard: [], linkGroups: [], activityEvents: [], gardenKeys: [], knowledgeMaps: [], knowledgeCards: [],
+  ddls: [], important: [], taskBoard: [], linkGroups: [], knowledgeMaps: [], knowledgeCards: [],
 };
 
 export function emptyStore(): StoreShape {

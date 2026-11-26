@@ -3,16 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { searchEverything } from '../db';
 import type { SearchHit } from '../utils/search';
-import { hiddenGardenEntries } from '../utils/gardenEntry';
 import './SearchOverlay.css';
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  onNavigate?: (route: string) => void;
 }
 
 /** 全局内容搜索：只搜用户录入的内容，结果带位置并可跳转 */
-export default function SearchOverlay({ open, onClose }: Props) {
+export default function SearchOverlay({ open, onClose, onNavigate }: Props) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -32,8 +32,6 @@ export default function SearchOverlay({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return undefined;
     let alive = true;
-    const hidden = hiddenGardenEntries(q);
-    if (hidden.length) { setHits(hidden); setBusy(false); return undefined; }
     const text = q.trim();
     if (!text) { setHits([]); setBusy(false); return undefined; }
     setBusy(true);
@@ -47,8 +45,11 @@ export default function SearchOverlay({ open, onClose }: Props) {
   if (!open) return null;
 
   function openHit(hit: SearchHit) {
-    onClose();
-    navigate(hit.route);
+    if (onNavigate) onNavigate(hit.route);
+    else {
+      onClose();
+      navigate(hit.route);
+    }
     if (hit.onOpen === 'tasks') {
       setTimeout(() => window.dispatchEvent(new Event('dailynote-open-tasks')), 80);
     }
@@ -73,9 +74,8 @@ export default function SearchOverlay({ open, onClose }: Props) {
         </div>
 
         <div className="sr-body">
-          {!q.trim() ? (
-            <div className="sr-empty">输入要查找的内容</div>
-          ) : busy && hits.length === 0 ? (
+          {!q.trim() ? null
+            : busy && hits.length === 0 ? (
             <div className="sr-empty">搜索中...</div>
           ) : hits.length === 0 ? (
             <div className="sr-empty">没有找到</div>

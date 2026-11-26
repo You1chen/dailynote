@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { LongTermGoal, GoalTask, WishStatus } from '../types';
-import { genId } from '../types';
+import type { LongTermGoal } from '../types';
 import { getAllGoals, saveGoalDetailed, deleteGoal } from '../db';
 
 
@@ -77,65 +76,9 @@ export function useGoals() {
     return true;
   }, [setAll]);
 
-  const addTask = useCallback(async (goalId: number, title: string) => {
-    const prev = goalsRef.current;
-    const goal = prev.find(g => g.id === goalId);
-    if (!goal) return false;
-    const task: GoalTask = { id: genId(), title: title.trim(), completed: false, createdAt: Date.now() };
-    return updateGoal(goalId, { tasks: [...goal.tasks, task] });
-  }, [updateGoal]);
-
-  const toggleTask = useCallback(async (goalId: number, taskId: string) => {
-    const prev = goalsRef.current;
-    const goal = prev.find(g => g.id === goalId);
-    if (!goal) return false;
-    return updateGoal(goalId, {
-      tasks: goal.tasks.map(t => (t.id === taskId ? { ...t, completed: !t.completed } : t)),
-    });
-  }, [updateGoal]);
-
-  const removeTask = useCallback(async (goalId: number, taskId: string) => {
-    const prev = goalsRef.current;
-    const goal = prev.find(g => g.id === goalId);
-    if (!goal) return false;
-    return updateGoal(goalId, { tasks: goal.tasks.filter(t => t.id !== taskId) });
-  }, [updateGoal]);
-
-  /** 新增大愿望：名称 + 愿景必填，其余可选 */
-  const addWish = useCallback(async (input: {
-    title: string;
-    vision: string;
-    description?: string;
-    category?: string;
-    targetDate?: string;
-    tasks?: GoalTask[];
-  }) => {
-    const wish: LongTermGoal = {
-      kind: 'wish',
-      title: input.title.trim(),
-      vision: input.vision.trim(),
-      description: (input.description ?? '').trim(),
-      category: input.category ?? '其他',
-      targetDate: input.targetDate || undefined,
-      status: 'active',
-      tasks: input.tasks ?? [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    const { id, ok } = await saveGoalDetailed(wish);
-    if (!ok) return null;
-    setAll([{ ...wish, id }, ...goalsRef.current]);
-    return id;
-  }, [setAll]);
-
-  const setWishStatus = useCallback(async (id: number, status: WishStatus) => {
-    return updateGoal(id, { status });
-  }, [updateGoal]);
-
   return {
     goals, loading,
-    addGoal, addWish, setWishStatus,
-    updateGoal, removeGoal, addTask, toggleTask, removeTask,
+    addGoal, updateGoal, removeGoal,
     reload: load,
   };
 }

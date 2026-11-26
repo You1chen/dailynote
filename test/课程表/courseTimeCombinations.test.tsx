@@ -5,6 +5,8 @@ import type { ReactElement, ReactNode } from 'react';
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], index: 0 }));
 vi.mock('react', async importOriginal => ({
   ...(await importOriginal<typeof import('react')>()),
+  useRef: (current: unknown) => ({ current }),
+  useEffect: vi.fn(),
   useState: (initial: unknown) => {
     const index = hooks.index++;
     if (!(index in hooks.values)) hooks.values[index] = typeof initial === 'function' ? initial() : initial;
@@ -16,8 +18,8 @@ vi.mock('react', async importOriginal => ({
 vi.mock('../../src/db', () => ({ getSemester: vi.fn(), saveCourse: vi.fn() }));
 import CourseEditModal from '../../src/components/CourseEditModal';
 import CourseTimeSettings from '../../src/components/CourseTimeSettings';
-import { DEFAULT_COURSE_TIME_COMBINATIONS, loadCourseTimeCombinations, normalizeCourseTimeCombinations, saveCourseTimeCombinations } from '../../src/utils/courseTimeCombinations';
-import { _resetForTest, exportJSON, importJSONIntoStore } from '../../src/services/store';
+import { DEFAULT_COURSE_TIME_COMBINATIONS, loadCourseTimeCombinations, normalizeCourseTimeCombinations } from '../../src/utils/courseTimeCombinations';
+import { _resetForTest, initStore } from '../../src/services/store';
 import type { Course } from '../../src/types';
 
 type Element = ReactElement<Record<string, any>>;
@@ -32,6 +34,20 @@ function find(node: ReactNode, predicate: (element: Element) => boolean): Elemen
   throw new Error('Element not found');
 }
 const memory: Record<string, string> = {};
+async function seedLegacyFile(data: Record<string, unknown>): Promise<void> {
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('dailynote_kv', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('kv');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const tx = database.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(JSON.stringify({ version: 1, savedAt: 0, dailyPlans: [], ...data }), 'dailynote-data');
+    tx.oncomplete = () => { database.close(); resolve(); };
+    tx.onerror = () => { database.close(); reject(tx.error); };
+  });
+}
 beforeEach(async () => {
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => memory[key] ?? null,
@@ -122,17 +138,16 @@ describe('课程时间组合', () => {
     expect(combinations).toHaveLength(3);
   });
 
-  it('persists custom and empty combinations through backup import/export; old backups retain local choices', async () => {
+  it('旧单文件里的时间组合迁入偏好；显式空组合保持为空', async () => {
     const custom = [{ startTime: '12:10', endTime: '13:20' }];
-    saveCourseTimeCombinations(custom);
-    const backup = exportJSON();
-    expect(JSON.parse(backup).courseTimeCombinations).toEqual(custom);
-    saveCourseTimeCombinations([]);
-    await importJSONIntoStore(backup);
+    await seedLegacyFile({ courseTimeCombinations: custom });
+    await initStore();
     expect(loadCourseTimeCombinations()).toEqual(custom);
-    await importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [] }));
-    expect(loadCourseTimeCombinations()).toEqual(custom);
-    await importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [], courseTimeCombinations: [] }));
-    expect(loadCourseTimeCombinations()).toEqual([]);
+  });
+
+  it('没有时间组合字段的旧单文件沿用默认组合', async () => {
+    await seedLegacyFile({});
+    await initStore();
+    expect(loadCourseTimeCombinations()).toEqual(DEFAULT_COURSE_TIME_COMBINATIONS);
   });
 });

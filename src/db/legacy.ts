@@ -45,6 +45,10 @@ class LegacyDailyNoteDB extends Dexie {
 
 export let legacyDb = new LegacyDailyNoteDB();
 
+export function legacyDatabaseExists(): Promise<boolean> {
+  return Dexie.exists(legacyDb.name);
+}
+
 /** 读取旧库全部表数据（库不存在/空库返回空结构） */
 export async function readLegacyTables(): Promise<Partial<StoreShape>> {
   try {

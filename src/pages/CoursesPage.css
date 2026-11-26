@@ -48,7 +48,7 @@
 }
 
 .courses-special-tag {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
@@ -71,12 +71,11 @@
 
 /* The timetable fills the available app pane, not the global 480px content column. */
 .app-container.courses-page {
-  --ct-time-width: 40px;
   display: flex;
   flex-direction: column;
   max-width: none;
   min-width: 0;
-  height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 60px);
+  height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
   min-height: 0;
   flex: 0 0 auto;
   padding: 0 var(--safe-right) 0 0;
@@ -94,15 +93,6 @@
 .courses-back { justify-self: start; }
 .courses-settings { justify-self: end; }
 
-.ct-hint {
-  padding: 0 6px 5px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-.ct-touch-hint { display: none; }
-@media (pointer: coarse) { .ct-touch-hint { display: inline; } }
-
 .ct-scroll {
   flex: 1;
   min-width: 0;
@@ -113,7 +103,7 @@
 
 .ct-columns {
   display: grid;
-  grid-template-columns: var(--ct-time-width) repeat(var(--ct-day-count), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--ct-day-count), minmax(0, 1fr)) 28px;
 }
 
 .ct-head {
@@ -132,22 +122,25 @@
 .ct-head > span { padding: 6px 0; min-width: 0; }
 .ct-head > span + span { border-left: 1px solid var(--color-border); }
 
-.ct-time-axis, .ct-day { position: relative; min-width: 0; }
-.ct-time-axis {
-  color: var(--color-text-secondary);
-  background: var(--color-surface);
-  font-size: 9px;
-  text-align: center;
-  user-select: none;
-  font-variant-numeric: tabular-nums;
+/* A vertical swipe here scrolls the timetable. Swiping an empty day slot selects a range. */
+.ct-scroll-rail {
+  border-inline-start: 1px solid var(--color-border);
+  background: var(--color-bg);
   touch-action: pan-y;
 }
-.ct-time-fold, .ct-time-tick { position: absolute; inset-inline: 0; }
-.ct-time-tick { line-height: 12px; }
-.ct-time-fold { display: grid; align-content: center; line-height: 11px; background: var(--color-bg); }
-.ct-time-fold span { display: block; }
+.ct-body > .ct-scroll-rail::before {
+  content: '';
+  position: sticky;
+  top: 50%;
+  display: block;
+  width: 4px;
+  height: 32px;
+  margin-inline: auto;
+  border-radius: 4px;
+  background: var(--color-text-muted);
+}
 
-.ct-day { border-left: 1px solid var(--color-border); user-select: none; }
+.ct-day { position: relative; min-width: 0; border-left: 1px solid var(--color-border); user-select: none; }
 .ct-band {
   position: absolute;
   inset-inline: 0;
@@ -209,15 +202,14 @@
   white-space: nowrap;
   line-height: 1.2;
 }
-.ct-block-name { font-size: 11px; font-weight: 700; }
-.ct-block-name sup { margin-left: 2px; font-size: 8px; line-height: 1; }
-.ct-block-time, .ct-block-loc { font-size: 9px; }
+.ct-block-name { font-size: 12px; font-weight: 700; }
+.ct-block-name sup { margin-left: 2px; font-size: 9px; line-height: 1; }
+.ct-block-time, .ct-block-loc { font-size: 10.5px; }
 .ct-block-time { font-variant-numeric: tabular-nums; }
 
 .courses-weekend-setting label { display: flex; align-items: center; gap: 8px; }
 .courses-weekend-setting input { accent-color: var(--color-primary); }
 
-.modal-hint { margin:8px 0; color:var(--color-text-muted); font-size:12px; }
 
 .courses-import-modal { max-width: 560px; }
 .courses-import-list { display:flex; flex-direction:column; gap:8px; max-height:42vh; overflow:auto; margin:8px 0; }

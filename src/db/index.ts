@@ -8,13 +8,14 @@
 
 import type {
   KnowledgeMap, KnowledgeNode, KnowledgeStatus, KnowledgeCardLibrary,
- DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
+ DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, TaskBoard, TaskNode, ImportantItem, LinkGroup } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, bindLegacyCourses, type AnyStoreTable } from '../services/store';
-import { toggleLeafDone, removeLeaf, setLeafShelved, normalizeOrder } from '../utils/taskTree';
+import { toggleLeafDone, removeLeaf, setLeafShelved, normalizeExecutionOrder, reorderExecutionLeaves, pruneExpiredTasks, pruneDoneLeaves, isExpiredTask, updateLeaf } from '../utils/taskTree';
+import { elapsedTaskMs } from '../utils/taskTiming';
 import { searchStore, type SearchHit } from '../utils/search';
 import { DDL_DEFAULT_TIME } from '../utils/ddl';
-import { decryptGoals, encryptWish } from '../services/gardenSecurity';
+import { isRetiredPrivateGoal, isRetiredTrashItem } from '../utils/retiredRecords';
 
 // ============ 每日计划 CRUD ============
 
@@ -46,8 +47,7 @@ export async function getAllPlans(): Promise<DailyPlan[]> {
 // ============ 长期目标 CRUD ============
 
 export async function getAllGoals(): Promise<LongTermGoal[]> {
-  const goals = deepClone([...store.longTermGoals].sort((a, b) => b.createdAt - a.createdAt));
-  return decryptGoals(goals);
+  return deepClone(store.longTermGoals.filter(goal => !isRetiredPrivateGoal(goal)).sort((a, b) => b.createdAt - a.createdAt));
 }
 
 export async function saveGoal(goal: LongTermGoal): Promise<number> {
@@ -60,7 +60,11 @@ export async function saveGoal(goal: LongTermGoal): Promise<number> {
  * 又不想破坏 `saveGoal` 原有的 number 返回值。
  */
 export async function saveGoalDetailed(goal: LongTermGoal): Promise<{ id: number; ok: boolean }> {
-  const clean = await encryptWish(deepClone(goal));
+  const clean = deepClone(goal);
+  if (isRetiredPrivateGoal(clean)) return { id: clean.id ?? 0, ok: false };
+  if (clean.id != null && store.longTermGoals.some(goal => goal.id === clean.id && isRetiredPrivateGoal(goal))) {
+    return { id: clean.id, ok: false };
+  }
   let resultId = 0;
   const ok = await mutate(() => {
     if (clean.id != null) {
@@ -78,13 +82,13 @@ export async function saveGoalDetailed(goal: LongTermGoal): Promise<{ id: number
 export async function deleteGoal(id: number): Promise<boolean> {
   return mutate(() => {
     const goal = store.longTermGoals.find(g => g.id === id);
-    if (goal) {
+    if (goal && !isRetiredPrivateGoal(goal)) {
       store.trashItems.push({
         id: allocId('trashItems'),
         originalTable: 'longTermGoals',
         originalId: id,
         originalData: deepClone(goal),
-        title: goal.kind === 'wish' ? '秘密花园条目' : goal.title,
+        title: goal.title,
         deletedAt: Date.now(),
       });
       store.longTermGoals = store.longTermGoals.filter(g => g.id !== id);
@@ -124,7 +128,7 @@ export async function deleteReflection(id: number): Promise<void> {
         originalTable: 'reflections',
         originalId: id,
         originalData: deepClone(r),
-        title: `反思 - ${r.problem?.slice(0, 30) || '无标题'}`,
+        title: `记事 - ${r.problem?.slice(0, 30) || '无标题'}`,
         deletedAt: Date.now(),
       });
       store.reflections = store.reflections.filter(x => x.id !== id);
@@ -431,7 +435,7 @@ export async function deleteLinkGroup(id: number): Promise<void> {
 // ============ 回收站 CRUD ============
 
 export async function getTrashItems(): Promise<TrashItem[]> {
-  return deepClone([...store.trashItems].sort((a, b) => b.deletedAt - a.deletedAt));
+  return deepClone(store.trashItems.filter(item => !isRetiredTrashItem(item)).sort((a, b) => b.deletedAt - a.deletedAt));
 }
 
 /** 回收站条目对应的原表（timeBlocks 还原到当天计划） */
@@ -445,15 +449,13 @@ const TRASH_TARGET: Record<string, AnyStoreTable> = {
   courses: 'courses',
   ddls: 'ddls',
   important: 'important',
-  backlog: 'backlog',
-  ideas: 'ideas',
   linkGroups: 'linkGroups',
   timeBlocks: 'dailyPlans',
 };
 
 export async function restoreFromTrash(trashId: number): Promise<boolean> {
   const item = store.trashItems.find(t => t.id === trashId);
-  if (!item) return false;
+  if (!item || isRetiredTrashItem(item)) return false;
   // 先写"新增"侧（原表），再写"移除"侧（回收站），崩溃中断不丢数据
   const target = TRASH_TARGET[item.originalTable];
   const writeOrder: AnyStoreTable[] | undefined = target ? [target, 'trashItems'] : undefined;
@@ -518,18 +520,6 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
           store.important.push(rec);
           break;
         }
-        case 'backlog': {
-          const rec = originalData as BacklogItem;
-          if (rec.id != null && store.backlog.some(b => b.id === rec.id)) { ok = false; return; }
-          store.backlog.push(rec);
-          break;
-        }
-        case 'ideas': {
-          const rec = originalData as Idea;
-          if (rec.id != null && store.ideas.some(i => i.id === rec.id)) { ok = false; return; }
-          store.ideas.push(rec);
-          break;
-        }
         case 'linkGroups': {
           const rec = originalData as LinkGroup;
           if (rec.id != null && store.linkGroups.some(g => g.id === rec.id)) { ok = false; return; }
@@ -547,8 +537,7 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
     } catch {
       ok = false;
     }
-  }, { writeOrder, skipActivity: true });
-  if (ok && item.originalTable === 'ideas') notifyIdeasChanged();
+  }, { writeOrder });
   return ok;
 }
 
@@ -576,16 +565,12 @@ function restoreTimeBlockSync(block: any): void {
 
 export async function permanentlyDelete(trashId: number): Promise<void> {
   await mutate(() => {
-    store.trashItems = store.trashItems.filter(t => t.id !== trashId);
+    store.trashItems = store.trashItems.filter(t => t.id !== trashId || isRetiredTrashItem(t));
   });
 }
 
-export async function clearAllTrash(publicOnly = false): Promise<void> {
-  await mutate(() => {
-    store.trashItems = publicOnly
-      ? store.trashItems.filter(item => item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish')
-      : [];
-  });
+export async function clearAllTrash(): Promise<void> {
+  await mutate(() => { store.trashItems = store.trashItems.filter(isRetiredTrashItem); });
 }
 
 /** 清理超过30天的回收站项 */
@@ -597,7 +582,7 @@ export async function cleanOldTrash(): Promise<void> {
 
 function cleanOldTrashSync(): void {
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  store.trashItems = store.trashItems.filter(t => t.deletedAt >= cutoff);
+  store.trashItems = store.trashItems.filter(t => t.deletedAt >= cutoff || isRetiredTrashItem(t));
 }
 
 /** 将时间块移入回收站 */
@@ -702,141 +687,139 @@ export async function deleteTaskTemplate(id: number): Promise<void> {
   }, { writeOrder: ['trashItems', 'taskTemplates'] });
 }
 
-// ============ 杂念（小愿望 / 琐事 / 灵感） CRUD ============
-
-/**
- * 杂念变更通知：计划页的分类计数、收获页的按日统计各自持有 useIdeas 实例，
- * 靠这个事件立即刷新，而不是等切换页面重新挂载。
- */
-function notifyIdeasChanged(): void {
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event('dailynote-ideas-changed'));
-}
-
-/** 按日期倒序、同日按创建时间倒序 */
-export async function getAllIdeas(): Promise<Idea[]> {
-  return deepClone([...store.ideas].sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return b.createdAt - a.createdAt;
-  }));
-}
-
-export async function saveIdea(item: Idea): Promise<number> {
-  item = deepClone(item);
-  let resultId = 0;
-  await mutate(() => {
-    if (item.id != null) {
-      const idx = store.ideas.findIndex(x => x.id === item.id);
-      if (idx >= 0) store.ideas[idx] = { ...item, updatedAt: Date.now() };
-      resultId = item.id;
-      return;
-    }
-    resultId = allocId('ideas');
-    store.ideas.push({ ...item, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
-  });
-  notifyIdeasChanged();
-  return resultId;
-}
-
-export async function deleteIdea(id: number, intent?: 'complete'): Promise<void> {
-  await mutate(() => {
-    const item = store.ideas.find(x => x.id === id);
-    if (item) {
-      store.trashItems.push({
-        id: allocId('trashItems'),
-        originalTable: 'ideas',
-        originalId: id,
-        title: `灵感 - ${item.text.slice(0, 12)}`,
-        originalData: JSON.parse(JSON.stringify(item)),
-        deletedAt: Date.now(),
-      });
-      store.ideas = store.ideas.filter(x => x.id !== id);
-      cleanOldTrashSync();
-    }
-  }, { writeOrder: ['trashItems', 'ideas'], activityIntent: intent === 'complete' ? 'complete-idea' : undefined });
-  notifyIdeasChanged();
-}
-// ============ 遗留问题 CRUD ============
-
-export async function getAllBacklog(): Promise<BacklogItem[]> {
-  return deepClone([...store.backlog]);
-}
-
-export async function saveBacklog(item: BacklogItem): Promise<number> {
-  item = deepClone(item);
-  let resultId = 0;
-  await mutate(() => {
-    if (item.id != null) {
-      const idx = store.backlog.findIndex(x => x.id === item.id);
-      if (idx >= 0) store.backlog[idx] = { ...item, updatedAt: Date.now() };
-      resultId = item.id;
-      return;
-    }
-    resultId = allocId('backlog');
-    store.backlog.push({ ...item, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
-  });
-  return resultId;
-}
-
-/** 只改状态：更新时间戳即"重新计时"（气泡不催刚动过的） */
-export async function setBacklogStatus(id: number, status: BacklogStatus): Promise<void> {
-  await mutate(() => {
-    const idx = store.backlog.findIndex(x => x.id === id);
-    if (idx >= 0) store.backlog[idx] = { ...store.backlog[idx], status, updatedAt: Date.now() };
-  });
-}
-
-export async function deleteBacklog(id: number): Promise<void> {
-  await mutate(() => {
-    const item = store.backlog.find(x => x.id === id);
-    if (item) {
-      store.trashItems.push({
-        id: allocId('trashItems'),
-        originalTable: 'backlog',
-        originalId: id,
-        originalData: deepClone(item),
-        title: `遗留问题 - ${item.title?.slice(0, 30) || '无标题'}`,
-        deletedAt: Date.now(),
-      });
-      store.backlog = store.backlog.filter(x => x.id !== id);
-    }
-    cleanOldTrashSync();
-  }, { writeOrder: ['trashItems', 'backlog'] });
-}
-
-
 // ============ 任务树 CRUD（单记录数组表，id 恒 1） ============
 
+const EMPTY_TASK_BOARD: TaskBoard = { id: 1, nodes: [], order: [], updatedAt: 0 };
+
 export async function getTaskBoard(): Promise<TaskBoard> {
-  return deepClone(store.taskBoard.find(b => b.id === 1) ?? { id: 1, nodes: [], order: [], updatedAt: 0 });
+  const board = store.taskBoard.find(b => b.id === 1) ?? EMPTY_TASK_BOARD;
+  return deepClone({ ...board, order: normalizeExecutionOrder(board.nodes, board.order ?? []) });
+}
+
+async function mutateTaskBoard(update: (board: TaskBoard) => TaskBoard): Promise<void> {
+  let previous: TaskBoard | undefined;
+  let next: TaskBoard | undefined;
+  const ok = await mutate(() => {
+    previous = store.taskBoard.find(b => b.id === 1);
+    const current = previous ?? EMPTY_TASK_BOARD;
+    const updated = update(current);
+    if (updated === current) return;
+
+    next = { ...updated, updatedAt: Date.now() };
+    if (previous) store.taskBoard[store.taskBoard.indexOf(previous)] = next;
+    else store.taskBoard.push(next);
+  });
+  if (ok) return;
+
+  // mutate applies in memory before persisting. Do not undo a newer write.
+  if (next) {
+    const index = store.taskBoard.indexOf(next);
+    if (index >= 0) {
+      if (previous) store.taskBoard[index] = previous;
+      else store.taskBoard.splice(index, 1);
+    }
+  }
+  throw new Error('保存任务清单失败');
+}
+
+function mergeTaskEdits(current: TaskNode[], edited: TaskNode[], base?: TaskNode[]): TaskNode[] {
+  const collect = (nodes: TaskNode[], index = new Map<string, TaskNode>()): Map<string, TaskNode> => {
+    for (const node of nodes) {
+      index.set(node.id, node);
+      collect(node.children, index);
+    }
+    return index;
+  };
+  const currentById = collect(current);
+  const baseById = base ? collect(base) : currentById;
+  const merge = (nodes: TaskNode[]): TaskNode[] => nodes.map(node => {
+    const latest = currentById.get(node.id);
+    const initial = baseById.get(node.id);
+    const children = merge(node.children);
+    if (!latest) return { ...node, children };
+    return {
+      ...node,
+      title: initial?.title === node.title ? latest.title : node.title,
+      done: latest.done,
+      doneAt: latest.doneAt,
+      shelved: initial?.shelved === node.shelved ? latest.shelved : node.shelved,
+      taskTiming: latest.taskTiming,
+      children,
+    };
+  });
+  return merge(edited);
 }
 
 export async function saveTaskBoard(next: { nodes: TaskNode[]; order: string[] }): Promise<void> {
-  await mutate(() => {
-    const rec: TaskBoard = { id: 1, nodes: next.nodes, order: next.order, updatedAt: Date.now() };
-    const idx = store.taskBoard.findIndex(b => b.id === 1);
-    if (idx >= 0) store.taskBoard[idx] = rec;
-    else store.taskBoard.push(rec);
+  await mutateTaskBoard(board => {
+    const nodes = mergeTaskEdits(board.nodes, next.nodes);
+    return { ...board, nodes, order: normalizeExecutionOrder(nodes, next.order) };
   });
 }
 
+export async function saveTaskTree(nodes: TaskNode[], base?: TaskNode[]): Promise<void> {
+  await mutateTaskBoard(board => {
+    // Resolve old paths before replacing the tree, so renamed IDs keep their slots.
+    const order = normalizeExecutionOrder(board.nodes, board.order ?? []);
+    const active = pruneExpiredTasks(mergeTaskEdits(board.nodes, nodes, base));
+    return { ...board, nodes: active, order: normalizeExecutionOrder(active, order) };
+  });
+}
+
+function pruneTaskBoard(board: TaskBoard, shouldRemove: (node: TaskNode) => boolean): TaskBoard {
+  const nodes = pruneDoneLeaves(board.nodes, shouldRemove);
+  if (nodes === board.nodes) return board;
+  const order = normalizeExecutionOrder(board.nodes, board.order ?? []);
+  return { ...board, nodes, order: normalizeExecutionOrder(nodes, order) };
+}
+
+export async function clearExpiredTaskLeaves(now = Date.now()): Promise<void> {
+  await mutateTaskBoard(board => pruneTaskBoard(board, node => isExpiredTask(node, now)));
+}
+
 export async function toggleTaskLeaf(key: string): Promise<void> {
-  const board = await getTaskBoard();
-  const nodes = toggleLeafDone(board.nodes, key);
-  await saveTaskBoard({ nodes, order: board.order });
+  await mutateTaskBoard(board => {
+    const now = Date.now();
+    const nodes = toggleLeafDone(board.nodes, key, now);
+    return nodes === board.nodes ? board : { ...board, nodes };
+  });
+}
+
+export async function toggleTaskTimer(key: string, now = Date.now()): Promise<void> {
+  await mutateTaskBoard(board => {
+    const nodes = updateLeaf(board.nodes, key, node => {
+      if (node.done) return node;
+      const elapsedMs = elapsedTaskMs(node.taskTiming, now);
+      const taskTiming = node.taskTiming?.startedAt !== undefined ? { elapsedMs } : { elapsedMs, startedAt: now };
+      return { ...node, taskTiming };
+    });
+    return nodes === board.nodes ? board : { ...board, nodes };
+  });
 }
 
 /** 搁置 / 撤销搁置：只改标记，链结构原样保留 */
 export async function shelveTaskLeaf(key: string, shelved = true): Promise<void> {
-  const board = await getTaskBoard();
-  const nodes = setLeafShelved(board.nodes, key, shelved);
-  await saveTaskBoard({ nodes, order: board.order });
+  await mutateTaskBoard(board => {
+    const nodes = setLeafShelved(board.nodes, key, shelved);
+    return nodes === board.nodes ? board : { ...board, nodes };
+  });
 }
 
 export async function removeTaskLeaf(key: string): Promise<void> {
-  const board = await getTaskBoard();
-  const nodes = removeLeaf(board.nodes, key);
-  const order = normalizeOrder(nodes, board.order.filter(k => k !== key));
-  await saveTaskBoard({ nodes, order });
+  await mutateTaskBoard(board => {
+    const nodes = removeLeaf(board.nodes, key);
+    const order = normalizeExecutionOrder(board.nodes, board.order ?? []);
+    return nodes === board.nodes ? board : { ...board, nodes, order: normalizeExecutionOrder(nodes, order) };
+  });
+}
+
+/** Reorder the current board without replacing any node or its metadata. */
+export async function reorderTaskLeaves(fromKey: string, toKey: string): Promise<void> {
+  await mutateTaskBoard(board => {
+    const currentOrder = board.order ?? [];
+    const order = reorderExecutionLeaves(board.nodes, currentOrder, fromKey, toKey);
+    return order === currentOrder ? board : { ...board, order };
+  });
 }
 
 // ============ 全局内容搜索 ============

@@ -1,21 +1,17 @@
 import type { TaskNode } from '../types';
 import { genId } from '../types';
 
-export interface TaskRow {
-  id: string;
-  title: string;
+export interface TaskRow extends Omit<TaskNode, 'children'> {
   level: number;
-  done: boolean;
-  shelved?: boolean;
-  doneAt?: number;
 }
 
 export function flattenTaskRows(nodes: TaskNode[]): TaskRow[] {
   const out: TaskRow[] = [];
   const walk = (list: TaskNode[], level: number) => {
     for (const node of list) {
-      out.push({ id: node.id, title: node.title, level, done: node.done, shelved: node.shelved, doneAt: node.doneAt });
-      if (node.children.length) walk(node.children, level + 1);
+      const { children, ...row } = node;
+      out.push({ ...row, level });
+      if (children.length) walk(children, level + 1);
     }
   };
   walk(nodes, 0);
@@ -29,9 +25,8 @@ export function rowsToTree(rows: TaskRow[]): TaskNode[] {
   for (const row of rows) {
     const level = Math.max(0, Math.min(row.level, stack.length));
     stack.length = level;
-    const node: TaskNode = { id: row.id, title: row.title, done: row.done, children: [] };
-    if (row.shelved) node.shelved = true;
-    if (row.doneAt) node.doneAt = row.doneAt;
+    const { level: _level, ...fields } = row;
+    const node: TaskNode = { ...fields, children: [] };
     if (stack.length) stack[stack.length - 1].children.push(node);
     else root.push(node);
     stack.push(node);
@@ -56,6 +51,30 @@ export function shiftTaskBranch(rows: TaskRow[], index: number, delta: number): 
   const allowed = delta > 0 ? Math.min(delta, max - rows[index].level) : Math.max(delta, min - rows[index].level);
   if (!allowed) return rows;
   return rows.map((row, i) => i >= index && i < end ? { ...row, level: row.level + allowed } : row);
+}
+
+/** Move a whole branch to the previous/next sibling slot, keeping its children. */
+export function moveTaskBranch(rows: TaskRow[], index: number, direction: -1 | 1): { rows: TaskRow[]; index: number } {
+  const row = rows[index];
+  if (!row) return { rows, index };
+  const level = row.level;
+  const end = branchEnd(rows, index);
+  if (direction < 0) {
+    let prev = index - 1;
+    while (prev >= 0 && rows[prev].level > level) prev--;
+    if (prev < 0 || rows[prev].level !== level) return { rows, index };
+    return {
+      rows: [...rows.slice(0, prev), ...rows.slice(index, end), ...rows.slice(prev, index), ...rows.slice(end)],
+      index: prev,
+    };
+  }
+  const after = rows[end];
+  if (!after || after.level !== level) return { rows, index };
+  const afterEnd = branchEnd(rows, end);
+  return {
+    rows: [...rows.slice(0, index), ...rows.slice(end, afterEnd), ...rows.slice(index, end), ...rows.slice(afterEnd)],
+    index: index + (afterEnd - end),
+  };
 }
 
 export function removeTaskBranch(rows: TaskRow[], index: number): TaskRow[] {

@@ -8,7 +8,7 @@ import './Trash.css';
 
 const TABLE_LABELS: Record<string, string> = {
   longTermGoals: '长期目标',
-  reflections: '反思',
+  reflections: '记事',
   harvests: '收获',
   fixedRoutines: '作息模板',
   taskItems: '任务清单项',
@@ -16,7 +16,6 @@ const TABLE_LABELS: Record<string, string> = {
   courses: '课程',
   ddls: 'DDL',
   important: '重要的事',
-  backlog: '遗留问题',
   linkGroups: '关联分组',
   timeBlocks: '时间块',
 };
@@ -30,9 +29,6 @@ export default function TrashPage() {
     if (askClear) { setAskClear(false); return true; }
     return false;
   }, [notice, askClear]);
-  // Wishes and confessions never surface in the public trash, even if a stale row slips through.
-  const visible = items.filter(item => !(item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish'));
-
   if (loading) {
     return (
       <div className="app-container">
@@ -45,25 +41,21 @@ export default function TrashPage() {
   return (
     <div className="app-container">
       <GroupedPageHeader title="回收站" blocked={askClear || notice !== null}>
-        {visible.length > 0 && (
+        {items.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setAskClear(true)}>
             <AlertTriangle size={14} /> 清空回收站
           </button>
         )}
       </GroupedPageHeader>
 
-      <p className="trash-hint">
-        已删除的内容会保留 30 天，之后自动清理。
-      </p>
-
-      {visible.length === 0 ? (
+      {items.length === 0 ? (
         <div className="empty-state">
           <Trash2 size={48} className="icon" />
           <p>回收站为空</p>
         </div>
       ) : (
         <div className="trash-list">
-          {visible.map(item => {
+          {items.map(item => {
             const gid = item.id!;
             const label = TABLE_LABELS[item.originalTable] || item.originalTable;
             const daysLeft = Math.max(

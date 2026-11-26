@@ -4,7 +4,7 @@
  * 验证：
  *   1. 第二次启动走快照（文件名未变 → 不重读内容）
  *   2. 目录结构变化（新增日期）→ 快照失效 → 全量读，能看到新数据
- *   3. rescanFromDisk 丢弃快照 → 外部修改能被读进来
+ *   3. 清空快照后能读到外部修改
  *   4. 换存储目录不复用快照
  */
 
@@ -19,7 +19,7 @@ const memStore: Record<string, string> = {};
   clear: () => { Object.keys(memStore).forEach(k => delete memStore[k]); },
 };
 
-import { _resetForTest, initStore, rescanFromDisk, flush, getStore } from '../../src/services/store';
+import { _resetForTest, initStore, flush, getStore } from '../../src/services/store';
 import * as db from '../../src/db';
 import { readSnapshot, clearSnapshot, sameNames, filesCover } from '../../src/services/snapshot';
 
@@ -67,7 +67,7 @@ describe('启动快照', () => {
     expect((getStore().dailyPlans[0] as any).injected).toBeUndefined();
   });
 
-  it('同路径内容外改时复用快照，显式重扫才读取新内容', async () => {
+  it('同路径内容外改时复用快照，不重读文件', async () => {
     await db.savePlan({ date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0 } as any);
     const { persist } = await import('../../src/services/store');
     await persist();
@@ -78,8 +78,6 @@ describe('启动快照', () => {
     }));
     await initStore();
     expect((getStore().dailyPlans[0] as any).injected).toBeUndefined();
-    await rescanFromDisk();
-    expect((getStore().dailyPlans[0] as any).injected).toBe(true);
   });
 
   it('快照列出未创建的分类文件时仍能命中', async () => {
@@ -113,7 +111,7 @@ describe('启动快照', () => {
     expect(getStore().dailyPlans.map(p => p.date)).toContain('2026-03-02');
   });
 
-  it('rescanFromDisk 丢弃快照后能读到外部修改', async () => {
+  it('清空快照后能读到外部修改', async () => {
     await db.savePlan({ date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0 } as any);
     await flush();
     await initStore();
@@ -121,7 +119,8 @@ describe('启动快照', () => {
     await kvPut('days/2026-03-01/plan.json', JSON.stringify({
       date: '2026-03-01', timeBlocks: [], createdAt: 0, updatedAt: 0, injected: true,
     }));
-    await rescanFromDisk();
+    await clearSnapshot();
+    await initStore();
     expect((getStore().dailyPlans[0] as any).injected).toBe(true);
   });
 

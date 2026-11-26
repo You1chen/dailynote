@@ -152,7 +152,7 @@
   background: #ecfdf5;
 }
 
-/* 验收完成后：标题删除线 + 整块文字变淡 */
+/* 已完成：标题删除线 + 整块文字变淡 */
 .time-block--done .time-block-inner {
   opacity: 0.55;
 }
@@ -193,7 +193,7 @@
   white-space: nowrap;
 }
 
-.time-block-scores {
+.time-block-status {
   font-size: 0.5625rem;
   color: var(--color-text-muted);
   margin-top: auto;
@@ -293,62 +293,21 @@
   background: var(--color-surface);
 }
 
-/* 时间模式切换 */
-.bs-time-mode {
-  display: flex;
-  gap: 0;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1.5px solid var(--color-border);
-}
-
-.bs-mode-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  font-size: var(--font-sm);
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-
-.bs-mode-btn--active {
-  background: var(--color-primary);
-  color: #fff;
-}
-
-.bs-scores {
+.bs-time-range {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
 }
 
-/* 即时模式徽标 */
-.bs-instant-badge {
-  display: inline-block;
-  font-size: var(--font-xs);
-  font-weight: 600;
-  color: #f59e0b;
-  background: #fef3c7;
-  padding: 1px 8px;
-  border-radius: 10px;
-  margin-left: 8px;
-  vertical-align: middle;
+.bs-time-range .input {
+  width: 100%;
+  min-width: 0;
 }
 
-[data-theme="dark"] .bs-instant-badge {
-  background: #451a03;
-  color: #fbbf24;
-}
-
-.bs-instant-hint {
-  font-size: var(--font-xs);
-  color: var(--color-text-muted);
-  margin-top: 4px;
-  margin-bottom: 0;
+.bs-time-range > span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-sm);
 }
 
 /* 清单模式 - 子任务编辑 */
@@ -659,56 +618,6 @@
   color: var(--color-primary);
 }
 
-/* ============ 验收弹窗（独立于编辑面板） ============ */
-.accept-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.accept-modal {
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 420px;
-  padding: 20px;
-  box-shadow: var(--shadow-md);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 85vh;
-  overflow-y: auto;
-  animation: acceptPop 0.18s ease-out;
-}
-
-@keyframes acceptPop {
-  from { transform: scale(0.96); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-.accept-title {
-  font-size: var(--font-lg);
-  font-weight: 700;
-  margin: 0;
-}
-
-.accept-task-title {
-  font-size: var(--font-sm);
-  color: var(--color-text-muted);
-  word-break: break-word;
-}
-
-.accept-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 /* ============ 课程块（只读展示，来自课程表） ============ */
 .course-block {
   position: absolute;
@@ -801,12 +710,6 @@
 .course-modal-label {
   flex-shrink: 0;
   width: 44px;
-  color: var(--color-text-muted);
-}
-
-.course-modal-hint {
-  margin-top: 12px;
-  font-size: var(--font-xs);
   color: var(--color-text-muted);
 }
 
@@ -1002,29 +905,6 @@
   color: var(--color-primary);
 }
 
-/* 新建按钮 */
-.dp-fab {
-  position: fixed;
-  right: max(16px, calc((100vw - 480px) / 2 + 16px));
-  bottom: calc(76px + var(--safe-bottom));
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: #fff;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-lg);
-  cursor: pointer;
-  z-index: 50;
-}
-
-.dp-fab:active {
-  transform: scale(0.94);
-}
-
 /* 时间块圆角与新配色（几何位置仍由内联样式决定） */
 .time-block {
   border-radius: 10px;
@@ -1102,7 +982,7 @@
   letter-spacing: 0.01em;
 }
 
-.time-block-scores {
+.time-block-status {
   font-size: 10.5px;
 }
 
@@ -1156,12 +1036,12 @@
 /* ==================================================================
    日程页整体重排（2026-10 重写）
    思路：不再"页面里放一个滚动盒子"，改成整页连续滚动：
-   内容从左侧导航后面直接开始，时间轴铺满宽度，滚到底就是底部标签栏。
+   时间轴铺满页面宽度，并为设备安全区域保留底部空间。
    ================================================================== */
 
 .dp-page {
   min-height: 100dvh;
-  padding: 0 0 calc(70px + var(--safe-bottom));
+  padding: 0 0 calc(20px + var(--safe-bottom));
   background: var(--color-bg);
 }
 
@@ -1176,9 +1056,6 @@
   -webkit-backdrop-filter: blur(12px);
 }
 
-[data-theme="dark"] .dp-head {
-  background: rgba(15, 15, 26, 0.92);
-}
 
 .dp-top {
   padding: 0;
@@ -1202,10 +1079,6 @@
   color: var(--color-text-secondary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.dp-sep {
-  opacity: 0.5;
 }
 
 .dp-stats .dp-tools {
@@ -1292,48 +1165,51 @@
   padding-bottom: 0;
 }
 
-.dp-fab {
-  bottom: calc(72px + var(--safe-bottom));
+.dp-time-grid :is(.time-row, .fs-hour-row) {
+  pointer-events: none;
 }
 
-/* 计划页的杂念条：小愿望活泼、琐事克制 */
-.dp-minds {
-  display: flex;
-  gap: 8px;
-  padding: 2px 16px 10px;
+.dp-time-grid {
+  --time-slot-left: 46px;
 }
 
-.dp-mind {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  cursor: pointer;
+.fs-grid.dp-time-grid {
+  --time-slot-left: 50px;
 }
 
-.dp-mind--wish {
-  background: linear-gradient(135deg, #ffe6f2, #fff3d6);
-  color: #c2537f;
+.dp-time-slot {
+  position: absolute;
+  left: var(--time-slot-left);
+  right: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: crosshair;
+  touch-action: none;
 }
 
-.dp-mind--chore {
-  background: #eef0f3;
-  color: #4b5260;
+.dp-time-grid :is(.time-block, .course-block, .fs-time-block, .fs-course-block) {
+  padding: 0;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  font: inherit;
+  text-align: left;
+  touch-action: pan-y;
 }
 
-.dp-mind-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ff8ab5;
+.dp-time-grid :is(.dp-time-slot, .time-block, .course-block):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
-.dp-mind-dash {
-  width: 9px;
-  height: 1.5px;
-  background: #8b93a1;
+.dp-time-selection {
+  position: absolute;
+  left: 48px;
+  right: 10px;
+  z-index: 4;
+  border: 2px solid var(--color-primary);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  pointer-events: none;
 }

@@ -1,99 +1,104 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { toggleTaskTimer } from '../db/taskTimers';
 import type { TaskBoard, TaskLeaf, TaskNode } from '../types';
-import { getTaskBoard, saveTaskBoard, toggleTaskLeaf, removeTaskLeaf, shelveTaskLeaf } from '../db';
-import { countUndone, leavesOf, moveKey, normalizeOrder } from '../utils/taskTree';
+import { getTaskBoard, saveTaskTree, toggleTaskLeaf, removeTaskLeaf, shelveTaskLeaf, reorderTaskLeaves, clearExpiredTaskLeaves } from '../db';
+import { countUndone, executionLeavesOf, reorderExecutionLeaves, toggleLeafDone } from '../utils/taskTree';
 
 const EMPTY: TaskBoard = { id: 1, nodes: [], order: [], updatedAt: 0 };
 
 /** 数据变化事件：球上的数字在别的页面也能刷新 */
 const CHANGED_EVENT = 'dailynote-task-changed';
-function notifyChanged(): void {
-  window.dispatchEvent(new Event(CHANGED_EVENT));
-}
 
 export interface TaskBoardApi {
   nodes: TaskNode[];
-  /** 任务清单里的末级（不含搁置） */
+  /** 任务清单里的末级（不含遗留） */
   leaves: TaskLeaf[];
-  /** 搁置清单里的末级 */
+  /** 遗留清单里的末级 */
   shelved: TaskLeaf[];
   undone: number;
   loading: boolean;
-  saveTree: (nodes: TaskNode[]) => Promise<void>;
+  saveTree: (nodes: TaskNode[], baseNodes?: TaskNode[]) => Promise<void>;
   toggle: (key: string) => Promise<void>;
+  toggleTimer: (key: string) => Promise<void>;
   remove: (key: string) => Promise<void>;
   shelve: (key: string, shelved?: boolean) => Promise<void>;
   reorder: (fromKey: string, toKey: string) => Promise<void>;
+  clearExpired: () => Promise<void>;
   reload: () => Promise<void>;
 }
 
 export function useTaskBoard(): TaskBoardApi {
   const [board, setBoard] = useState<TaskBoard>(EMPTY);
   const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
+  const eventSource = useRef(Symbol());
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setBoard(await getTaskBoard()); }
-    catch (e) { console.error('加载任务失败:', e); }
-    finally { setLoading(false); }
+  const refresh = useCallback(async () => {
+    const id = ++requestId.current;
+    try {
+      const next = await getTaskBoard();
+      if (id === requestId.current) setBoard(next);
+    } finally {
+      if (id === requestId.current) setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(async () => {
+    try { await refresh(); }
+    catch (e) { console.error('加载任务失败:', e); }
+  }, [refresh]);
 
-  const allLeaves = useMemo(() => leavesOf(board.nodes, board.order), [board]);
+  useEffect(() => {
+    const source = eventSource.current;
+    const onChange = (event: Event) => {
+      if ((event as CustomEvent).detail !== source) void load();
+    };
+    window.addEventListener(CHANGED_EVENT, onChange);
+    void load();
+    return () => {
+      window.removeEventListener(CHANGED_EVENT, onChange);
+      requestId.current++;
+    };
+  }, [load]);
+
+  const allLeaves = useMemo(() => executionLeavesOf(board.nodes, board.order), [board]);
   const leaves = useMemo(() => allLeaves.filter(l => !l.shelved), [allLeaves]);
   const shelved = useMemo(() => allLeaves.filter(l => l.shelved), [allLeaves]);
   const undone = useMemo(() => countUndone(leaves), [leaves]);
 
-  const saveTree = useCallback(async (nodes: TaskNode[]) => {
-    const order = normalizeOrder(nodes, board.order);
-    await saveTaskBoard({ nodes, order });
-    setBoard(b => ({ ...b, nodes, order, updatedAt: Date.now() }));
-    notifyChanged();
-  }, [board.order]);
+  const commit = useCallback(async (write: () => Promise<void>) => {
+    try {
+      await write();
+      window.dispatchEvent(new CustomEvent(CHANGED_EVENT, { detail: eventSource.current }));
+      await refresh();
+    } catch (e) {
+      await load();
+      throw e;
+    }
+  }, [load, refresh]);
 
-  const toggle = useCallback(async (key: string) => {
-    await toggleTaskLeaf(key);
-    setBoard(b => ({ ...b, nodes: updateDone(b.nodes, key), updatedAt: Date.now() }));
-    notifyChanged();
-  }, []);
+  const saveTree = useCallback((nodes: TaskNode[], baseNodes?: TaskNode[]) => commit(() => saveTaskTree(nodes, baseNodes)), [commit]);
+  const toggleTimer = useCallback((key: string) => commit(() => toggleTaskTimer(key)), [commit]);
 
-  const shelve = useCallback(async (key: string, on = true) => {
-    await shelveTaskLeaf(key, on);
-    await load();
-    notifyChanged();
-  }, [load]);
+  const toggle = useCallback((key: string) => {
+    setBoard(b => ({ ...b, nodes: toggleLeafDone(b.nodes, key) }));
+    return commit(() => toggleTaskLeaf(key));
+  }, [commit]);
 
-  const remove = useCallback(async (key: string) => {
-    await removeTaskLeaf(key);
-    setBoard(b => ({ ...b, order: b.order.filter(k => k !== key) }));
-    await load();
-    notifyChanged();
-  }, [load]);
+  const shelve = useCallback((key: string, on = true) => commit(() => shelveTaskLeaf(key, on)), [commit]);
+  const remove = useCallback((key: string) => commit(() => removeTaskLeaf(key)), [commit]);
 
-  const reorder = useCallback(async (fromKey: string, toKey: string) => {
-    const order = moveKey(normalizeOrder(board.nodes, board.order), fromKey, toKey);
-    await saveTaskBoard({ nodes: board.nodes, order });
-    setBoard(b => ({ ...b, order, updatedAt: Date.now() }));
-    notifyChanged();
-  }, [board.nodes, board.order]);
-
-  return { nodes: board.nodes, leaves, shelved, undone, loading, saveTree, toggle, remove, shelve, reorder, reload: load };
-}
-
-/** 本地翻转入参树里对应末级的 done（避免整表重读） */
-function updateDone(nodes: TaskNode[], key: string): TaskNode[] {
-  const parts = key.split('/');
-  const rec = (list: TaskNode[], depth: number): TaskNode[] =>
-    list.map(n => {
-      if (n.title !== parts[depth]) return n;
-      if (depth === parts.length - 1) {
-        const done = !n.done;
-        return { ...n, done, doneAt: done ? Date.now() : undefined };
-      }
-      return { ...n, children: rec(n.children, depth + 1) };
+  const reorder = useCallback((fromKey: string, toKey: string) => {
+    setBoard(b => {
+      const order = reorderExecutionLeaves(b.nodes, b.order, fromKey, toKey);
+      return order === b.order ? b : { ...b, order };
     });
-  return rec(nodes, 0);
+    return commit(() => reorderTaskLeaves(fromKey, toKey));
+  }, [commit]);
+
+  const clearExpired = useCallback(() => commit(() => clearExpiredTaskLeaves()), [commit]);
+
+  return { nodes: board.nodes, leaves, shelved, undone, loading, saveTree, toggle, toggleTimer, remove, shelve, reorder, clearExpired, reload: load };
 }
 
 /** 监听任务变化（球上数字用） */
@@ -105,7 +110,7 @@ export function useTaskBadge(): number {
     const refresh = async () => {
       try {
         const board = await getTaskBoard();
-        if (alive) setCount(countUndone(leavesOf(board.nodes, board.order).filter(l => !l.shelved)));
+        if (alive) setCount(countUndone(executionLeavesOf(board.nodes, board.order).filter(l => !l.shelved)));
       } catch { /* 读失败就不显示 */ }
     };
     refresh();

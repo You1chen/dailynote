@@ -1,14 +1,26 @@
-import type { Idea } from '../types';
 import type { KnowledgeCard } from '../types/knowledge';
 import { differenceInCalendarDays, format, intervalToDuration } from 'date-fns';
 
-export type Memory = { id: string; title: string; day: string; time: number } & (
-  { kind: '卡片'; blocks: KnowledgeCard['contents']; card: KnowledgeCard } | { kind: '灵感'; text: string; idea: Idea });
-export function collectMemories(cards: KnowledgeCard[], ideas: Idea[]): Memory[] {
-  return [
-    ...cards.map(c => ({ id: `c:${c.id}`, title: c.title || '未命名卡片', day: format(c.createdAt, 'yyyy-MM-dd'), time: c.createdAt, kind: '卡片' as const, blocks: c.contents, card: c })),
-    ...ideas.filter(i => !i.kind || i.kind === 'idea').map(i => ({ id: `i:${i.id ?? i.createdAt}`, title: i.title || '灵感', day: i.date, time: i.createdAt, kind: '灵感' as const, text: i.text, idea: i }))
-  ];
+export type Memory = {
+  id: string;
+  title: string;
+  day: string;
+  time: number;
+  kind: '卡片';
+  blocks: KnowledgeCard['contents'];
+  card: KnowledgeCard;
+};
+
+export function collectMemories(cards: KnowledgeCard[]): Memory[] {
+  return cards.map(card => ({
+    id: `c:${card.id}`,
+    title: card.title || '未命名卡片',
+    day: format(card.createdAt, 'yyyy-MM-dd'),
+    time: card.createdAt,
+    kind: '卡片' as const,
+    blocks: card.contents,
+    card,
+  }));
 }
 export function deal<T>(values: T[], random = Math.random): T[] {
   const out = values.slice();

@@ -75,8 +75,32 @@ describe('CoursesPage — 课表和本地弹窗', () => {
     expect(html).toContain('当前课程');
     for (const text of ['历史课程', '周末课程', '周六', '周日', '粘贴导入', '>列表<']) expect(html).not.toContain(text);
     expect(html.match(/学期设置/g)).toHaveLength(1);
-    expect(html).toContain('返回计划');
+    expect(html).toContain('>返回</button>');
     expect(html).toContain('--ct-day-count:5');
+    expect(html).not.toContain('>时间<');
+    expect(html).not.toContain('ct-time-axis');
+    expect(html).toContain('ct-scroll-rail');
+    expect(html).toContain('08:00–09:40');
+  });
+
+  it('orders semester settings from start date to special dates without helper copy', () => {
+    button('学期设置').props.onClick();
+    const html = renderToStaticMarkup(render());
+    const start = html.indexOf('开学时间');
+    const weekend = html.indexOf('显示周末');
+    const special = html.indexOf('特殊日期');
+    expect(start).toBeGreaterThan(-1);
+    expect(start).toBeLessThan(weekend);
+    expect(weekend).toBeLessThan(special);
+    expect(html).not.toContain('settings-field-hint');
+    expect(html).not.toContain('仅调整本页显示');
+    expect(html).not.toContain('法定节假日已内置');
+  });
+
+  it('shows no instructional hint line above the timetable', () => {
+    const html = renderToStaticMarkup(render());
+    expect(html).not.toContain('点击空白选时间');
+    expect(html).not.toContain('滑动时间轴滚动');
   });
 
   it('enables existing weekend data through settings without changing it', () => {

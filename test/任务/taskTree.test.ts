@@ -49,8 +49,18 @@ async function kvKeys(): Promise<string[]> {
   });
 }
 
+async function kvPut(key: string, value: string): Promise<void> {
+  const db = await openKvDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(KV_STORE, 'readwrite');
+    tx.objectStore(KV_STORE).put(value, key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
 import {
-  initStore, importJSONIntoStore, _resetForTest } from '../../src/services/store';
+  initStore, _resetForTest } from '../../src/services/store';
 import * as db from '../../src/db';
 import type { TaskNode } from '../../src/types';
 import {
@@ -58,12 +68,14 @@ import {
   prevLeafState,
   chainText,
   countUndone,
+  executionLeavesOf,
   leafKey,
   leafLabel,
   leavesOf,
   linesToText,
   linesToTree,
   moveKey,
+  moveKeyToTargetSlot,
   normalizeOrder,
   parseTaskText,
   pruneDoneLeaves,
@@ -262,6 +274,18 @@ describe('删除与排序', () => {
     expect(moveKey(order, 'a', 'c')).toEqual(['b', 'a', 'c']);
   });
 
+  it('moveKeyToTargetSlot uses the original destination index in both directions', () => {
+    const order = ['a', 'b', 'c', 'd'];
+    expect(moveKeyToTargetSlot(order, 'a', 'b')).toEqual(['b', 'a', 'c', 'd']);
+    expect(moveKeyToTargetSlot(order, 'b', 'a')).toEqual(['b', 'a', 'c', 'd']);
+    expect(moveKeyToTargetSlot(order, 'a', 'd')).toEqual(['b', 'c', 'd', 'a']);
+    expect(moveKeyToTargetSlot(order, 'd', 'a')).toEqual(['d', 'a', 'b', 'c']);
+    expect(moveKeyToTargetSlot(order, 'b', 'b')).toBe(order);
+    expect(moveKeyToTargetSlot(order, 'missing', 'b')).toBe(order);
+    expect(moveKeyToTargetSlot(order, 'b', 'missing')).toBe(order);
+    expect(order).toEqual(['a', 'b', 'c', 'd']);
+  });
+
   it('normalizeOrder 去掉失效 key、补齐新 key', () => {
     const tree = sampleTree();
     const keys = leavesOf(tree).map(l => l.key);
@@ -318,13 +342,94 @@ describe('任务板持久化', () => {
     expect(board.order).not.toContain('实验/电子技术实验/仿真');
   });
 
-  it('旧备份缺少 taskBoard 字段时按空数组兼容', async () => {
+  it('migrates legacy path order and preserves slots when a node is renamed', async () => {
+    const nodes = linesToTree(parseTaskText('- A\n- B\n- C'));
+    const [a, b, c] = executionLeavesOf(nodes).map(l => l.key);
+    await kvPut('taskboard.json', JSON.stringify([{ id: 1, nodes, order: ['C', 'deleted', 'A', 'A'], updatedAt: 1 }]));
+    await initStore();
+    expect((await db.getTaskBoard()).order).toEqual([c, a, b]);
+
+    await db.saveTaskTree(nodes.map(n => n.title === 'C' ? { ...n, title: 'C renamed' } : n));
+    await initStore();
+    const board = await db.getTaskBoard();
+    expect(board.order).toEqual([c, a, b]);
+    expect(executionLeavesOf(board.nodes, board.order).map(l => l.label)).toEqual(['C renamed', 'A', 'B']);
+  });
+
+  it('uses stable keys to distinguish duplicate titles and matches paths with slashes', async () => {
+    const nodes = linesToTree(parseTaskText('- A/B\n- same\n- same'));
+    const [path, first, second] = executionLeavesOf(nodes).map(l => l.key);
+    expect(new Set([path, first, second]).size).toBe(3);
+    await db.saveTaskBoard({ nodes, order: ['same', 'A/B'] });
+    expect((await db.getTaskBoard()).order).toEqual([first, second, path]);
+    await db.toggleTaskLeaf('A/B');
+    await db.shelveTaskLeaf(second);
+    await db.removeTaskLeaf(first);
+    const board = await db.getTaskBoard();
+    expect(board.order).toEqual([second, path]);
+    expect(executionLeavesOf(board.nodes, board.order)).toMatchObject([
+      { key: second, done: false, shelved: true },
+      { key: path, done: true, shelved: false },
+    ]);
+  });
+
+  it('persists both the reorder and overlapping metadata updates without replacing nodes', async () => {
+    const nodes = linesToTree(parseTaskText('- A\n- B\n- C'));
+    const [a, b, c] = executionLeavesOf(nodes).map(l => l.key);
+    await db.saveTaskBoard({ nodes, order: [] });
+    await Promise.all([
+      db.toggleTaskLeaf(b),
+      db.reorderTaskLeaves('A', 'B'),
+      db.shelveTaskLeaf(c),
+    ]);
+    const snapshot = await db.getTaskBoard();
+    await db.reorderTaskLeaves(a, 'missing');
+    expect(await db.getTaskBoard()).toEqual(snapshot);
+    await initStore();
+    const board = await db.getTaskBoard();
+    expect(board.order).toEqual([b, a, c]);
+    expect(board.nodes).toMatchObject([
+      { id: nodes[0].id, done: false },
+      { id: nodes[1].id, done: true, doneAt: expect.any(Number) },
+      { id: nodes[2].id, shelved: true },
+    ]);
+  });
+
+  it('persists expired completion cleanup, keeping undoable tasks and unfinished branches', async () => {
+    const now = Date.now();
+    const nodes = linesToTree(parseTaskText('- Empty parent\n\t- Legacy completed\n- Mixed parent\n\t- Expired\n\t- Pending\n- Recent'));
+    Object.assign(nodes[0].children[0], { done: true });
+    Object.assign(nodes[1].children[0], { done: true, shelved: true, doneAt: now - 30_000 });
+    Object.assign(nodes[2], { done: true, doneAt: now - 1_000 });
+    await db.saveTaskBoard({ nodes, order: ['Recent', 'Mixed parent/Pending'] });
+    await db.clearExpiredTaskLeaves(now);
+    await initStore();
+    const board = await db.getTaskBoard();
+    expect(board.nodes.map(n => n.title)).toEqual(['Mixed parent', 'Recent']);
+    expect(board.nodes[0].children.map(n => n.title)).toEqual(['Pending']);
+    expect(executionLeavesOf(board.nodes, board.order).map(l => l.label)).toEqual(['Recent', 'Mixed parent-Pending']);
+    const recent = executionLeavesOf(board.nodes, board.order)[0];
+    await db.toggleTaskLeaf(recent.key);
+    await db.clearExpiredTaskLeaves(now + 30_000);
+    expect((await db.getTaskBoard()).nodes[1]).toMatchObject({ done: false });
+  });
+
+  it('does not resurrect expired items from an open editor when saving', async () => {
+    const nodes = linesToTree(parseTaskText('- Parent\n\t- Completed'));
+    Object.assign(nodes[0].children[0], { done: true, doneAt: Date.now() - 30_000 });
+    await db.saveTaskTree(nodes);
+    await initStore();
+    expect(await db.getTaskBoard()).toMatchObject({ nodes: [], order: [] });
+  });
+
+  it('旧单文件缺少 taskBoard 字段时按空数组兼容', async () => {
     const old = JSON.stringify({
       version: 1, savedAt: 0, dailyPlans: [], longTermGoals: [], reflections: [],
       harvests: [], fixedRoutines: [], taskItems: [], taskTemplates: [], trashItems: [],
-      courses: [], semester: [], ddls: [], backlog: [],
+      courses: [], semester: [], ddls: [],
     });
-    await expect(importJSONIntoStore(old)).resolves.toBe(0);
+    await kvPut('dailynote-data', old);
+    await initStore();
     const board = await db.getTaskBoard();
     expect(board.nodes).toEqual([]);
     expect(board.order).toEqual([]);

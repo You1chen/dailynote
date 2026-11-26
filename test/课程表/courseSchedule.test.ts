@@ -10,7 +10,6 @@ import {
   computeDayCourses,
   isCourseInSemester,
 } from '../../src/utils/courseSchedule';
-import { BUILTIN_HOLIDAYS, isBuiltinHoliday } from '../../src/utils/holidays';
 import type { Course, SemesterRecord } from '../../src/types';
 import { normalizeCourseDayOfWeek } from '../../src/types';
 
@@ -123,32 +122,11 @@ describe('isCourseInSemester（学期归属兼容）', () => {
   });
 });
 
-describe('内置节假日表', () => {
-  it('2026 国庆假期全部命中，10-08 不命中', () => {
-    for (let d = 1; d <= 7; d++) {
-      expect(isBuiltinHoliday(`2026-10-0${d}`)).toBe(true);
-    }
-    expect(isBuiltinHoliday('2026-10-08')).toBe(false);
-  });
-  it('2026 春节 9 天命中（2/15-2/23），前后不命中', () => {
-    expect(isBuiltinHoliday('2026-02-15')).toBe(true);
-    expect(isBuiltinHoliday('2026-02-23')).toBe(true);
-    expect(isBuiltinHoliday('2026-02-14')).toBe(false);
-    expect(isBuiltinHoliday('2026-02-24')).toBe(false);
-  });
-  it('表内无重复日期', () => {
-    expect(new Set(BUILTIN_HOLIDAYS).size).toBe(BUILTIN_HOLIDAYS.length);
-  });
-  it('未知年份返回 false', () => {
-    expect(isBuiltinHoliday('2028-01-01')).toBe(false);
-    expect(isBuiltinHoliday('2025-10-01')).toBe(false);
-  });
-});
-
-describe('isDayHoliday（手动特殊日期 > 内置表）', () => {
+describe('isDayHoliday（仅使用手动特殊日期）', () => {
   const sem = makeSemester('2026-08-10');
-  it('内置节假日：国庆放假', () => {
-    expect(isDayHoliday('2026-10-01', sem)).toBe(true);
+  it.each(['2026-10-01', '2027-01-01'])('不会自动将 %s 标记为放假', date => {
+    expect(isDayHoliday(date, sem)).toBe(false);
+    expect(isDayHoliday(date, undefined)).toBe(false);
   });
   it('普通上课日不放假', () => {
     expect(isDayHoliday('2026-08-13', sem)).toBe(false);
@@ -157,13 +135,9 @@ describe('isDayHoliday（手动特殊日期 > 内置表）', () => {
     const s = makeSemester('2026-08-10', [{ id: 1, date: '2026-08-13', kind: 'holiday' }]);
     expect(isDayHoliday('2026-08-13', s)).toBe(true);
   });
-  it('手动补课：覆盖内置节假日（学校临时上课）', () => {
+  it('手动补课：不标记为放假', () => {
     const s = makeSemester('2026-08-10', [{ id: 1, date: '2026-10-01', kind: 'makeup' }]);
     expect(isDayHoliday('2026-10-01', s)).toBe(false);
-  });
-  it('无学期记录：内置表仍生效', () => {
-    expect(isDayHoliday('2026-10-01', undefined)).toBe(true);
-    expect(isDayHoliday('2026-08-13', undefined)).toBe(false);
   });
 });
 
@@ -216,12 +190,15 @@ describe('computeDayCourses', () => {
     expect(computeDayCourses([even], makeSemester(start), '2026-08-13')).toEqual([]);
     expect(computeDayCourses([even], makeSemester(start), '2026-08-20').map(c => c.name)).toEqual(['双周课']);
   });
-  it('法定节假日抑制：2026-10-01（周四，第 8 周）无课', () => {
-    expect(computeDayCourses([thursday], makeSemester(start), '2026-10-01')).toEqual([]);
+  it('原内置放假日 2026-10-01（周四，第 8 周）按常规课表上课', () => {
+    expect(computeDayCourses([thursday], makeSemester(start), '2026-10-01')).toEqual([thursday]);
+    const holiday = makeSemester(start, [{ id: 1, date: '2026-10-01', kind: 'holiday' }]);
+    expect(computeDayCourses([thursday], holiday, '2026-10-01')).toEqual([]);
   });
-  it('手动补课覆盖节假日：2026-10-01 恢复上课', () => {
+  it('手动补课保留常规星期和周次过滤', () => {
     const sem = makeSemester(start, [{ id: 1, date: '2026-10-01', kind: 'makeup' }]);
-    expect(computeDayCourses([thursday], sem, '2026-10-01').map(c => c.name)).toEqual(['数学']);
+    const odd = makeCourse({ dayOfWeek: [4], weekType: 'odd' });
+    expect(computeDayCourses([thursday, mondayA, odd], sem, '2026-10-01')).toEqual([thursday]);
   });
   it('手动放假抑制普通上课日', () => {
     const sem = makeSemester(start, [{ id: 1, date: '2026-08-13', kind: 'holiday' }]);

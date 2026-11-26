@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addDays, startOfWeek, format, isSameDay } from 'date-fns';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -6,18 +6,20 @@ import { getAllCourses, getSemester, getPlanByDate } from '../db';
 import type { Course, SemesterRecord, DailyPlan } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { usePreferences } from '../hooks/usePreferences';
+import { useRouteBack } from '../hooks/useRouteBack';
 import { blockRenderRect, minutesToTop, topToMinutes, minutesToTime, sleepLabel, getVisibleHours } from '../utils/time';
 import { computeDayCourses, weekIndex, isDayHoliday } from '../utils/courseSchedule';
 import CourseEditModal, { DAY_LABELS } from '../components/CourseEditModal';
 import './WeekViewPage.css';
 
-// 网格几何（与课程表视图/日视图同一套：全 0-24h、无睡眠折叠）
-const TIME_COL_W = 44;
-const COL_W = 52;
+const DAYS_PER_WEEK = 7;
 const GRID_HEADER_H = 58;
+const weekColumnStart = (index: number) => `${index / DAYS_PER_WEEK * 100}%`;
+const weekBlockWidth = `calc(${100 / DAYS_PER_WEEK}% - 4px)`;
 
 export default function WeekViewPage() {
   const navigate = useNavigate();
+  const routeBack = useRouteBack();
   const { prefs } = usePreferences();
 
   // 显示周：周一 → 周日（与国人习惯一致；日历内部仍以 0=周日 的 getDay 记星期）
@@ -27,23 +29,13 @@ export default function WeekViewPage() {
   const [plans, setPlans] = useState<(DailyPlan | undefined)[]>([]);
   // 编辑弹窗：undefined=关闭
   const [editingCourse, setEditingCourse] = useState<Course | undefined>(undefined);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [gridWidth, setGridWidth] = useState(0);
-
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setGridWidth(entry.contentRect.width));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
   useRegisterBackHandler(() => {
-    navigate('/');
+    if (editingCourse) setEditingCourse(undefined);
+    else routeBack();
     return true;
-  }, [navigate]);
+  }, [editingCourse, routeBack]);
 
-  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const weekDates = useMemo(() => Array.from({ length: DAYS_PER_WEEK }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekDateStrs = useMemo(() => weekDates.map(d => format(d, 'yyyy-MM-dd')), [weekDates]);
 
   const loadWeek = useCallback(async () => {
@@ -78,9 +70,6 @@ export default function WeekViewPage() {
   const sleepEnd = prefs.sleepEnd;
   const visibleHours = hideSleep ? getVisibleHours(sleepStart, sleepEnd) : 24;
   const gridHeight = visibleHours * hourHeight + barHeight;
-  const timeColWidth = gridWidth > 0 ? Math.min(TIME_COL_W, gridWidth * 0.15) : TIME_COL_W;
-  const dayColWidth = gridWidth > 0 ? (gridWidth - timeColWidth) / 7 : COL_W;
-  const gridWidthStyle = gridWidth > 0 ? { width: gridWidth } : undefined;
   const gridGeo = { hideSleep, sleepStart, sleepEnd, hourHeight, barHeight, gridHeight };
 
   /**
@@ -92,8 +81,8 @@ export default function WeekViewPage() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top - GRID_HEADER_H;
     if (y < 0) return;
-    const idx = Math.floor((x - timeColWidth) / dayColWidth);
-    if (idx < 0 || idx > 6) return;
+    if (x < 0 || x >= rect.width) return;
+    const idx = Math.floor(x / rect.width * DAYS_PER_WEEK);
     const minutes = topToMinutes(y, gridGeo);
     if (minutes == null) return;
     const m = Math.max(0, Math.min(1430, Math.round(minutes / 5) * 5));
@@ -103,7 +92,7 @@ export default function WeekViewPage() {
     <div className="app-container app-container--week">
       {/* 页面标题 */}
       <div className="page-header">
-        <button className="btn btn-ghost btn-icon" onClick={() => navigate('/')}>
+        <button className="btn btn-ghost btn-icon" aria-label="返回" onClick={routeBack}>
           <ArrowLeft size={22} />
         </button>
         <h1 className="page-title">周视图</h1>
@@ -123,14 +112,14 @@ export default function WeekViewPage() {
         </button>
       </div>
 
-      <div className="wv-scroll" ref={scrollRef}>
-        <div className="wv-inner" style={{ height: GRID_HEADER_H + gridHeight, ...gridWidthStyle, '--time-col-width': `${timeColWidth}px` } as React.CSSProperties} onClick={handleGridClick}>
+      <div className="wv-scroll">
+        <div className="wv-inner" style={{ height: GRID_HEADER_H + gridHeight }} onClick={handleGridClick}>
           {/* 极淡列分隔线（替代原来的格子边框） */}
-          {Array.from({ length: 8 }, (_, i) => (
-            <div key={`col-${i}`} className="wv-col-line" style={{ left: timeColWidth + i * dayColWidth }} />
+          {Array.from({ length: DAYS_PER_WEEK - 1 }, (_, i) => (
+            <div key={`col-${i}`} className="wv-col-line" style={{ left: weekColumnStart(i + 1) }} />
           ))}
           {/* 表头：星期 + 日期 + 周次 + 放假角标 */}
-          <div className="wv-head" style={{ height: GRID_HEADER_H }}>
+          <div className="wv-head" style={{ height: GRID_HEADER_H }} onClick={event => event.stopPropagation()}>
             {weekDates.map((d, i) => {
               const ds = weekDateStrs[i];
               const wk = semester?.startDate ? weekIndex(ds, semester.startDate) : 0;
@@ -139,7 +128,7 @@ export default function WeekViewPage() {
                 <div
                   key={ds}
                   className={`wv-head-cell${isSameDay(d, new Date()) ? ' wv-head-cell--today' : ''}`}
-                  style={{ left: timeColWidth + i * dayColWidth, width: dayColWidth }}
+                  style={{ left: weekColumnStart(i), width: weekColumnStart(1) }}
                 >
                   <span className="wv-head-day">{DAY_LABELS[(i + 1) % 7]}</span>
                   <span className="wv-head-date">{format(d, 'M/d')}</span>
@@ -164,12 +153,10 @@ export default function WeekViewPage() {
             return (
               <div
                 key={h}
-                className="wv-hour-row"
-                style={{ top: GRID_HEADER_H + top, height: hourHeight }}
-              >
-                <span className="wv-hour-label">{String(h).padStart(2, '0')}:00</span>
-                <div className="wv-hour-line" />
-              </div>
+                className="wv-hour-line"
+                style={{ top: GRID_HEADER_H + top }}
+                aria-hidden="true"
+              />
             );
           })}
 
@@ -199,8 +186,8 @@ export default function WeekViewPage() {
                     navigate(`/?date=${weekDateStrs[i]}&block=${b.id}`);
                   }}
                   style={{
-                    left: timeColWidth + i * dayColWidth + 2,
-                    width: dayColWidth - 4,
+                    left: `calc(${weekColumnStart(i)} + 2px)`,
+                    width: weekBlockWidth,
                     top: GRID_HEADER_H + rect.top,
                     height: rect.height,
                   }}
@@ -225,8 +212,8 @@ export default function WeekViewPage() {
                   className="wv-course-block"
                   title={`${c.name} · ${c.startTime}-${c.endTime}${c.location ? ` · ${c.location}` : ''}`}
                   style={{
-                    left: timeColWidth + i * dayColWidth + 2,
-                    width: dayColWidth - 4,
+                    left: `calc(${weekColumnStart(i)} + 2px)`,
+                    width: weekBlockWidth,
                     top: GRID_HEADER_H + rect.top,
                     height: rect.height,
                   }}

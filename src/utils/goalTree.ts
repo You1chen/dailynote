@@ -76,12 +76,10 @@ export function tasksToNodes(tasks: GoalTask[]): GoalNode[] {
 
 /**
  * 取得目标的有效树。
- * - 大愿望不使用树，返回空数组（里程碑仍走 `tasks`）。
  * - `nodes` 存在即权威，包括空数组。
  * - 只有旧目标（`nodes === undefined`）才用 `tasks` 投影。
  */
 export function effectiveNodes(goal: LongTermGoal): GoalNode[] {
-  if (goal.kind === 'wish') return [];
   if (goal.nodes !== undefined) return goal.nodes;
   return tasksToNodes(goal.tasks);
 }

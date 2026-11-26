@@ -129,8 +129,8 @@ export default function PlanMindmap({ title, nodes, onSelect }: Props) {
       const meta = rootNode
         ? `${n.steps} 个分支 · ${n.progress == null ? '尚未拆解' : `${Math.round(n.progress)}%`}`
         : n.leaf
-          ? (n.completed ? '已完成 · 点按撤销' : '点按完成')
-          : `${n.steps} 个下一步 · 点按展开`;
+          ? (n.completed ? '已完成' : '未完成')
+          : `${n.steps} 个下一步`;
       ctx.fillText(meta, left + (rootNode ? 17 : 19), metaY);
 
       if (!rootNode) {
@@ -157,7 +157,6 @@ export default function PlanMindmap({ title, nodes, onSelect }: Props) {
   return (
     <section className="gp-canvas-section" ref={section} aria-label="计划思维导图">
       <div className="gp-canvas-tools">
-        <span>让每一步，长成你的计划</span>
         <button type="button" aria-label="缩小导图" onClick={() => zoom(.82)}><Minus size={16} /></button>
         <button type="button" aria-label="放大导图" onClick={() => zoom(1.22)}><Plus size={16} /></button>
         <button type="button" aria-label="适配全部节点" onClick={fit}><Maximize2 size={16} /></button>
@@ -199,7 +198,6 @@ export default function PlanMindmap({ title, nodes, onSelect }: Props) {
         }}
         onPointerCancel={event => { pointers.current.delete(event.pointerId); gesture.current.moved = true; }}
       />
-      <p className="gp-canvas-hint">拖动画布 · 双指缩放 · 点分支深入 · 点末级行动完成</p>
     </section>
   );
 }

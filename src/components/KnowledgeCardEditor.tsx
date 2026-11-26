@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, Eye, Image as ImageIcon, MessageCircle, Mic, Plus, RefreshCw, Square, Trash2, X } from 'lucide-react';
 import type { KnowledgeCard, KnowledgeCardContent, KnowledgeStatus } from '../types/knowledge';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
-import { fileToCompressedDataURL } from '../utils/avatarCrop';
+import { fileToCompressedDataURL } from '../utils/imageCompression';
 import { DEFAULT_AUDIO_EXPORT_PATH, copyImageBlob, exportAudioBlob, exportCardData, exportImageBlob } from '../utils/knowledgeCards';
 import ConfirmDialog from './ConfirmDialog';
 import CardTypeMenu from './CardTypeMenu';
@@ -15,6 +15,12 @@ export interface KnowledgeCardEditorProps {
   onSave: (card: KnowledgeCard) => Promise<void>;
   onClose: () => void;
   audioExportPath?: string;
+  quickComposer?: boolean;
+}
+
+export interface QuickCardBackDetail {
+  handled: boolean;
+  complete: (saved: boolean) => void;
 }
 
 type RecordingPhase = 'idle' | 'permission' | 'recording' | 'processing';
@@ -35,7 +41,7 @@ const blobDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(blob);
 });
 
-export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = DEFAULT_AUDIO_EXPORT_PATH }: KnowledgeCardEditorProps) {
+export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = DEFAULT_AUDIO_EXPORT_PATH, quickComposer = false }: KnowledgeCardEditorProps) {
   const [draft, setDraft] = useState<KnowledgeCard>(() => ({ ...card, contents: card.contents.map(item => ({ ...item })) }));
   const draftRef = useRef(draft);
   const [index, setIndex] = useState(0);
@@ -222,12 +228,12 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     await active.done;
   }
 
-  async function saveAndClose(explicit: boolean) {
-    if (operation.current) return;
+  async function saveAndClose(explicit: boolean, close = onClose): Promise<boolean> {
+    if (operation.current) return false;
     if (explicit && !draftRef.current.title.trim()) {
       setError('请先填写卡片名称，再保存。');
       titleInput.current?.focus();
-      return;
+      return false;
     }
     operation.current = true;
     setBusy(true);
@@ -236,10 +242,10 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
       clearPress();
       if (phaseRef.current === 'permission') cancelPermission();
       if (session.current) await stopRecording();
-      if (!mounted.current) return;
+      if (!mounted.current) return false;
       const latest = draftRef.current;
       const contents = latest.contents.filter(item => item.kind === 'text' ? !!item.text.trim() : !!item.data);
-      if (!latest.title.trim() && !contents.length) { onClose(); return; }
+      if (!latest.title.trim() && !contents.length) { close(); return true; }
       const saved: KnowledgeCard = {
         ...latest, contents, title: latest.title.trim() || '未命名卡片', updatedAt: Date.now(),
       };
@@ -250,18 +256,21 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
           setDraft(saved);
           setNotice('已保存');
         } else {
-          onClose();
+          close();
         }
+        return true;
       }
+      return false;
     } catch (cause) {
       if (mounted.current) setError(`保存失败，草稿已保留。${errorText(cause)}`);
+      return false;
     } finally {
       operation.current = false;
       if (mounted.current) setBusy(false);
     }
   }
 
-  useRegisterBackHandler(() => {
+  function handleEditorBack() {
     if (exportOpen) { if (!exportingCard) setExportOpen(false); return true; }
     if (imageMenuOpen) { setImageMenuOpen(false); return true; }
     if (commentContentId || typeOpen) return false;
@@ -271,7 +280,28 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     else if (phaseRef.current !== 'idle') void stopRecording();
     else void saveAndClose(false);
     return true;
-  }, [exportOpen, exportingCard, imageMenuOpen, typeOpen, commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
+  }
+
+  useRegisterBackHandler(handleEditorBack,
+    [exportOpen, exportingCard, imageMenuOpen, typeOpen, commentContentId, confirmDelete, fullscreenImage, onSave, onClose]);
+
+  useEffect(() => {
+    if (!quickComposer) return;
+    const close = (event: Event) => {
+      const detail = (event as CustomEvent<QuickCardBackDetail | undefined>).detail;
+      if (!detail) { handleEditorBack(); return; }
+      if (detail.handled) return;
+      detail.handled = true;
+      if (phaseRef.current !== 'idle' || exportOpen || imageMenuOpen || commentContentId || typeOpen || confirmDelete || fullscreenImage) {
+        handleEditorBack();
+        detail.complete(false);
+        return;
+      }
+      void saveAndClose(false, () => {}).then(detail.complete);
+    };
+    window.addEventListener('dailynote-quick-card-back', close);
+    return () => window.removeEventListener('dailynote-quick-card-back', close);
+  });
 
   function clearImagePress() {
     if (imagePressTimer.current) clearTimeout(imagePressTimer.current);
@@ -489,10 +519,9 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     {fullscreenImage && <div className="kce-fullscreen" role="dialog" aria-modal="true" aria-label="全屏图片"><button type="button" onClick={() => setFullscreenImage(null)} aria-label="关闭全屏图片"><X size={25} /></button><img src={fullscreenImage} alt="卡片图片全屏预览" /></div>}
     {exportOpen && <div className="kce-export-backdrop" onClick={() => setExportOpen(false)}><section className="kce-export-dialog" role="dialog" aria-modal="true" aria-label={exportKind === 'image' ? '保存图片' : '导出卡片'} onClick={event => event.stopPropagation()}>
       <h3>{exportKind === 'image' ? '保存图片' : '导出卡片'}</h3>
-      <p>{exportKind === 'image' ? '图片会保存为单独文件。' : '完整卡片数据会导出为 JSON，包含文字、图片、录音和评论。'}</p>
       {Capacitor.isNativePlatform()
         ? <label>保存位置<input value={exportPath} onChange={event => { setExportPath(event.target.value); setExportError(''); }} placeholder="例如 DailyNote/cards" autoFocus /></label>
-        : <small>确认后选择保存位置；浏览器不支持选择器时会下载到默认目录。</small>}
+        : null}
       {exportError && <p className="kce-error" role="alert">{exportError}</p>}
       <div className="kce-export-actions"><button type="button" onClick={() => setExportOpen(false)}>取消</button><button type="button" className="kce-primary" disabled={exportingCard} onClick={() => void confirmExport()}>{exportingCard ? '导出中…' : '确认导出'}</button></div>
     </section></div>}

@@ -59,7 +59,7 @@ export default function GoalMap({ goal, onToggleLeaf, onEdit, onDelete, onClose 
       {focus && <button type="button" className="gp-map-back" onClick={() => setFocusId(path && path.length > 1 ? path[path.length - 2].id : null)}><ArrowLeft size={18} />返回上一级</button>}
       <div className="gp-map-summary"><span>{focus ? '当前分支' : '总进度'}</span><strong>{progress === null ? '尚未拆解' : `${percentLabel(progress)}%`}</strong></div>
       <PlanMindmap title={focus?.title ?? goal.title} nodes={children} onSelect={(id, leaf) => { if (leaf) void toggle(id); else setFocusId(id); }} />
-      <details className="gp-map-directory"><summary>节点目录 · 键盘与文字操作</summary>
+      <details className="gp-map-directory"><summary>节点目录</summary>
       {children.length > 0 ? <div className="gp-map-branches" role="list">{children.map(node => {
         const leaf = node.children.length === 0;
         const value = nodeProgress(node);

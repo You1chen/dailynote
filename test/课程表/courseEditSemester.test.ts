@@ -7,6 +7,8 @@ vi.mock('../../src/db', () => db);
 // 不依赖 DOM：保留真实组件和保存事件，只为表单提供已有的合法课程名。
 vi.mock('react', async importOriginal => ({
   ...(await importOriginal<typeof import('react')>()),
+  useRef: (current: unknown) => ({ current }),
+  useEffect: vi.fn(),
   useState: (initial: unknown) => [
     initial && typeof initial === 'object' && 'name' in initial
       ? { ...initial, name: '测试课程' }

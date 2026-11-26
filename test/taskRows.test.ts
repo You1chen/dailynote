@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TaskNode } from '../src/types';
-import { flattenTaskRows, newTaskRow, persistableTaskRows, removeTaskBranch, rowsToTree, setBranchShelved, shiftTaskBranch, withTrailingDraftRow } from '../src/utils/taskRows';
+import { flattenTaskRows, moveTaskBranch, newTaskRow, persistableTaskRows, removeTaskBranch, rowsToTree, setBranchShelved, shiftTaskBranch, withTrailingDraftRow } from '../src/utils/taskRows';
 import { commitTaskRow, shouldActivateDraftOnBlur, shouldReuseAppendOnEnter } from '../src/utils/taskRowEditing';
 
 const nodes: TaskNode[] = [
@@ -37,8 +37,30 @@ describe('task row tree editor', () => {
     expect(back[3].level).toBe(1);
   });
 
-  it('keeps one append row after entering, switching rows and editing a previous title', () => {
-    const initial = flattenTaskRows([{ id: 'saved-a', title: 'A', done: false, children: [] }, { id: 'saved-b', title: 'B', done: false, children: [] }]);
+  it('swaps a whole branch with its previous or next sibling', () => {
+    const rows = [
+      { id: 'a', title: 'A', level: 0, done: false },
+      { id: 'a1', title: 'A1', level: 1, done: false },
+      { id: 'b', title: 'B', level: 0, done: false },
+      { id: 'c', title: 'C', level: 0, done: false },
+      { id: 'c1', title: 'C1', level: 1, done: false },
+    ];
+    const down = moveTaskBranch(rows, 0, 1);
+    expect(down.rows.map(row => row.id)).toEqual(['b', 'a', 'a1', 'c', 'c1']);
+    expect(down.index).toBe(1);
+    const up = moveTaskBranch(down.rows, 1, -1);
+    expect(up.rows.map(row => row.id)).toEqual(['a', 'a1', 'b', 'c', 'c1']);
+    expect(up.index).toBe(0);
+    // 末位分支没有下一个兄弟
+    expect(moveTaskBranch(rows, 3, 1).rows).toBe(rows);
+    // 首个子任务没有上一个兄弟
+    expect(moveTaskBranch(rows, 1, -1).rows).toBe(rows);
+    // 与带子节点的兄弟交换时子节点跟随父节点
+    const swapWithChildren = moveTaskBranch(rows, 0, 1);
+    expect(rowsToTree(swapWithChildren.rows).map(node => [node.id, node.children.map(child => child.id)])).toEqual([['b', []], ['a', ['a1']], ['c', ['c1']]]);
+  });
+
+  it('keeps one append row after entering, switching rows and editing a previous title', () => {    const initial = flattenTaskRows([{ id: 'saved-a', title: 'A', done: false, children: [] }, { id: 'saved-b', title: 'B', done: false, children: [] }]);
     const { rows, draftId } = withTrailingDraftRow(initial);
     expect(rows.map(row => row.id)).toEqual(['saved-a', 'saved-b', draftId]);
     expect(persistableTaskRows(rows).map(row => row.title)).toEqual(['A', 'B']);

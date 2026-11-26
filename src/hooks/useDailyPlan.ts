@@ -26,9 +26,6 @@ export function useDailyPlan(date: string) {
       endTime,
       taskTitle: '',
       plannedContent: '',
-      actualExecution: '',
-      focusScore: 0,
-      efficiencyScore: 0,
       completed: false,
       notes: '',
     };
@@ -83,9 +80,6 @@ export function useDailyPlan(date: string) {
       endTime: b.endTime,
       taskTitle: b.taskTitle,
       plannedContent: b.plannedContent,
-      actualExecution: '',
-      focusScore: 5,
-      efficiencyScore: 5,
       completed: false,
       notes: '',
     }));

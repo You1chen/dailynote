@@ -7,6 +7,7 @@
 
 import type { StoreShape } from '../types/storage';
 import { effectiveNodes } from './goalTree';
+import { isRetiredPrivateGoal } from './retiredRecords';
 
 export interface SearchHit {
   key: string;
@@ -69,7 +70,6 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
       const fields = [
         b.taskTitle,
         b.plannedContent,
-        b.actualExecution,
         b.notes,
         ...(b.checklist ?? []).map(i => i.text),
       ];
@@ -86,9 +86,9 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
 
   // Legacy reflections/harvests remain in storage and backups; their retired pages no longer produce search links.
 
-  // ---- 大愿望 / 长期目标 ----
+  // ---- 长期目标 ----
   for (const g of data.longTermGoals) {
-    if (g.kind === 'wish') continue; // 秘密花园内容不出现在全局搜索
+    if (isRetiredPrivateGoal(g)) continue;
     const nodeTitles: string[] = [];
     const walkNodes = (nodes: ReturnType<typeof effectiveNodes>) => {
       for (const node of nodes) {
@@ -102,21 +102,9 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
       q,
       `goal:${g.id}`,
       g.title || '(目标)',
-      [g.title, g.description, g.vision ?? '', ...nodeTitles],
+      [g.title, g.description, ...nodeTitles],
       `长期目标${g.category ? ` · ${g.category}` : ''}`,
       '/goals',
-    ));
-  }
-
-  // ---- 遗留问题 ----
-  for (const b of data.backlog) {
-    push(makeHit(
-      q,
-      `bl:${b.id}`,
-      b.title || '(遗留问题)',
-      [b.title, b.blocker, b.detail, b.startText],
-      '遗留问题',
-      '/backlog',
     ));
   }
 
@@ -155,12 +143,7 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     ));
   }
 
-  for (const idea of data.ideas ?? []) {
-    if (idea.kind && idea.kind !== 'idea') continue;
-    push(makeHit(q, `idea:${idea.id}`, idea.title || '灵感', [idea.title ?? '', idea.text, ...(idea.tags ?? [])], `灵感 · ${shortDate(idea.date)}`, `/reflection?date=${idea.date}&ideas=1`));
-  }
-
-  // ---- 卡片（卡片库归属反思页，节点只引用卡片 ID） ----
+  // ---- 卡片（卡片库归属记事页，节点只引用卡片 ID） ----
   const cardLibrary = data.knowledgeCards?.[0];
   if (cardLibrary) {
     for (const record of cardLibrary.records) {
@@ -176,7 +159,7 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
         [record.card.title, ...textParts],
         owner && node
           ? `卡片 · ${owner.courseName} · ${node.title}`
-          : '卡片 · 反思收集器',
+          : '卡片 · 记事收集器',
         owner ? `/courses?knowledgeCourse=${owner.courseId}&knowledgeNode=${node?.id ?? ''}` : '/reflection',
       ));
     }

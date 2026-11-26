@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Plus, Trash2, Check } from 'lucide-react';
 import { useLinkGroups } from '../hooks/useLinkGroups';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { getAllCourses, getSemester } from '../db';
 import { effectiveCourses, currentWeekOf } from '../utils/courseSchedule';
 import { courseLink, groupLink, hasLink, toggleLink, courseWeeksText } from '../utils/ddlLinks';
@@ -38,6 +39,7 @@ export default function LinkPicker({ open, links, onChange, onClose }: Props) {
   const [addingIn, setAddingIn] = useState<number | null>(null);
   const [itemDraft, setItemDraft] = useState('');
   const [pendingDelete, setPendingDelete] = useState<LinkGroup | null>(null);
+  const sheet = useSheetDrag(onClose, open && !pendingDelete);
 
   // 每次打开都重新读课程表：课程表刚改过也能立刻反映
   useEffect(() => {
@@ -84,12 +86,10 @@ export default function LinkPicker({ open, links, onChange, onClose }: Props) {
 
   return (
     <div className="lp-mask" onClick={onClose}>
-      <div className="lp-sheet" onClick={e => e.stopPropagation()}>
+      <div className="lp-sheet" style={sheet.style} onClick={e => e.stopPropagation()}>
+        <div className="sheet-grip" {...sheet.handlers} aria-hidden="true" />
         <div className="lp-head">
-          <div>
-            <div className="lp-title">关联内容</div>
-            <div className="lp-sub">课程组随课程表自动同步，分组可自己加</div>
-          </div>
+          <div className="lp-title">关联内容</div>
           <button className="lp-close" onClick={onClose} aria-label="关闭"><X size={18} /></button>
         </div>
 
@@ -103,9 +103,7 @@ export default function LinkPicker({ open, links, onChange, onClose }: Props) {
               </span>
             </div>
 
-            {!semester?.startDate ? (
-              <p className="lp-empty">在「课程表」设置开学时间后，这里会自动列出正在上的课</p>
-            ) : week < 1 ? (
+            {!semester?.startDate ? null : week < 1 ? (
               <p className="lp-empty">还没开学，暂时没有可关联的课程</p>
             ) : validCourses.length === 0 ? (
               <p className="lp-empty">当前没有可关联课程</p>

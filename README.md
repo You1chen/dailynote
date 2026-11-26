@@ -1,41 +1,23 @@
-# DailyNote
+# 记
 
-本地优先的个人日程与复盘系统：计划、反思灵感、卡片、课程、截止事项和秘密花园，全部存在你自己的目录里，不联网、不要账号。
+「记」是一款本地优先的日程与笔记应用。它提供时间轴、TODO、长期目标、知识卡片、课表和截止事项。Web/PWA 与 Android 共用一套 React 和 TypeScript 源码。
 
-Web/PWA 与 Android APK 共用同一份代码，数据格式互通。
+## 本地开发
 
-## 先读
+使用 Node.js 22 和 npm，安装依赖后启动开发服务器。
 
-- [structure.md](structure.md)：当前目录结构、存储模型和调用关系。
-- [PROGRESS.md](PROGRESS.md)：按阶段压缩的开发史；最新改动在文末。
-- [MODELS.md](MODELS.md)：Android 离线 OCR 小模型如何随 APK 打包。
-
-## 环境
-
-- Node.js 22 LTS（CI 使用 22）与 npm 10+
-- TypeScript / Vite 由项目依赖提供，不需要全局安装
-- Android：JDK 17、Android Studio 或 Android SDK，compileSdk / targetSdk 36
-- **请使用 npm，不要用 pnpm。** 仓库提交的是 `package-lock.json`，`npm ci` 可复现依赖。
-
-## Web 开发
-
-```bash
+```sh
 npm ci
-npm run dev       # Vite 开发服务器
-npm test          # Vitest，57 个文件 / 852 个用例
-npm run build     # 类型检查 + 生产构建，输出 dist/
-npm run preview   # 预览生产构建
+npm run dev
 ```
+
+运行 `npm test` 执行回归测试。`npm run build` 做类型检查并生成 Web 生产包，`npm run preview` 可预览构建结果。项目结构、路由和存储约定见 [structure.md](structure.md)。
 
 ## Android 构建
 
-首次构建前准备 SDK：
+安装 JDK 21 和 Android SDK 36，设置 `JAVA_HOME`，并通过 `ANDROID_SDK_ROOT` 或 `android/local.properties` 指定 SDK。可以按 [SDK 路径模板](android/local.properties.example) 填写本机路径。
 
-1. 安装 Android Studio，并在 SDK Manager 安装 Android 16 / API 36。
-2. 复制 `android/local.properties.example` 为 `android/local.properties`，把 `sdk.dir` 改成你的 SDK 路径；或者用 Android Studio 打开 `android/` 让它自动生成。
-3. 设置 `JAVA_HOME` 指向 JDK 17。命令行只依赖 `JAVA_HOME` / PATH，不再写死任何本机 JDK 路径。
-
-```bash
+```sh
 # Windows
 npm run build:apk
 
@@ -43,90 +25,9 @@ npm run build:apk
 bash scripts/build-apk.sh
 ```
 
-调试 APK 输出：`android/app/build/outputs/apk/debug/dailynote.apk`。
-配置本机签名后，Windows 用 `npm run build:release`，macOS / Linux 用 `bash scripts/build-apk.sh --release`，生成 `android/app/build/outputs/apk/release/dailynote.apk`。本地签名不等于应用商店或系统开发者身份认证。
+调试 APK 输出到 `android/app/build/outputs/apk/debug/记.apk`。发布构建使用开发者自己的签名配置，Windows 运行 `npm run build:release`，macOS / Linux 运行 `bash scripts/build-apk.sh --release`。中文离线 OCR 由 ML Kit 提供，使用说明见 [MODELS.md](MODELS.md)。
 
-只做 Web 构建并同步到 Android、不跑 Gradle：
+## 本地数据
 
-```bash
-npm run build:android
-```
-
-### 签名
-
-默认 debug 构建使用 Android 默认调试签名，可以直接安装。需要覆盖安装或发布时：
-
-```bash
-bash scripts/setup-keystore.sh
-```
-
-脚本会提示输入密码，生成 `android/daily-note-keystore.jks` 和 `android/keystore.properties`。两者都在 `.gitignore` 中，**不要提交，也不要发给别人**。CI 使用 `KEYSTORE_BASE64` / `KEYSTORE_PROPERTIES` Secrets，缺失时退回 debug 签名。
-
-## 内置模型
-
-Android 端的中文离线 OCR 使用 ML Kit：
-
-```gradle
-implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
-```
-
-模型资源在 AAR 的 `assets/mlkit-google-ocr-models/` 里，Gradle 构建时打进 APK，运行时不联网下载。源码包不需要额外的模型文件；首次构建需要联网解析 Gradle 依赖。详见 [MODELS.md](MODELS.md)。
-
-## 数据与隐私
-
-- Android 数据是普通 JSON 文件，默认在 `Documents/DailyNote/`，可在应用内更换目录。网页版保存在当前浏览器的 IndexedDB 中，不会创建这个目录；清除站点数据前请导出备份。
-- 没有账号、云同步或网络请求；换设备靠导出/导入或直接拷贝目录。
-- 启动优先读本地快照；只有目录结构变化或手动「重新扫描存储目录」才全量读文件。
-- 写入按表指纹增量落盘，只写变脏的文件。
-- `dailynote-data.json` 是测试用样例数据，不是你的真实数据。
-
-## 目录
-
-```text
-src/utils/       纯函数（时间网格、课程、DDL、搜索、卡片…）
-src/db/          业务 CRUD（内存 store、卡片库）
-src/services/    文件存储、启动快照、OCR 桥
-src/hooks/       数据 Hook
-src/components/  复用组件
-src/pages/       页面
-src/types/       类型与存储表定义
-test/            Vitest 测试
-android/         Capacitor Android 工程与原生插件
-scripts/         构建、图标、签名脚本
-```
-
-## 已知限制
-
-- 图片识别仅 Android 可用；Web 端会提示不可用。
-- 直接改磁盘文件内容不会被自动发现，需要「重新扫描存储目录」。
-- 启动仍会把快照整份装回内存；图片/录音极多时内存重建会随总量增长，尚未做按记录懒加载。
-- 真机上的录音权限、系统栏 Insets、公共目录写入仍需在目标 Android 设备验证。
-- 仓库没有绑定远程地址；需要协作时自行添加 remote。
-
-## 打包给其他人
-
-源码包不应包含：
-
-```text
-node_modules/  dist/  android/.gradle/  android/app/build/  android/build/
-android/local.properties  android/keystore.properties  android/*.jks
-artifacts/  .git/  .idea/
-```
-
-这些已在 `.gitignore` 中；打包脚本会再次排除本机配置和签名文件。
-
-## 为什么源码包只有几 MB
-
-项目文件夹看起来很大，主要来自可重新生成的内容，不是源码。以本次打包的机器为例：
-
-| 内容 | 约占用 |
-| --- | ---: |
-| `node_modules/` | 688.5 MB / 64,173 个文件 |
-| `android/app/build/` | 84.6 MB |
-| `.git/` | 8.0 MB |
-| `dist/`、`artifacts/`、`android/.gradle/` | 6.5 MB |
-| `src/` + `test/` 源码 | 约 1.3 MB |
-
-源码 zip 约 3.2 MB，包含约 4.8 MB 的未压缩项目文件和 `package-lock.json`。朋友解压后执行 `npm ci` 会重新安装依赖；Android 构建会重新生成 `android/app/build/`。因此源码包不带这些目录是正常且更合适的，既避免 700 MB 传输，也避免把本机路径、签名和缓存带给别人。
-
-APK 是单独的可安装产物，约 25 MB；APK 里的 ML Kit OCR 模型不需要再放进源码包。
+- Android 默认保存在 `Documents/DailyNote/`，已有安装继续使用原存储目录。
+- Web/PWA 的数据保存在当前浏览器的 IndexedDB 中。

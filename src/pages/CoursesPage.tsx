@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type PointerEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useRouteBack } from '../hooks/useRouteBack';
 import { Trash2 } from 'lucide-react';
 import KnowledgeMapPanel from '../components/KnowledgeMapPanel';
 import { getAllCourses, deleteCourse, getSemester, saveSemester, saveCourse } from '../db';
 import type { Course, SemesterRecord } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { usePreferences } from '../hooks/usePreferences';
+import { useSheetDrag } from '../hooks/useSheetDrag';
 import { isCourseInSemester } from '../utils/courseSchedule';
 import { createTimetable, timetableDayBlocks, timetableSlot, timetableTime, TIMETABLE_FULL_WEEK, TIMETABLE_WEEKDAYS, type CourseSlot } from '../utils/courseTimetable';
 import { parseTimetableText, type ImportedCourseRow } from '../utils/timetableImport';
@@ -33,7 +35,7 @@ type GridGesture = { pointerId: number; day: number; y: number; minute: number; 
 type EditingState = { course: Course | null; slot?: CourseSlot };
 
 export default function CoursesPage() {
-  const navigate = useNavigate();
+  const routeBack = useRouteBack();
   const [searchParams, setSearchParams] = useSearchParams();
   const { prefs } = usePreferences();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -65,6 +67,8 @@ export default function CoursesPage() {
 
   const closeKnowledge = useCallback(() => { setKnowledgeCourse(null); setKnowledgeNodeId(null); }, []);
   const closeImport = () => { if (!importBusy) setImportOpen(false); };
+  const importSheet = useSheetDrag(closeImport, importOpen && !importBusy);
+  const semesterSheet = useSheetDrag(() => setSemesterOpen(false), semesterOpen && !importOpen);
   const backFromPreview = () => { setImportStep('text'); setImportError(''); };
   const handleBack = useCallback(() => {
     if (askDeleteSpecial !== null) setAskDeleteSpecial(null);
@@ -77,8 +81,8 @@ export default function CoursesPage() {
         else setImportOpen(false);
       }
     } else if (semesterOpen) setSemesterOpen(false);
-    else navigate('/', { replace: true });
-  }, [askDeleteSpecial, askDeleteCourse, knowledgeCourse, closeKnowledge, editing, importOpen, importBusy, importStep, semesterOpen, navigate]);
+    else routeBack();
+  }, [askDeleteSpecial, askDeleteCourse, knowledgeCourse, closeKnowledge, editing, importOpen, importBusy, importStep, semesterOpen, routeBack]);
 
   // The knowledge map registers its own nested handler; let it run first.
   useRegisterBackHandler(() => {
@@ -220,7 +224,6 @@ export default function CoursesPage() {
   const gridCourses = useMemo(() => courses.filter(c => isCourseInSemester(c, semester)), [courses, semester]);
   const timetable = useMemo(() => createTimetable(gridCourses, days, prefs.hourHeight), [gridCourses, days, prefs.hourHeight]);
   const dayBlocks = useMemo(() => days.map(day => timetableDayBlocks(gridCourses, day)), [gridCourses, days]);
-  const hasVisibleCourses = dayBlocks.some(blocks => blocks.length > 0);
   const hourTicks = Array.from({ length: 24 }, (_, hour) => hour * 60)
     .filter(minute => timetable.bands.some(band => !band.folded && minute >= band.start && minute < band.end));
 
@@ -267,28 +270,16 @@ export default function CoursesPage() {
   return (
     <div className="app-container courses-page">
       <header className="page-header courses-page-header">
-        <button type="button" className="btn btn-ghost courses-back" onClick={handleBack}>返回计划</button>
+        <button type="button" className="btn btn-ghost courses-back" onClick={handleBack}>返回</button>
         <h1 className="page-title">课程表</h1>
         <button type="button" className="btn btn-ghost courses-settings" onClick={() => setSemesterOpen(true)}>学期设置</button>
       </header>
-      <p className="ct-hint" id="course-grid-help">
-        {hasVisibleCourses ? '点击空白选时间，拖动选范围' : '当前课表暂无可见课程，点击折叠时段添加'}
-        <span className="ct-touch-hint"> · 滑动时间轴滚动</span>
-      </p>
-      <section className="ct-scroll" aria-label="课程表网格" aria-describedby="course-grid-help" style={{ '--ct-day-count': days.length } as CSSProperties}>
+      <section className="ct-scroll" aria-label="课程表网格" style={{ '--ct-day-count': days.length } as CSSProperties}>
         <div className="ct-head ct-columns">
-          <span>时间</span>
           {days.map(day => <span key={day}>{DAY_LABELS[day]}</span>)}
+          <span className="ct-scroll-rail" aria-hidden="true" />
         </div>
         <div className="ct-body ct-columns" style={{ height: timetable.height }}>
-          <div className="ct-time-axis" aria-hidden="true">
-            {timetable.bands.filter(band => band.folded).map(band => (
-              <div className="ct-time-fold" key={band.start} style={{ top: band.top, height: band.height }}>
-                <span>{timetableTime(band.start)}</span><span>{timetableTime(band.end)}</span>
-              </div>
-            ))}
-            {hourTicks.map(minute => <span className="ct-time-tick" key={minute} style={{ top: timetable.yAtMinute(minute) }}>{timetableTime(minute)}</span>)}
-          </div>
           {days.map((day, index) => {
             const selected = selection?.day === day ? selection : null;
             const selectionTop = selected ? timetable.yAtMinute(Math.min(selected.from, selected.to)) : 0;
@@ -322,28 +313,27 @@ export default function CoursesPage() {
               </div>
             );
           })}
+          <div className="ct-scroll-rail" aria-hidden="true" />
         </div>
       </section>
 
       {semesterOpen && !importOpen && <div className="modal-overlay" onClick={() => setSemesterOpen(false)}>
-        <section className="modal courses-semester-modal" role="dialog" aria-modal="true" aria-labelledby="semester-settings-title" onClick={event => event.stopPropagation()}>
+        <section className="modal courses-semester-modal" role="dialog" aria-modal="true" aria-labelledby="semester-settings-title" style={semesterSheet.style} onClick={event => event.stopPropagation()}>
+          <div className="sheet-grip" aria-hidden="true" {...semesterSheet.handlers} />
           <h3 className="modal-title" id="semester-settings-title">学期设置</h3>
-          <div className="settings-field courses-weekend-setting">
-            <label><input type="checkbox" checked={showWeekends} onChange={event => setShowWeekends(event.target.checked)} /> 在课表中显示周末</label>
-            <p className="settings-field-hint">仅调整本页显示。需要编辑周末课程时可临时开启，隐藏不会删除课程。</p>
+          <div className="settings-field">
+            <label className="label" htmlFor="semester-start-date">开学时间</label>
+            <input id="semester-start-date" className="input" type="date" value={semester?.startDate ?? ''} onChange={e => handleStartDateChange(e.target.value)} />
+            {!semester?.startDate && <p className="courses-warn" role="status">未设置开学时间，课程暂不显示</p>}
           </div>
           <div className="settings-field">
             <button type="button" className="btn btn-outline btn-sm" onClick={() => { setImportError(''); setImportStep('text'); setImportPreview([]); setImportOpen(true); }}>粘贴导入</button>
           </div>
-          <div className="settings-field">
-            <label className="label">🎒 开学时间</label>
-            <p className="settings-field-hint" style={{ marginBottom: 8 }}>开学时间所在周为第 1 周。可切换到对应开学日期查看旧课表，已有课程不会迁移。</p>
-            <input className="input" type="date" value={semester?.startDate ?? ''} onChange={e => handleStartDateChange(e.target.value)} />
-            {!semester?.startDate && <p className="courses-warn" style={{ marginTop: 8 }}>⚠️ 未设置开学时间，课程不会显示在日程表中</p>}
+          <div className="settings-field courses-weekend-setting">
+            <label><input type="checkbox" checked={showWeekends} onChange={event => setShowWeekends(event.target.checked)} /> 显示周末</label>
           </div>
           <div className="settings-field">
-            <label className="label">🎌 特殊日期</label>
-            <p className="settings-field-hint" style={{ marginBottom: 8 }}>法定节假日已内置。放假不显示课程，补课照常显示。</p>
+            <label className="label">特殊日期</label>
             <div className="courses-special-add">
               <input className="input input-sm" type="date" value={specialDate} onChange={e => setSpecialDate(e.target.value)} />
               <div className="courses-kind-row">{SPECIAL_KINDS.map(k => <button key={k.value} className={`settings-chip ${specialKind === k.value ? 'settings-chip--active' : ''}`} onClick={() => setSpecialKind(k.value)}>{k.label}</button>)}</div>
@@ -356,15 +346,14 @@ export default function CoursesPage() {
       </div>}
 
       {importOpen && <div className="modal-overlay" onClick={closeImport}>
-        <section className="modal courses-import-modal" role="dialog" aria-modal="true" aria-labelledby="course-import-title" onClick={event => event.stopPropagation()}>
+        <section className="modal courses-import-modal" role="dialog" aria-modal="true" aria-labelledby="course-import-title" style={importSheet.style} onClick={event => event.stopPropagation()}>
+          <div className="sheet-grip" aria-hidden="true" {...importSheet.handlers} />
           <h3 className="modal-title" id="course-import-title">粘贴课表</h3>
           {importStep === 'text' ? <>
-            <p className="modal-hint">每行：周一 08:00-09:40 高等数学 @教1-101</p>
             <textarea className="input textarea" rows={8} value={importText} onChange={event => { setImportText(event.target.value); setImportError(''); }} placeholder={'周一 08:00-09:40 高等数学 @教1-101\n周三 14:30-16:10 大学物理'} autoFocus />
             {importError && <p className="knowledge-error" role="alert">{importError}</p>}
             <div className="modal-actions"><button className="btn btn-ghost" onClick={closeImport}>取消</button><button className="btn btn-primary" disabled={!importText.trim()} onClick={parseImport}>解析预览</button></div>
           </> : <>
-            <p className="modal-hint">确认识别结果，可直接修改；周次不会自动猜测。</p>
             <div className="courses-import-list">{importPreview.map((row, index) => <div key={index} className="courses-import-row">
               <input className="input input-sm" aria-label={`课程 ${index + 1} 名称`} value={row.name} onChange={event => updateImportRow(index, { name: event.target.value })} />
               <div className="courses-import-grid">

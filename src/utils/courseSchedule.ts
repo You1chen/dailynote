@@ -4,7 +4,6 @@
 // 日期一律本地时区解析（new Date('YYYY-MM-DD' + 'T00:00:00')），与 DayNavigator 约定一致。
 
 import type { Course, SemesterRecord } from '../types';
-import { isBuiltinHoliday } from './holidays';
 
 function parseLocal(dateStr: string): Date {
   return new Date(dateStr + 'T00:00:00');
@@ -51,14 +50,12 @@ export function isCourseInSemester(course: Course, semester: SemesterRecord | un
   return course.semesterStartDate === undefined || course.semesterStartDate === semester?.startDate;
 }
 
-/** 某天是否为不上课日：手动特殊日期优先，其次内置法定节假日 */
+/** 只有学期设置中手动标记为「放假」的日期不上课。 */
 export function isDayHoliday(dateStr: string, semester: SemesterRecord | undefined): boolean {
-  const special = semester?.specialDates.find(s => s.date === dateStr);
-  if (special) return special.kind === 'holiday';
-  return isBuiltinHoliday(dateStr);
+  return semester?.specialDates.find(s => s.date === dateStr)?.kind === 'holiday';
 }
 
-/** 计算某天要上的课（按开始时间排序）。无开学时间 / 未开学 / 节假日 → 空数组 */
+/** 计算某天要上的课（按开始时间排序）。无开学时间 / 未开学 / 手动放假 → 空数组 */
 export function computeDayCourses(
   courses: Course[],
   semester: SemesterRecord | undefined,

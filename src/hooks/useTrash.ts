@@ -16,7 +16,7 @@ export function useTrash() {
     setLoading(true);
     try {
       await cleanOldTrash();
-      setItems((await getTrashItems()).filter(item => !(item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish')));
+      setItems(await getTrashItems());
     } catch (e) {
       console.error('加载回收站失败:', e);
     } finally {
@@ -38,7 +38,7 @@ export function useTrash() {
   }, []);
 
   const clearAll = useCallback(async () => {
-    await clearAllTrash(true);
+    await clearAllTrash();
     setItems([]);
   }, []);
 
