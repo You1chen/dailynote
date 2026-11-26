@@ -157,4 +157,5 @@ DDL 有了一周内提醒，全局搜索只查自己填写的内容，并把结�
 ## 2026-11-26 — 修复 GitHub Actions 的 Android 构建
 
 - 最近三次失败都停在 `Setup Android SDK`。固定使用 Ubuntu 24.04 和 JDK 21，优先检查镜像预装的 SDK 36，缺少组件时才安装。
-- 主线推送和 PR 复用同一 Linux 打包脚本。上传前验证 APK 存在、签名有效且包名为 `com.ji.note`。本地 YAML 与 Bash 语法校验通过，51 个测试文件共 763 项通过。
+- 主线推送和 PR 复用同一 Linux 打包脚本。上传前验证 APK 存在、签名有效且包名为 `com.ji.note`。本地 YAML 与 Bash 语法校验、调试 APK 构建及 763 项测试通过。
+- 首次远程复跑通过了 SDK 检查，随后停在依赖安装。移除未使用、会额外安装旧版 Sharp 的 `@capacitor/assets`，更新锁文件，开启 npm 安装脚本日志。
