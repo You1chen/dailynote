@@ -2,10 +2,10 @@
 
 | 项目     | 当前实现                                                                        |
 | -------- | ------------------------------------------------------------------------------- |
-| 应用     | 1.3.1，Android `versionCode 7`，包名 `com.dailynote.app`                    |
+| 应用     | 1.3.1，Android `versionCode 7`，包名 `com.ji.note`，独立签名                    |
 | 前端     | React 18、TypeScript、Vite 5、React Router 6 `HashRouter`                     |
 | 平台     | Web/PWA 与 Capacitor 8 Android，共用业务代码                                    |
-| 数据     | 本地优先，无账号服务。Android 默认 `Documents/DailyNote/`，Web 使用 IndexedDB |
+| 数据     | 本地优先，无账号服务。Android 默认 `Documents/Ji/`，Web 使用 IndexedDB |
 | 回归基线 | 51 个测试文件、763 个测试通过                                                   |
 
 ## 开发起步
@@ -80,7 +80,7 @@ APK 输出到 `android/app/build/outputs/apk/{debug,release}/记.apk`。发布�
 
 ## 本地存储与升级兼容
 
-Android 默认根目录为 `Documents/DailyNote/`。Web 使用 `dailynote_kv` 的同构相对路径。域类型见 [storage.ts](src/types/storage.ts)，16 张持久化表与分类文件注册见 [storeSchema.ts](src/services/storeSchema.ts)。
+Android 默认根目录为 `Documents/Ji/`，与旧 DailyNote 的 `Documents/DailyNote/` 分开。Web 使用 `dailynote_kv` 的同构相对路径。域类型见 [storage.ts](src/types/storage.ts)，16 张持久化表与分类文件注册见 [storeSchema.ts](src/services/storeSchema.ts)。
 
 ```text
 根目录/

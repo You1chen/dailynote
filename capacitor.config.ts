@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.dailynote.app',
+  appId: 'com.ji.note',
   appName: '记',
   webDir: 'dist',
   server: {

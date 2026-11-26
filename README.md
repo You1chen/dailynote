@@ -29,5 +29,5 @@ bash scripts/build-apk.sh
 
 ## 本地数据
 
-- Android 默认保存在 `Documents/DailyNote/`，已有安装继续使用原存储目录。
+- Android 上「记」使用包名 `com.ji.note`，可以与旧 DailyNote 同时安装。默认数据目录为 `Documents/Ji/`，旧版的 `Documents/DailyNote/` 由旧应用继续使用。
 - Web/PWA 的数据保存在当前浏览器的 IndexedDB 中。

@@ -124,11 +124,13 @@ function countData(): number {
 
 // ============ 路径管理 ============
 
+const DEFAULT_STORAGE_PATH = 'Documents/Ji';
+
 export function getStoragePath(): string {
   try {
-    return localStorage.getItem('dailynote_storage_path') || 'Documents/DailyNote';
+    return localStorage.getItem('dailynote_storage_path') || DEFAULT_STORAGE_PATH;
   } catch {
-    return 'Documents/DailyNote';
+    return DEFAULT_STORAGE_PATH;
   }
 }
 

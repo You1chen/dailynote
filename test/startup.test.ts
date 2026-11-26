@@ -47,7 +47,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('startup', () => {
   it('starts Web automatically on the default path', async () => {
     localStorage.setItem('unrelated-site-preference', '1');
-    expect(getStoragePath()).toBe('Documents/DailyNote');
+    expect(getStoragePath()).toBe('Documents/Ji');
     expect(await initializeStartup()).toEqual({ phase: 'ready', count: -1 });
     expect(native.getStorageStatus).not.toHaveBeenCalled();
   });
