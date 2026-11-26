@@ -56,10 +56,11 @@ interface Props {
   onSaved: () => void;
   initialSlot?: CourseSlot;
   onDelete?: () => void;
+  onKnowledgeMap?: () => void;
 }
 
 /** 课程新建/编辑弹窗（课程表页与周视图共用） */
-export default function CourseEditModal({ course, onClose, onSaved, initialSlot, onDelete }: Props) {
+export default function CourseEditModal({ course, onClose, onSaved, initialSlot, onDelete, onKnowledgeMap }: Props) {
   const [form, setForm] = useState<CourseFormState>(
     course
       ? {
@@ -266,9 +267,10 @@ export default function CourseEditModal({ course, onClose, onSaved, initialSlot,
         </div>
         {formError && <p className="cem-error">{formError}</p>}
         <div className="modal-actions cem-actions">
-          {course && onDelete && (
+          {course && (onDelete || onKnowledgeMap) && (
             <div className="cem-course-actions">
-              <button type="button" className="btn btn-ghost btn-icon cem-delete" aria-label="删除课程" title="删除课程" onClick={onDelete}><Trash2 size={17} aria-hidden="true" /></button>
+              {onDelete && <button type="button" className="btn btn-ghost btn-icon cem-delete" aria-label="删除课程" title="删除课程" onClick={onDelete}><Trash2 size={17} aria-hidden="true" /></button>}
+              {onKnowledgeMap && <button type="button" className="btn btn-ghost btn-sm" onClick={onKnowledgeMap}>知识地图</button>}
             </div>
           )}
           <button className="btn btn-ghost" onClick={onClose}>取消</button>

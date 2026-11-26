@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import {
-  ArrowLeft, BookOpen, CalendarClock, CalendarDays, CalendarRange, ChevronRight,
-  Footprints, List, Search, Settings, Star, Target, Trash2, type LucideIcon,
+  Archive, ArrowLeft, BookOpen, CalendarClock, CalendarDays, CalendarRange, ChevronRight,
+  CircleHelp, Database, Footprints, List, Search, Settings, Star, Target, Trash2, type LucideIcon,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import SearchOverlay from './SearchOverlay';
@@ -15,9 +15,13 @@ interface Props {
   group?: NavGroup;
   onGroup: (group: NavGroup) => void;
   searchOpen: boolean;
+  avatar: string;
+  username: string;
+  badge?: number;
   ddlBadge?: number;
   importantBadge?: number;
   onClose: () => void;
+  onHelp: () => void;
   onShowSearch: () => void;
   onCloseSearch: () => void;
   onSelect: (to: string) => void;
@@ -40,12 +44,12 @@ function NavBadge({ count = 0 }: { count?: number }) {
   return <span className="side-nav-badge" role="img" aria-label={`${count} 项提醒`}>{count}</span>;
 }
 
-export default function SideNav({ open, group, onGroup, searchOpen, ddlBadge, importantBadge, onClose, onShowSearch, onCloseSearch, onSelect }: Props) {
+export default function SideNav({ open, group, onGroup, searchOpen, avatar, username, badge, ddlBadge, importantBadge, onClose, onHelp, onShowSearch, onCloseSearch, onSelect }: Props) {
   const { pathname } = useLocation();
   const navContent = useRef<HTMLDivElement>(null);
   const searchButton = useRef<HTMLButtonElement>(null);
   const groupBack = useRef<HTMLButtonElement>(null);
-  const [ddl, important] = navigationBadges({ ddlBadge, importantBadge });
+  const [ddl, important, backlog] = navigationBadges({ backlogBadge: badge, ddlBadge, importantBadge });
   const groups: { id: NavGroup; title: string; icon: LucideIcon; items: NavItem[] }[] = [
     { id: 'items', title: '事项信息', icon: List, items: [
       { ...ddl, icon: CalendarClock },
@@ -55,9 +59,11 @@ export default function SideNav({ open, group, onGroup, searchOpen, ddlBadge, im
     ] },
     { id: 'planning', title: '规划', icon: Target, items: [
       { to: '/goals', icon: Target, label: '目标' },
+      { ...backlog, icon: Archive },
     ] },
-    { id: 'data', title: '数据', icon: Trash2, items: [
+    { id: 'data', title: '数据', icon: Database, items: [
       { to: '/trash', icon: Trash2, label: '回收站' },
+      { to: '/backup', icon: Database, label: '备份' },
     ] },
   ];
 
@@ -87,6 +93,7 @@ export default function SideNav({ open, group, onGroup, searchOpen, ddlBadge, im
     );
   }
 
+  const appearance = '/settings?section=appearance';
   const currentGroup = groups.find(item => item.id === group);
   return (
     <section id="app-navigation" className={`side-nav${open ? ' side-nav--open' : ''}`} role="dialog" aria-label="导航" aria-modal={open || undefined} aria-hidden={!open}>
@@ -110,6 +117,11 @@ export default function SideNav({ open, group, onGroup, searchOpen, ddlBadge, im
               <div className="side-nav-top">
                 <button ref={searchButton} className="side-nav-search" onClick={onShowSearch} type="button"><Search size={20} aria-hidden="true" />搜索</button>
               </div>
+              <Link className="side-nav-profile" to={appearance} onClick={event => selectLink(event, appearance)}>
+                <span className="side-nav-avatar" aria-hidden="true">{avatar?.startsWith('data:image/') ? <img src={avatar} alt="" /> : avatar || '👤'}</span>
+                <span className="side-nav-identity"><small>ID</small><strong>{username?.trim() || '未设置'}</strong></span>
+                <ChevronRight size={18} className="side-nav-profile-arrow" aria-hidden="true" />
+              </Link>
               <div className="side-nav-links side-nav-links--featured">{notesLinks.map(renderItem)}</div>
               <div className="side-nav-directory">
                 {groups.map(({ id, title, icon: Icon, items }) => (
@@ -117,11 +129,15 @@ export default function SideNav({ open, group, onGroup, searchOpen, ddlBadge, im
                     <Icon size={20} aria-hidden="true" />
                     <span>{title}</span>
                     <NavBadge count={sumBadges(items)} />
-                    <ChevronRight className="side-nav-arrow" size={18} aria-hidden="true" />
+                    <ChevronRight className="side-nav-profile-arrow" size={18} aria-hidden="true" />
                   </button>
                 ))}
               </div>
-              <div className="side-nav-settings">
+              <div className="side-nav-settings side-nav-settings--split">
+                <button type="button" className="side-nav-item" onClick={onHelp}>
+                  <CircleHelp size={20} aria-hidden="true" />
+                  <span>帮助</span>
+                </button>
                 {renderItem({ to: '/settings', icon: Settings, label: '设置' })}
               </div>
             </>

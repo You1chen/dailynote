@@ -7,7 +7,6 @@
 
 import type { StoreShape } from '../types/storage';
 import { effectiveNodes } from './goalTree';
-import { isRetiredPrivateGoal } from './retiredRecords';
 
 export interface SearchHit {
   key: string;
@@ -70,6 +69,7 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
       const fields = [
         b.taskTitle,
         b.plannedContent,
+        b.actualExecution,
         b.notes,
         ...(b.checklist ?? []).map(i => i.text),
       ];
@@ -86,9 +86,9 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
 
   // Legacy reflections/harvests remain in storage and backups; their retired pages no longer produce search links.
 
-  // ---- 长期目标 ----
+  // ---- 大愿望 / 长期目标 ----
   for (const g of data.longTermGoals) {
-    if (isRetiredPrivateGoal(g)) continue;
+    if (g.kind === 'wish') continue; // 秘密花园内容不出现在全局搜索
     const nodeTitles: string[] = [];
     const walkNodes = (nodes: ReturnType<typeof effectiveNodes>) => {
       for (const node of nodes) {
@@ -102,9 +102,21 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
       q,
       `goal:${g.id}`,
       g.title || '(目标)',
-      [g.title, g.description, ...nodeTitles],
+      [g.title, g.description, g.vision ?? '', ...nodeTitles],
       `长期目标${g.category ? ` · ${g.category}` : ''}`,
       '/goals',
+    ));
+  }
+
+  // ---- 遗留问题 ----
+  for (const b of data.backlog) {
+    push(makeHit(
+      q,
+      `bl:${b.id}`,
+      b.title || '(遗留问题)',
+      [b.title, b.blocker, b.detail, b.startText],
+      '遗留问题',
+      '/backlog',
     ));
   }
 
@@ -143,10 +155,17 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     ));
   }
 
-  // ---- 记事卡片 ----
-  const cardLibrary = data.knowledgeCards?.find(library => library.id === 1) ?? data.knowledgeCards?.[0];
+  for (const idea of data.ideas ?? []) {
+    if (idea.kind && idea.kind !== 'idea') continue;
+    push(makeHit(q, `idea:${idea.id}`, idea.title || '灵感', [idea.title ?? '', idea.text, ...(idea.tags ?? [])], `灵感 · ${shortDate(idea.date)}`, `/reflection?date=${idea.date}&ideas=1`));
+  }
+
+  // ---- 卡片（卡片库归属记事页，节点只引用卡片 ID） ----
+  const cardLibrary = data.knowledgeCards?.[0];
   if (cardLibrary) {
     for (const record of cardLibrary.records) {
+      const owner = (data.knowledgeMaps ?? []).find(map => map.nodes.some(node => node.cardIds?.includes(record.id)));
+      const node = owner?.nodes.find(item => item.cardIds?.includes(record.id));
       const textParts = record.card.contents.flatMap(content =>
         content.kind === 'text' ? [content.text] : content.kind === 'audio' ? [content.fileName] : [],
       );
@@ -155,8 +174,10 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
         `knowledge-card:${record.id}`,
         record.card.title || '未命名卡片',
         [record.card.title, ...textParts],
-        '卡片 · 记事收集器',
-        `/reflection?card=${encodeURIComponent(record.id)}`,
+        owner && node
+          ? `卡片 · ${owner.courseName} · ${node.title}`
+          : '卡片 · 记事收集器',
+        owner ? `/courses?knowledgeCourse=${owner.courseId}&knowledgeNode=${node?.id ?? ''}` : '/reflection',
       ));
     }
   }

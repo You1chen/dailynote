@@ -58,7 +58,7 @@ async function kvPut(key: string, value: string): Promise<void> {
   });
 }
 
-import { initStore, _resetForTest } from '../../src/services/store';
+import { initStore, importJSONIntoStore, _resetForTest } from '../../src/services/store';
 import * as db from '../../src/db';
 import { appendTemplateItems, genId } from '../../src/types';
 import type { TaskTemplate } from '../../src/types';
@@ -155,34 +155,34 @@ describe('模板持久化', () => {
   });
 });
 
-// ============ 旧单文件兼容 ============
+// ============ 导入兼容 ============
 
-describe('模板旧单文件兼容', () => {
-  it('旧单文件（无 taskTemplates 字段）迁移成功且模板为空', async () => {
+describe('模板导入兼容', () => {
+  it('旧备份 JSON（无 taskTemplates 字段）导入成功且模板为空', async () => {
     const json = JSON.stringify({
       version: 1, savedAt: 0,
       dailyPlans: [{ date: '2026-08-01', timeBlocks: [], createdAt: 1, updatedAt: 1 }],
       longTermGoals: [], reflections: [], harvests: [], fixedRoutines: [], taskItems: [],
     });
-    await kvPut('dailynote-data', json);
-    await initStore();
-    expect(await db.getPlanByDate('2026-08-01')).toBeDefined();
+    const count = await importJSONIntoStore(json);
+    expect(count).toBe(1);
     expect(await db.getAllTaskTemplates()).toHaveLength(0);
   });
 
-  it('旧单文件携带的模板迁移后保留内容', async () => {
+  it('含模板的新备份导入后并入', async () => {
     const json = JSON.stringify({
       version: 1, savedAt: 0,
       dailyPlans: [],
       longTermGoals: [], reflections: [], harvests: [], fixedRoutines: [], taskItems: [],
-      taskTemplates: [{ id: 5, name: '旧模板', items: [{ id: 'i1', text: 't', done: false }], createdAt: 1, updatedAt: 1 }],
+      taskTemplates: [{ id: 5, name: '导入模板', items: [{ id: 'i1', text: 't', done: false }], createdAt: 1, updatedAt: 1 }],
     });
-    await kvPut('dailynote-data', json);
-    await initStore();
+    const count = await importJSONIntoStore(json);
+    expect(count).toBe(1);
     const list = await db.getAllTaskTemplates();
     expect(list).toHaveLength(1);
+    // 数字表导入新记录时用 allocId 重新分配 id（与 longTermGoals 等一致），保留内容
     expect(typeof list[0].id).toBe('number');
-    expect(list[0].name).toBe('旧模板');
+    expect(list[0].name).toBe('导入模板');
     expect(list[0].items).toEqual([{ id: 'i1', text: 't', done: false }]);
   });
 });

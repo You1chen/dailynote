@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, X } from 'lucide-react';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { navigationBadges, sumBadges, type NavigationBadgeCounts } from '../utils/navigationBadges';
-import { usePreferences } from '../hooks/usePreferences';
-import { alarmFlashState, alarmPauseDeadline, DEFAULT_ALARM_PAUSE_MINUTES, type HomeAlarmPreference } from '../utils/homeAlarm';
+import {
+  alarmFlashState, alarmPauseDeadline, DEFAULT_ALARM_PAUSE_MINUTES, HOME_ALARM_STORAGE_KEY,
+  loadAlarmPreference, saveAlarmPreference, type HomeAlarmPreference,
+} from '../utils/homeAlarm';
 import './HomeAlarm.css';
 
 // Browsers clamp timeouts to a signed 32-bit integer.
@@ -15,7 +17,7 @@ export default function HomeAlarm(counts: NavigationBadgeCounts) {
   const badges = navigationBadges(counts);
   const total = sumBadges(badges);
   const [open, setOpen] = useState(false);
-  const { prefs: { homeAlarm: preference }, updatePrefs } = usePreferences();
+  const [preference, setPreference] = useState(loadAlarmPreference);
   const [minutes, setMinutes] = useState(String(DEFAULT_ALARM_PAUSE_MINUTES));
   const [custom, setCustom] = useState(false);
   const [invalid, setInvalid] = useState(false);
@@ -24,6 +26,14 @@ export default function HomeAlarm(counts: NavigationBadgeCounts) {
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const flashState = alarmFlashState(preference, Date.now());
+
+  useEffect(() => {
+    function syncPreference(event: StorageEvent) {
+      if (event.key === HOME_ALARM_STORAGE_KEY || event.key === null) setPreference(loadAlarmPreference());
+    }
+    window.addEventListener('storage', syncPreference);
+    return () => window.removeEventListener('storage', syncPreference);
+  }, []);
 
   useEffect(() => {
     if (preference.flashDisabled || !preference.pausedUntil) return;
@@ -72,7 +82,8 @@ export default function HomeAlarm(counts: NavigationBadgeCounts) {
   }, [open], 'overlay');
 
   function updatePreference(next: HomeAlarmPreference) {
-    void updatePrefs({ homeAlarm: next });
+    saveAlarmPreference(next);
+    setPreference(next);
     setCustom(false);
     setInvalid(false);
   }

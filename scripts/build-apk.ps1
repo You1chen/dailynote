@@ -1,4 +1,4 @@
-﻿# 记 APK Build Script (PowerShell)
+# DailyNote APK Build Script (PowerShell)
 # Usage: .\scripts\build-apk.ps1            -> Full build (web + sync + APK)
 #        .\scripts\build-apk.ps1 -SyncOnly  -> Web build + sync only (no APK)
 #        .\scripts\build-apk.ps1 -Release   -> Signed release APK
@@ -20,7 +20,7 @@ if ($Release -and -not $SyncOnly -and -not (Test-Path (Join-Path $AndroidDir 'ke
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  记 APK Build" -ForegroundColor Cyan
+Write-Host "  DailyNote APK Build" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -38,7 +38,10 @@ if ($LASTEXITCODE -ne 0) { throw "Vite build failed" }
 Write-Host "      DONE" -ForegroundColor Green
 
 # 3. Capacitor sync
+# Native Android uses ML Kit for OCR, so the ~10 MB browser Tesseract payload
+# is unnecessary inside the APK. Keep it for the Web/PWA build only.
 Write-Host "[3/4] Capacitor sync..." -ForegroundColor Yellow
+Remove-Item -Recurse -Force (Join-Path $ProjectRoot 'dist\tesseract'), (Join-Path $ProjectRoot 'dist\tessdata') -ErrorAction SilentlyContinue
 npx cap sync
 if ($LASTEXITCODE -ne 0) { throw "Capacitor sync failed" }
 Write-Host "      DONE" -ForegroundColor Green
@@ -68,7 +71,7 @@ if (-not $SyncOnly) {
     Write-Host ""
 
     $buildType = if ($Release) { "release" } else { "debug" }
-    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\$buildType\记.apk"
+    $apkPath = Join-Path $AndroidDir "app\build\outputs\apk\$buildType\dailynote.apk"
     if (Test-Path $apkPath) {
         $size = (Get-Item $apkPath).Length / 1MB
         Write-Host "========================================" -ForegroundColor Green

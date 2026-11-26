@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useCallback, useRef, useEffect } from 'react';
 import { App } from '@capacitor/app';
-import type { PluginListenerHandle } from '@capacitor/core';
 
 type BackPriority = boolean | 'overlay';
 
@@ -63,25 +62,32 @@ export function BackButtonProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
-    let disposed = false;
-    let listener: PluginListenerHandle | undefined;
+    // 只在 Capacitor 环境下注册（Android）
+    let cleanup: (() => void) | undefined;
 
-    void App.addListener('backButton', () => {
-      if (disposed) return;
-      const stack = [...handlerStackRef.current, ...overlayStackRef.current];
-      for (let i = stack.length - 1; i >= 0; i--) {
-        if (stack[i]() === true) return;
-      }
-      void App.exitApp();
-    }).then(handle => {
-      // StrictMode can clean up the first effect before the native bridge replies.
-      if (disposed) return handle.remove();
-      listener = handle;
-    }).catch(error => console.warn('无法注册 Android 返回键监听', error));
+    try {
+      const listenerPromise = App.addListener('backButton', () => {
+        const stack = [...handlerStackRef.current, ...overlayStackRef.current];
+        // 从栈顶（最新注册的）开始调用
+        for (let i = stack.length - 1; i >= 0; i--) {
+          const result = stack[i]();
+          if (result === true) {
+            // handler 返回 true 表示已处理
+            return;
+          }
+        }
+        // 没有任何 handler 处理，执行默认行为：退出应用
+        App.exitApp();
+      });
+      listenerPromise.then(listener => {
+        cleanup = () => listener.remove();
+      });
+    } catch {
+      // 非 Capacitor 环境（浏览器开发），无需处理
+    }
 
     return () => {
-      disposed = true;
-      void listener?.remove();
+      cleanup?.();
     };
   }, []);
 

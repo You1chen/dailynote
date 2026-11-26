@@ -6,14 +6,14 @@
  *   2. id 单调递增（add → delete → add 不复用；回收站还原不撞 id）
  *   3. 回收站软删除 / 还原 / 深拷贝
  *   4. cleanOldTrash 清理并持久化
- *   5. persist 快照与串行队列
- *   6. 存储路径读写
- *   7. 一次性旧 Dexie 迁移（持久化成功后删除旧库）
- *   8. 已退役表（遗留/花园密钥/活动）的数据只做保全，不进内存 store
+ *   5. persist 快照与串行队列、路径捕获
+ *   6. normalizePath / 改路径行为
+ *   7. 导入合并（保留时间戳）
+ *   8. 一次性旧 Dexie 迁移（持久化成功后删除旧库）
  */
 
 import 'fake-indexeddb/auto';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // ---- 模拟 localStorage（Node 环境没有）----
 const memStore: Record<string, string> = {};
@@ -76,14 +76,15 @@ import {
   getStore,
   setStoragePath,
   getStoragePath,
+  normalizePath,
+  changeStoragePath,
+  importJSONIntoStore,
+  exportBackupFile,
   isCapacitor,
+  listSubdirs,
   _resetForTest,
 } from '../../src/services/store';
-import { emptyStore } from '../../src/services/storeSchema';
-import { searchStore } from '../../src/utils/search';
 import * as db from '../../src/db';
-import { deleteCard, getCards } from '../../src/db/knowledgeCards';
-import { clearSnapshot } from '../../src/services/snapshot';
 import { legacyDb, readLegacyTables } from '../../src/db/legacy';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -290,58 +291,88 @@ describe('persist 快照与串行队列', () => {
 // ============ 路径 ============
 
 describe('路径管理', () => {
+  it('normalizePath 规范化输入并拒绝非法', () => {
+    expect(normalizePath('MyNotes')).toBe('Documents/MyNotes');
+    expect(normalizePath('Documents/MyNotes')).toBe('Documents/MyNotes');
+    expect(normalizePath('  MyNotes/  ')).toBe('Documents/MyNotes');
+    expect(() => normalizePath('')).toThrow();
+    expect(() => normalizePath('..')).toThrow();
+    expect(() => normalizePath('a/../b')).toThrow();
+    expect(() => normalizePath('C:/x')).toThrow();
+    expect(() => normalizePath('a:b')).toThrow();
+  });
+
+  it('changeStoragePath 切换路径并保留数据', async () => {
+    await db.saveGoal(makeGoal('data'));
+    const result = await changeStoragePath('Documents/Notes');
+    expect(getStoragePath()).toBe('Documents/Notes');
+    // Web 端 KV 是全局的，切换路径后数据仍在（原生端则写入新目录文件）
+    expect(result.recovered).toBe(true);
+    expect(await db.getAllGoals()).toHaveLength(1);
+  });
+
   it('setStoragePath / getStoragePath 读写', () => {
     setStoragePath('Documents/Custom');
     expect(getStoragePath()).toBe('Documents/Custom');
   });
 });
 
-// ============ 退役数据保全 ============
+// ============ 导入 ============
 
-describe('退役数据保全', () => {
-  it('遗留、花园密钥与活动日文件不再进入 StoreShape，保存后原样留在磁盘', async () => {
-    const backlog = JSON.stringify([{ id: 1, title: '旧遗留', status: 'blocked', startMode: 'date', startAt: 1, createdAt: 1, updatedAt: 1 }]);
-    const gardenKeys = JSON.stringify([{ id: 1, keyId: 'k1', version: 1, publicKey: 'pk', salt: 's', iv: 'i', privateKey: 'p', iterations: 310000, updatedAt: 1 }]);
-    const activity = JSON.stringify([{ id: 'e1', date: '2026-08-01', category: 'goal', action: 'create', title: '旧活动', at: 1 }]);
-    await kvPut('backlog.json', backlog);
-    await kvPut('garden-keys.json', gardenKeys);
-    await kvPut('days/2026-08-01/activity.json', activity);
-
-    const shape = emptyStore() as Record<string, unknown>;
-    expect(shape).not.toHaveProperty('backlog');
-    expect(shape).not.toHaveProperty('gardenKeys');
-    expect(shape).not.toHaveProperty('activityEvents');
-
-    await initStore();
-    await db.saveGoal(makeGoal('新目标'));
-    await flush();
-
-    expect(await kvGet('backlog.json')).toBe(backlog);
-    expect(await kvGet('garden-keys.json')).toBe(gardenKeys);
-    expect(await kvGet('days/2026-08-01/activity.json')).toBe(activity);
+describe('importJSONIntoStore', () => {
+  it('导入合并保留时间戳（不重置 createdAt/updatedAt）', async () => {
+    const json = JSON.stringify({
+      version: 1,
+      savedAt: 0,
+      dailyPlans: [{ date: '2026-07-20', timeBlocks: [], createdAt: 111, updatedAt: 222 }],
+      longTermGoals: [],
+      reflections: [],
+      harvests: [],
+      fixedRoutines: [],
+      taskItems: [],
+    });
+    const count = await importJSONIntoStore(json);
+    expect(count).toBe(1);
+    const plan = await db.getPlanByDate('2026-07-20');
+    expect(plan!.createdAt).toBe(111);
+    expect(plan!.updatedAt).toBe(222);
   });
 
-  it('花园记录仍随目标与回收站保存，但不从公开接口和搜索泄漏', async () => {
-    const wish = { id: 1, kind: 'wish', title: '秘密愿望', description: '只有花园可见', category: '', tasks: [], createdAt: 1, updatedAt: 1 };
-    const wishTrash = { id: 5, originalTable: 'longTermGoals', originalId: 3, originalData: { ...wish, id: 3 }, title: '秘密花园条目', deletedAt: Date.now() };
-    await kvPut('goals.json', JSON.stringify([wish, { ...makeGoal('公开目标'), id: 2 }]));
-    await kvPut('trash.json', JSON.stringify([wishTrash]));
-    await initStore();
+  it('导入单个备份 JSON → 自动分布到新布局文件夹（不保留单文件存储）', async () => {
+    const json = JSON.stringify({
+      version: 1, savedAt: 0,
+      dailyPlans: [{ date: '2026-07-20', timeBlocks: [], createdAt: 111, updatedAt: 222 }],
+      longTermGoals: [{ id: 5, title: 'g', description: '', category: '技能', tasks: [], createdAt: 1, updatedAt: 1 }],
+      reflections: [], harvests: [], fixedRoutines: [], taskItems: [],
+      trashItems: [{ id: 2, originalTable: 'longTermGoals', originalId: 8, originalData: {}, title: 't', deletedAt: 1 }],
+    });
+    const count = await importJSONIntoStore(json);
+    expect(count).toBe(3);
 
-    expect((await db.getAllGoals()).map(goal => goal.title)).toEqual(['公开目标']);
-    expect((await db.getTrashItems()).some(item => (item.originalData as any)?.kind === 'wish')).toBe(false);
-    expect(searchStore(getStore(), '秘密愿望')).toHaveLength(0);
-    expect(getStore().longTermGoals).toHaveLength(2);
+    // 磁盘上是分类文件夹文件，而不是单文件
+    const keys = (await kvKeys()).sort();
+    expect(keys).toContain('days/2026-07-20/plan.json');
+    expect(keys).toContain('goals.json');
+    expect(keys).toContain('trash.json');
+    expect(keys).not.toContain('dailynote-data');
+  });
 
-    await db.saveGoal(makeGoal('另一目标'));
-    await flush();
-    expect(JSON.parse((await kvGet('goals.json'))!).some((goal: any) => goal.kind === 'wish')).toBe(true);
+  it('BOM 头被去除、非法格式被拒绝', async () => {
+    await expect(importJSONIntoStore('\ufeff{"version":1,"dailyPlans":[],"longTermGoals":[],"reflections":[],"harvests":[],"fixedRoutines":[]}')).resolves.toBe(0);
+    await expect(importJSONIntoStore('{"foo":"bar"}')).rejects.toThrow();
+  });
 
-    await db.clearAllTrash();
-    expect(getStore().trashItems.some(item => (item.originalData as any)?.kind === 'wish')).toBe(true);
+  it('错误信息区分具体原因（空文件 / 非 JSON 文本 / 非 DailyNote 格式）', async () => {
+    await expect(importJSONIntoStore('')).rejects.toThrow('文件内容为空');
+    await expect(importJSONIntoStore('   \n\t')).rejects.toThrow('文件内容为空');
+    // 微信缓存文件特征字节（0xB1 0xAB 开头）→ 提示选错文件而非笼统的格式错误
+    await expect(importJSONIntoStore('\xB1\xAB\xDE\x74\x0B\x75')).rejects.toThrow('不是 JSON 文本');
+    // 是 JSON 但缺 version/dailyPlans → 提示可能为旧版备份
+    await expect(importJSONIntoStore('{"foo":"bar"}')).rejects.toThrow('不是 DailyNote 数据文件');
+    // 形似 JSON 但实际损坏 → 提示损坏
+    await expect(importJSONIntoStore('{"version":1,"dailyPlans":[}')).rejects.toThrow('不是有效的 JSON');
   });
 });
-
 
 // ============ 一次性迁移 ============
 
@@ -471,63 +502,6 @@ describe('旧版单文件迁移', () => {
     expect(keys).toContain('trash.json');
     expect(keys).not.toContain('dailynote-data');
   });
-  it('旧文件含退役表内容时另存到 legacy 归档，可迁移的部分照常进入新布局', async () => {
-    const bundle = JSON.stringify({
-      version: 1, savedAt: 1,
-      dailyPlans: [{ date: '2026-07-02', timeBlocks: [], createdAt: 1, updatedAt: 1 }],
-      longTermGoals: [], reflections: [], harvests: [], fixedRoutines: [], taskItems: [], trashItems: [],
-      backlog: [{ id: 1, title: '旧遗留', status: 'blocked' }],
-      ideas: [{ id: 2, kind: 'idea', text: '旧杂念', date: '2026-07-02', createdAt: 1, updatedAt: 1 }],
-    });
-    await kvPut('dailynote-data', bundle);
-
-    await initStore();
-    expect(await db.getPlanByDate('2026-07-02')).toBeDefined();
-    expect(await kvGet('dailynote-legacy-archive.json')).toBe(bundle);
-    expect(await kvGet('dailynote-data')).toBeNull();
-  });
-});
-
-describe('知识地图退役迁移', () => {
-  function map(title: string, id = 1) {
-    return { id, courseId: id, createdAt: 1, nodes: [{ id: 'node', title, cards: [{ text: title }] }] };
-  }
-
-  it('迁移地图独有的数据并原样保留文件，清空快照后不会恢复已删除卡片', async () => {
-    const original = JSON.stringify([map('旧地图卡片')], null, 2);
-    await kvPut('knowledge-maps.json', original);
-    expect(await initStore()).toBe(1);
-    expect(getStore()).not.toHaveProperty('knowledgeMaps');
-    const [card] = await getCards();
-    expect(card.title).toBe('旧地图卡片');
-    await deleteCard(card.id);
-    await persist();
-    await flush();
-    await clearSnapshot();
-    await initStore();
-    expect(await getCards()).toEqual([]);
-    expect(JSON.parse((await kvGet('knowledge-cards.json'))!)[0].legacyMapsMigrated).toBe(true);
-    expect(await kvGet('knowledge-maps.json')).toBe(original);
-  });
-
-  it('归档旧单文件，合并独有卡片并以分类文件的重复条目为准', async () => {
-    const bundle = JSON.stringify({ version: 1, dailyPlans: [], knowledgeMaps: [map('旧的重复卡片'), map('旧单文件独有卡片', 2)] });
-    const mapFile = JSON.stringify([map('分类文件的卡片')]);
-    await kvPut('dailynote-data', bundle);
-    await kvPut('knowledge-maps.json', mapFile);
-    await initStore();
-    const cards = await getCards();
-    expect(cards.map(card => card.title)).toEqual(['分类文件的卡片', '旧单文件独有卡片']);
-    expect(await kvGet('knowledge-maps.json')).toBe(mapFile);
-    expect(await kvGet('dailynote-legacy-archive.json')).toBe(bundle);
-    expect(await kvGet('dailynote-data')).toBeNull();
-
-    await deleteCard(cards[0].id);
-    // Simulate recovery when the original bundle is still present after the cards file was saved.
-    await kvPut('dailynote-data', bundle);
-    await initStore();
-    expect((await getCards()).map(card => card.title)).toEqual(['旧单文件独有卡片']);
-  });
 });
 
 // ============ 加载自愈（跨文件半提交） ============
@@ -549,6 +523,77 @@ describe('加载自愈', () => {
     expect(await db.getTrashItems()).toHaveLength(0);
     const plan = await db.getPlanByDate('2026-08-01');
     expect(plan!.timeBlocks).toHaveLength(1);
+  });
+});
+
+// ============ 导出备份 ============
+
+describe('导出备份文件', () => {
+  let capturedAnchor: any;
+  let blobContent = '';
+
+  beforeEach(() => {
+    blobContent = '';
+    (globalThis as any).document = {
+      createElement: () => {
+        capturedAnchor = { href: '', download: '', click: vi.fn(), remove: vi.fn() };
+        return capturedAnchor;
+      },
+      body: { appendChild: vi.fn() },
+    };
+    (globalThis as any).Blob = class Blob {
+      constructor(public parts: string[]) { blobContent = parts[0]; }
+    };
+    (globalThis as any).URL = { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() };
+  });
+
+  it('Web 端触发浏览器下载，文件名含时间戳', async () => {
+    await db.saveGoal(makeGoal('g'));
+    const name = await exportBackupFile();
+    expect(name).toMatch(/^dailynote-backup-\d{8}-\d{6}\.json$/);
+    expect(capturedAnchor.download).toBe(name);
+    expect(capturedAnchor.click).toHaveBeenCalled();
+  });
+
+  it('备份 JSON 内容有效且包含已保存数据', async () => {
+    await db.saveGoal(makeGoal('目标'));
+    await exportBackupFile();
+    const parsed = JSON.parse(blobContent);
+    expect(parsed.version).toBe(1);
+    expect(parsed.longTermGoals).toHaveLength(1);
+  });
+
+  it('导出→重置→导入往返：任务清单模板完整恢复（换手机场景）', async () => {
+    await db.saveTaskTemplate({ name: '往返模板', items: [{ id: genId(), text: '项', done: false }], createdAt: 0, updatedAt: 0 } as any);
+    await exportBackupFile();
+    const backup = blobContent;
+    expect(JSON.parse(backup).taskTemplates).toHaveLength(1); // 备份包含模板
+
+    await _resetForTest();
+    const count = await importJSONIntoStore(backup);
+    expect(count).toBe(1);
+    const list = await db.getAllTaskTemplates();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('往返模板');
+  });
+
+  // 回归：浏览器里静态引入 @capacitor/app 会让 window.Capacitor 存在，
+  // 但平台仍是 web，必须走浏览器下载，而不是 Capacitor Filesystem（否则抛 base64 错误）。
+  it('浏览器存在 window.Capacitor 但平台=web：导出走浏览器下载，不抛 base64 错误', async () => {
+    const prevWin = (globalThis as any).window;
+    (globalThis as any).window = globalThis;
+    (globalThis as any).Capacitor = { isNativePlatform: () => false };
+    try {
+      await db.saveGoal(makeGoal('web 目标'));
+      const name = await exportBackupFile();
+      expect(name).toMatch(/^dailynote-backup-\d{8}-\d{6}\.json$/);
+      expect(capturedAnchor.download).toBe(name);
+      expect(capturedAnchor.click).toHaveBeenCalled();
+    } finally {
+      (globalThis as any).Capacitor = undefined;
+      if (prevWin === undefined) delete (globalThis as any).window;
+      else (globalThis as any).window = prevWin;
+    }
   });
 });
 
@@ -583,6 +628,19 @@ describe('isCapacitor 平台判定', () => {
 
   it('window 未定义（Node 测试环境）→ false', () => {
     expect(isCapacitor()).toBe(false);
+  });
+
+  it('浏览器带 window.Capacitor（平台=web）时 listSubdirs 仍返回空（无真实目录）', async () => {
+    const prevWin = (globalThis as any).window;
+    (globalThis as any).window = globalThis;
+    (globalThis as any).Capacitor = { isNativePlatform: () => false };
+    try {
+      expect(await listSubdirs()).toEqual([]);
+    } finally {
+      (globalThis as any).Capacitor = undefined;
+      if (prevWin === undefined) delete (globalThis as any).window;
+      else (globalThis as any).window = prevWin;
+    }
   });
 
   it('浏览器带 window.Capacitor（平台=web）时存储仍走 KV 后端', async () => {
@@ -670,6 +728,35 @@ describe('课程表存储', () => {
     expect(id2).toBeGreaterThan(id1);
   });
 
+  it('导出→重置→导入往返：课程与学期完整恢复（换手机场景）', async () => {
+    let blobContent = '';
+    (globalThis as any).document = {
+      createElement: () => ({ href: '', download: '', click: vi.fn(), remove: vi.fn() }),
+      body: { appendChild: vi.fn() },
+    };
+    (globalThis as any).Blob = class Blob {
+      constructor(public parts: string[]) { blobContent = parts[0]; }
+    };
+    (globalThis as any).URL = { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() };
+
+    await db.saveCourse(makeCourse('高数'));
+    await db.saveSemester({ ...makeSemester('2026-08-10'), specialDates: [{ id: 1, date: '2026-10-01', kind: 'makeup' }] });
+    await exportBackupFile();
+    const backup = blobContent;
+    expect(JSON.parse(backup).courses).toHaveLength(1);
+    expect(JSON.parse(backup).semester).toHaveLength(1);
+
+    await _resetForTest();
+    const count = await importJSONIntoStore(backup);
+    expect(count).toBe(2);
+    const list = await db.getAllCourses();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高数');
+    const sem = await db.getSemester();
+    expect(sem?.startDate).toBe('2026-08-10');
+    expect(sem?.specialDates[0].kind).toBe('makeup');
+  });
+
   it('仅课程数据目录（无任何计划）不被当首次使用丢弃（回归）', async () => {
     await kvPut('courses.json', JSON.stringify([{ ...makeCourse('高数'), id: 1 }]));
     await initStore();
@@ -750,6 +837,31 @@ describe('DDL 存储', () => {
     await db.deleteDdl(id1);
     const id2 = await db.saveDdl(makeDdl('b'));
     expect(id2).toBeGreaterThan(id1);
+  });
+
+  it('导出→重置→导入往返：DDL 完整恢复（换手机场景）', async () => {
+    let blobContent = '';
+    (globalThis as any).document = {
+      createElement: () => ({ href: '', download: '', click: vi.fn(), remove: vi.fn() }),
+      body: { appendChild: vi.fn() },
+    };
+    (globalThis as any).Blob = class Blob {
+      constructor(public parts: string[]) { blobContent = parts[0]; }
+    };
+    (globalThis as any).URL = { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() };
+
+    await db.saveDdl({ ...makeDdl('高数作业'), notes: '带备注', images: ['data:image/jpeg;base64,AAAA'] });
+    await exportBackupFile();
+    const backup = blobContent;
+    expect(JSON.parse(backup).ddls).toHaveLength(1);
+
+    await _resetForTest();
+    const count = await importJSONIntoStore(backup);
+    expect(count).toBe(1);
+    const list = await db.getAllDdls();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('高数作业');
+    expect(list[0].images).toEqual(['data:image/jpeg;base64,AAAA']);
   });
 
   it('仅 ddls.json 目录（无任何计划）不被当首次使用丢弃（回归）', async () => {

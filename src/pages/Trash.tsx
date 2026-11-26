@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { Trash2, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useTrash } from '../hooks/useTrash';
 import ConfirmDialog from '../components/ConfirmDialog';
-import GroupedPageHeader from '../components/GroupedPageHeader';
-import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import './Trash.css';
 
 const TABLE_LABELS: Record<string, string> = {
@@ -16,6 +14,7 @@ const TABLE_LABELS: Record<string, string> = {
   courses: '课程',
   ddls: 'DDL',
   important: '重要的事',
+  backlog: '遗留问题',
   linkGroups: '关联分组',
   timeBlocks: '时间块',
 };
@@ -24,15 +23,13 @@ export default function TrashPage() {
   const { items, loading, restore, permDelete, clearAll } = useTrash();
   const [askClear, setAskClear] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  useRegisterBackHandler(() => {
-    if (notice !== null) { setNotice(null); return true; }
-    if (askClear) { setAskClear(false); return true; }
-    return false;
-  }, [notice, askClear]);
+  // Wishes and confessions never surface in the public trash, even if a stale row slips through.
+  const visible = items.filter(item => !(item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish'));
+
   if (loading) {
     return (
       <div className="app-container">
-        <GroupedPageHeader title="回收站" />
+        <div className="page-header"><h1 className="page-title">回收站</h1></div>
         <div className="empty-state"><p>加载中...</p></div>
       </div>
     );
@@ -40,22 +37,27 @@ export default function TrashPage() {
 
   return (
     <div className="app-container">
-      <GroupedPageHeader title="回收站" blocked={askClear || notice !== null}>
-        {items.length > 0 && (
+      <div className="page-header">
+        <h1 className="page-title">回收站</h1>
+        {visible.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setAskClear(true)}>
             <AlertTriangle size={14} /> 清空回收站
           </button>
         )}
-      </GroupedPageHeader>
+      </div>
 
-      {items.length === 0 ? (
+      <p className="trash-hint">
+        已删除的内容会保留 30 天，之后自动清理。
+      </p>
+
+      {visible.length === 0 ? (
         <div className="empty-state">
           <Trash2 size={48} className="icon" />
           <p>回收站为空</p>
         </div>
       ) : (
         <div className="trash-list">
-          {items.map(item => {
+          {visible.map(item => {
             const gid = item.id!;
             const label = TABLE_LABELS[item.originalTable] || item.originalTable;
             const daysLeft = Math.max(

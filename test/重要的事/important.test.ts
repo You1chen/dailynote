@@ -42,17 +42,8 @@ async function kvKeys(): Promise<string[]> {
     kreq.onerror = () => { db.close(); resolve([]); };
   });
 }
-async function kvPut(key: string, value: string): Promise<void> {
-  const db = await openKvDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(KV_STORE, 'readwrite');
-    tx.objectStore(KV_STORE).put(value, key);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-}
 
-import { initStore, _resetForTest } from '../../src/services/store';
+import { initStore, importJSONIntoStore, _resetForTest } from '../../src/services/store';
 import * as db from '../../src/db';
 import type { ImportantItem } from '../../src/types';
 import { countImportantNear, splitDeadlineItems, IMPORTANT_NEAR_MIN, IMPORTANT_KEEP_AFTER_MIN } from '../../src/utils/ddl';
@@ -129,14 +120,13 @@ describe('重要的事持久化', () => {
     expect((await db.getAllImportant())[0].name).toBe('搬家');
   });
 
-  it('旧单文件缺少 important 字段时按空数组兼容', async () => {
+  it('旧备份缺少 important 字段时按空数组兼容', async () => {
     const old = JSON.stringify({
       version: 1, savedAt: 0, dailyPlans: [], longTermGoals: [], reflections: [],
       harvests: [], fixedRoutines: [], taskItems: [], taskTemplates: [], trashItems: [],
-      courses: [], semester: [], ddls: [], taskBoard: [],
+      courses: [], semester: [], ddls: [], backlog: [], taskBoard: [],
     });
-    await kvPut('dailynote-data', old);
-    await initStore();
+    await expect(importJSONIntoStore(old)).resolves.toBe(0);
     expect(await db.getAllImportant()).toHaveLength(0);
   });
 });

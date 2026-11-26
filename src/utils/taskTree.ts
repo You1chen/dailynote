@@ -179,6 +179,7 @@ export function executionLeavesOf(nodes: TaskNode[], order: string[] = []): Task
       done: node.done,
       shelved: !!node.shelved,
       doneAt: node.doneAt,
+      ...(node.mindLinked ? { mindLinked: true } : {}),
       ...(node.taskTiming ? { taskTiming: node.taskTiming } : {}),
     };
     raw.push(leaf);

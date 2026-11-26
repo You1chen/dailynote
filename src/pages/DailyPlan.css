@@ -152,7 +152,7 @@
   background: #ecfdf5;
 }
 
-/* 已完成：标题删除线 + 整块文字变淡 */
+/* 验收完成后：标题删除线 + 整块文字变淡 */
 .time-block--done .time-block-inner {
   opacity: 0.55;
 }
@@ -193,7 +193,7 @@
   white-space: nowrap;
 }
 
-.time-block-status {
+.time-block-scores {
   font-size: 0.5625rem;
   color: var(--color-text-muted);
   margin-top: auto;
@@ -308,6 +308,37 @@
 .bs-time-range > span {
   color: var(--color-text-secondary);
   font-size: var(--font-sm);
+}
+
+.bs-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* 即时模式徽标 */
+.bs-instant-badge {
+  display: inline-block;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: #f59e0b;
+  background: #fef3c7;
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+[data-theme="dark"] .bs-instant-badge {
+  background: #451a03;
+  color: #fbbf24;
+}
+
+.bs-instant-hint {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  margin-bottom: 0;
 }
 
 /* 清单模式 - 子任务编辑 */
@@ -618,6 +649,56 @@
   color: var(--color-primary);
 }
 
+/* ============ 验收弹窗（独立于编辑面板） ============ */
+.accept-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.accept-modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: acceptPop 0.18s ease-out;
+}
+
+@keyframes acceptPop {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.accept-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  margin: 0;
+}
+
+.accept-task-title {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+  word-break: break-word;
+}
+
+.accept-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ============ 课程块（只读展示，来自课程表） ============ */
 .course-block {
   position: absolute;
@@ -710,6 +791,12 @@
 .course-modal-label {
   flex-shrink: 0;
   width: 44px;
+  color: var(--color-text-muted);
+}
+
+.course-modal-hint {
+  margin-top: 12px;
+  font-size: var(--font-xs);
   color: var(--color-text-muted);
 }
 
@@ -982,7 +1069,7 @@
   letter-spacing: 0.01em;
 }
 
-.time-block-status {
+.time-block-scores {
   font-size: 10.5px;
 }
 
@@ -1056,6 +1143,9 @@
   -webkit-backdrop-filter: blur(12px);
 }
 
+[data-theme="dark"] .dp-head {
+  background: rgba(15, 15, 26, 0.92);
+}
 
 .dp-top {
   padding: 0;
@@ -1079,6 +1169,10 @@
   color: var(--color-text-secondary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.dp-sep {
+  opacity: 0.5;
 }
 
 .dp-stats .dp-tools {

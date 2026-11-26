@@ -50,6 +50,7 @@ vi.mock('../src/db', () => ({
 }));
 vi.mock('../src/components/FullscreenSchedule', () => ({ default: () => null }));
 vi.mock('../src/components/PreferencePanel', () => ({ default: () => null }));
+vi.mock('../src/components/MindSheet', () => ({ default: () => null }));
 vi.mock('../src/components/DayNavigator', () => ({ default: () => null }));
 vi.mock('../src/components/ConfirmDialog', () => ({ default: () => null }));
 
@@ -58,7 +59,7 @@ import PlanTimeGrid from '../src/components/PlanTimeGrid';
 
 const block: TimeBlock = {
   id: 'user-created', startTime: '08:00', endTime: '09:00', taskTitle: '用户创建的计划',
-  plannedContent: '实际计划详情',
+  plannedContent: '实际计划详情', actualExecution: '', focusScore: 0, efficiencyScore: 0,
   completed: false, notes: '',
 };
 const planFor = (date: string, blocks: TimeBlock[] = []): DailyPlan => ({

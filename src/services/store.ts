@@ -18,8 +18,8 @@
  *     semester.json                  学期设置（单记录数组，id 恒 1）
  *     ddls.json                      DDL 截止清单
  *     important.json                 重要的事
+ *     backlog.json                   遗留问题（backlog）
  *     taskboard.json                 任务树（单记录，id 恒 1）
- *     preferences.json               应用偏好（单个对象）
  *
  * 写盘策略：
  *   - mutate() 先对每张表做指纹快照，变更后对比，只写"变脏"的文件
@@ -28,38 +28,36 @@
  *   - 启动时若发现旧版单文件 dailynote-data.json → 迁移到新布局并删除旧文件（提交标记）
  */
 
-import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, TaskBoard, ImportantItem, LinkGroup } from '../types';
+import type { DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, TaskBoard, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
-import type { PreferencesPatch, UserPreferences } from '../types/preferences';
-import { defaultPreferences, LEGACY_HOME_ALARM_KEY, LEGACY_PREFERENCES_KEY, mergePreferences, normalizeCourseTimeCombinations, parsePreferencesPatch, PREFERENCES_CHANGED } from '../utils/preferenceValues';
+import { loadCourseTimeCombinations, saveCourseTimeCombinations } from '../utils/courseTimeCombinations';
 import type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { CATEGORY_FILES, CATEGORY_NAMES, CATEGORY_TABLES, DEFAULT_WRITE_ORDER, NUMERIC_TABLES, emptyStore } from './storeSchema';
 export type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { readLegacyTables, deleteLegacyDB, legacyDatabaseExists } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
 import { readSnapshot, writeSnapshot, clearSnapshot, sameNames, filesCover } from './snapshot';
-import type { KnowledgeCardLibrary } from '../types/knowledge';
-import { migrateLegacyKnowledgeCards, type LegacyKnowledgeMap } from '../utils/knowledgeMigration';
-import { isRetiredTrashItem } from '../utils/retiredRecords';
+import type { ActivityEvent, ActivityOptions } from '../types/settlement';
+import type { KnowledgeMap } from '../types/knowledge';
+import { detectActivity, recoverTimestampedActivity } from '../utils/settlement';
+import { syncMindTasks } from '../utils/mindTasks';
 
 // ============ 布局常量 ============
 
 /**
- * 旧版单文件（迁移前）；仅供启动迁移。
+ * 旧版单文件（迁移前）；仍是导入/导出的备份包格式，但不再是运行期存储。
  * Web 端旧版 KV 键是 dailynote-data（无扩展名），原生端旧文件是 dailynote-data.json。
  */
 export const OLD_SINGLE_REL = 'dailynote-data.json';
 function oldSingleRel(): string {
   return isCapacitor() ? 'dailynote-data.json' : 'dailynote-data';
 }
-const LEGACY_KNOWLEDGE_MAPS_FILE = 'knowledge-maps.json';
-const PREFERENCES_FILE = 'preferences.json';
 const DAY_DIR = 'days';
-const DAY_TYPES = ['reflections', 'harvests', 'tasks'] as const;
+const DAY_TYPES = ['reflections', 'harvests', 'tasks', 'activity'] as const;
 function dayPlan(date: string): string {
   return `${DAY_DIR}/${date}/plan.json`;
 }
-function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks'): string {
+function dayTypeFile(date: string, type: 'reflections' | 'harvests' | 'tasks' | 'activity'): string {
   return `${DAY_DIR}/${date}/${type}.json`;
 }
 
@@ -121,23 +119,40 @@ function clearStore(): void {
 }
 
 function countData(): number {
-  return Object.values(store).reduce((total, rows) => total + rows.length, 0);
+  // 交互记录只服务于结算，不计入「恢复了多少条记录」的用户可见统计。
+  return Object.entries(store).reduce(
+    (total, [table, rows]) => total + (table === 'activityEvents' ? 0 : rows.length),
+    0,
+  );
 }
 
 // ============ 路径管理 ============
 
-const DEFAULT_STORAGE_PATH = 'Documents/Ji';
-
 export function getStoragePath(): string {
-  try {
-    return localStorage.getItem('dailynote_storage_path') || DEFAULT_STORAGE_PATH;
-  } catch {
-    return DEFAULT_STORAGE_PATH;
-  }
+  return localStorage.getItem('dailynote_storage_path') || 'Documents/DailyNote';
 }
 
 export function setStoragePath(path: string): void {
   localStorage.setItem('dailynote_storage_path', path);
+}
+
+/** 规范化用户输入：接受 "MyNotes" 或 "Documents/MyNotes"，统一存为 "Documents/MyNotes" */
+export function normalizePath(input: string): string {
+  let p = (input ?? '').trim().replace(/[\\/]+/g, '/');
+  p = p.replace(/^Documents\//i, '');
+  p = p.replace(/^\/+|\/+$/g, '');
+  if (!p) throw new Error('路径不能为空');
+  if (p === '.' || p.includes('..')) throw new Error('路径不能包含 ".."');
+  if (/^[A-Za-z]:/.test(p)) throw new Error('路径不能是绝对路径');
+  if (/[<>:"|?*]/.test(p)) throw new Error('路径包含非法字符');
+  return `Documents/${p}`;
+}
+
+/** 展示路径（统一补全 Documents/ 前缀，仅影响显示） */
+export function getDisplayPath(): string {
+  const dir = getStoragePath();
+  const shown = /^Documents[\/\\]/.test(dir) ? dir : `Documents/${dir}`;
+  return `${shown}/`;
 }
 
 // ============ 环境检测 ============
@@ -356,7 +371,7 @@ async function listDayDates(dir: string): Promise<string[]> {
 
 /** 枚举应用拥有的日期数据文件；日期目录以外的文件永不参与清理。 */
 async function listManagedDayFiles(dir: string): Promise<string[]> {
-  const managed = /^days\/\d{4}-\d{2}-\d{2}\/(plan|reflections|harvests|tasks)\.json$/;
+  const managed = /^days\/\d{4}-\d{2}-\d{2}\/(plan|reflections|harvests|tasks|activity)\.json$/;
   if (!isCapacitor()) return (await idbKvKeys()).filter(key => managed.test(key));
   const { Filesystem, Directory } = await import('@capacitor/filesystem');
   const files: string[] = [];
@@ -372,45 +387,41 @@ async function listManagedDayFiles(dir: string): Promise<string[]> {
 
 // ============ 解析 ============
 
-function parseStorageData(text: string): { data: StorageData; legacyMaps: LegacyKnowledgeMap[]; archive?: string } | null {
+function parseStorageData(text: string): StorageData | null {
   try {
     const data = JSON.parse(text);
     if (!data || data.version !== 1 || !Array.isArray(data.dailyPlans)) return null;
-    const legacyMaps = Array.isArray(data.knowledgeMaps) ? data.knowledgeMaps : [];
-    const hasRetiredData = legacyMaps.length > 0 || ['backlog', 'ideas', 'activityEvents', 'gardenKeys'].some(key =>
-      Array.isArray(data[key]) && data[key].length > 0,
-    );
     return {
-      legacyMaps,
-      archive: hasRetiredData ? text : undefined,
-      data: {
-        version: 1,
-        savedAt: typeof data.savedAt === 'number' ? data.savedAt : 0,
-        preferences: parsePreferencesPatch(data.preferences) ?? (
-          Array.isArray(data.courseTimeCombinations)
-            ? { courseTimeCombinations: normalizeCourseTimeCombinations(data.courseTimeCombinations) }
-            : undefined
-        ),
-        dailyPlans: data.dailyPlans,
-        longTermGoals: Array.isArray(data.longTermGoals) ? data.longTermGoals : [],
-        reflections: Array.isArray(data.reflections) ? data.reflections : [],
-        harvests: Array.isArray(data.harvests) ? data.harvests : [],
-        fixedRoutines: Array.isArray(data.fixedRoutines) ? data.fixedRoutines : [],
-        taskItems: Array.isArray(data.taskItems) ? data.taskItems : [],
-        taskTemplates: Array.isArray(data.taskTemplates) ? data.taskTemplates : [],
-        trashItems: Array.isArray(data.trashItems) ? data.trashItems : [],
-        courses: Array.isArray(data.courses) ? data.courses.map(normalizeCourseDayOfWeek) : [],
-        semester: Array.isArray(data.semester) ? data.semester : [],
-        ddls: Array.isArray(data.ddls) ? data.ddls : [],
-        important: Array.isArray(data.important) ? data.important : [],
-        taskBoard: Array.isArray(data.taskBoard) ? data.taskBoard : [],
-        linkGroups: Array.isArray(data.linkGroups) ? data.linkGroups : [],
-        knowledgeCards: Array.isArray(data.knowledgeCards) ? data.knowledgeCards : [],
-      },
+      version: 1,
+      savedAt: typeof data.savedAt === 'number' ? data.savedAt : 0,
+      dailyPlans: data.dailyPlans,
+      longTermGoals: Array.isArray(data.longTermGoals) ? data.longTermGoals : [],
+      reflections: Array.isArray(data.reflections) ? data.reflections : [],
+      harvests: Array.isArray(data.harvests) ? data.harvests : [],
+      fixedRoutines: Array.isArray(data.fixedRoutines) ? data.fixedRoutines : [],
+      taskItems: Array.isArray(data.taskItems) ? data.taskItems : [],
+      taskTemplates: Array.isArray(data.taskTemplates) ? data.taskTemplates : [],
+      trashItems: Array.isArray(data.trashItems) ? data.trashItems : [],
+      courses: Array.isArray(data.courses) ? data.courses.map(normalizeCourseDayOfWeek) : [],
+      semester: Array.isArray(data.semester) ? data.semester : [],
+      ddls: Array.isArray(data.ddls) ? data.ddls : [],
+      important: Array.isArray(data.important) ? data.important : [],
+      backlog: Array.isArray(data.backlog) ? data.backlog : [],
+       ideas: Array.isArray(data.ideas) ? data.ideas : [],
+      taskBoard: Array.isArray(data.taskBoard) ? data.taskBoard : [],
+      linkGroups: Array.isArray(data.linkGroups) ? data.linkGroups : [],
+      activityEvents: Array.isArray(data.activityEvents) ? data.activityEvents : [],
+      gardenKeys: Array.isArray(data.gardenKeys) ? data.gardenKeys : [],
+      knowledgeMaps: Array.isArray(data.knowledgeMaps) ? data.knowledgeMaps : [],
+      knowledgeCards: Array.isArray(data.knowledgeCards) ? data.knowledgeCards : [],
     };
   } catch {
     return null;
   }
+}
+
+function hasAny(d: StorageData): boolean {
+  return DEFAULT_WRITE_ORDER.some(table => d[table].length > 0);
 }
 
 async function readDayArray<T>(dir: string, rel: string): Promise<T[]> {
@@ -444,6 +455,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const reflections: Reflection[] = [];
   const harvests: Harvest[] = [];
   const taskItems: TaskItem[] = [];
+  const activityEvents: ActivityEvent[] = [];
   for (const date of dates) {
     const planText = await readFile(dir, dayPlan(date));
     if (planText != null) {
@@ -457,6 +469,7 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     reflections.push(...(await readDayArray<Reflection>(dir, dayTypeFile(date, 'reflections'))));
     harvests.push(...(await readDayArray<Harvest>(dir, dayTypeFile(date, 'harvests'))));
     taskItems.push(...(await readDayArray<TaskItem>(dir, dayTypeFile(date, 'tasks'))));
+    activityEvents.push(...(await readDayArray<ActivityEvent>(dir, dayTypeFile(date, 'activity'))));
   }
   const longTermGoals = await readCategory<LongTermGoal>(dir, CATEGORY_FILES.longTermGoals);
   const fixedRoutines = await readCategory<FixedRoutine>(dir, CATEGORY_FILES.fixedRoutines);
@@ -466,10 +479,13 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const semester = await readCategory<SemesterRecord>(dir, CATEGORY_FILES.semester);
   const ddls = await readCategory<DdlItem>(dir, CATEGORY_FILES.ddls);
   const important = await readCategory<ImportantItem>(dir, CATEGORY_FILES.important);
+  const backlog = await readCategory<BacklogItem>(dir, CATEGORY_FILES.backlog);
+   const ideas = await readCategory<Idea>(dir, CATEGORY_FILES.ideas);
   const taskBoard = await readCategory<TaskBoard>(dir, CATEGORY_FILES.taskBoard);
   const linkGroups = await readCategory<LinkGroup>(dir, CATEGORY_FILES.linkGroups);
-  const knowledgeCards = await readCategory<KnowledgeCardLibrary>(dir, CATEGORY_FILES.knowledgeCards);
-  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !taskBoard && !linkGroups && !knowledgeCards) return null;
+  const knowledgeMaps = await readCategory<KnowledgeMap>(dir, CATEGORY_FILES.knowledgeMaps);
+  const knowledgeCards = await readCategory<any>(dir, CATEGORY_FILES.knowledgeCards);
+  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !backlog && !ideas && !taskBoard && !linkGroups && !knowledgeMaps && !knowledgeCards) return null;
   return {
     version: 1,
     savedAt: 0,
@@ -485,14 +501,19 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     semester: semester ?? [],
     ddls: ddls ?? [],
     important: important ?? [],
+    backlog: backlog ?? [],
+     ideas: ideas ?? [],
     taskBoard: taskBoard ?? [],
     linkGroups: linkGroups ?? [],
+    activityEvents,
+    gardenKeys: (await readCategory<any>(dir, CATEGORY_FILES.gardenKeys)) ?? [],
+    knowledgeMaps: knowledgeMaps ?? [],
     knowledgeCards: knowledgeCards ?? [],
   };
 }
 
 /** 旧版单文件（迁移用）。返回 'CORRUPT' 表示文件存在但解析失败 */
-async function readOldSingleFile(dir: string): Promise<ReturnType<typeof parseStorageData> | 'CORRUPT'> {
+async function readOldSingleFile(dir: string): Promise<StorageData | 'CORRUPT' | null> {
   const text = await readFile(dir, oldSingleRel());
   if (text == null) return null;
   const data = parseStorageData(text);
@@ -540,6 +561,7 @@ function currentNames(): { dates: string[]; files: string[] } {
   for (const r of store.reflections) dates.add(r.date);
   for (const h of store.harvests) dates.add(h.date);
   for (const t of store.taskItems) dates.add(t.date);
+  for (const e of store.activityEvents) dates.add(e.date);
   return { dates: [...dates], files: CATEGORY_NAMES };
 }
 
@@ -550,10 +572,19 @@ function namesFromData(data: StorageData): { dates: string[]; files: string[] } 
   for (const r of data.reflections) dates.add(r.date);
   for (const h of data.harvests) dates.add(h.date);
   for (const t of data.taskItems) dates.add(t.date);
+  for (const e of data.activityEvents ?? []) dates.add(e.date);
   return { dates: [...dates], files: CATEGORY_NAMES };
 }
 
+/** 落一份快照（失败不影响主流程） */
+function dataHasPendingGardenEncryption(data: Pick<StoreShape, 'longTermGoals' | 'trashItems' | 'activityEvents'>): boolean {
+  return data.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) || data.trashItems.some(t => t.originalTable === 'longTermGoals' && t.originalData?.kind === 'wish' && !t.originalData?.encrypted) || (data.activityEvents ?? []).some(e => e.category === 'wish-milestone' && !e.encrypted);
+}
+function pendingGardenEncryption(): boolean {
+  return dataHasPendingGardenEncryption(store);
+}
 function saveSnapshot(): Promise<void> {
+  if (pendingGardenEncryption()) return clearSnapshot();
   const { dates, files } = currentNames();
   return writeSnapshot({ root: getStoragePath(), dates, files, savedAt: Date.now(), data: snapshot() });
 }
@@ -574,6 +605,7 @@ function scheduleSnapshot(): void {
 
 /** 立即落快照（flush / 切后台时用） */
 async function flushSnapshot(): Promise<void> {
+  if (pendingGardenEncryption()) { await clearSnapshot(); return; }
   if (snapTimer) {
     clearTimeout(snapTimer);
     snapTimer = null;
@@ -583,37 +615,33 @@ async function flushSnapshot(): Promise<void> {
 }
 
 /** 读取当前路径的后端数据（新布局优先；旧单文件存在则视为迁移未完成，优先取它） */
-async function readBackend(): Promise<{
-  data: StorageData | null;
-  oldFormat: boolean;
-  hasPreviousState: boolean;
-  hasLegacyMapsFile?: boolean;
-  legacyMaps?: LegacyKnowledgeMap[];
-  archive?: string;
-}> {
+async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boolean; hasPreviousState: boolean }> {
   const dir = getStoragePath();
 
   // 旧单文件仍在 → 走迁移路径（本来就要读它）
   const old = await readOldSingleFile(dir);
   if (old === 'CORRUPT') console.warn('旧版数据文件损坏，尝试读取新布局:', dir);
-  if (old && old !== 'CORRUPT') return { ...old, oldFormat: true, hasPreviousState: true };
+  if (old && old !== 'CORRUPT') return { data: old, oldFormat: true, hasPreviousState: true };
   const names = await listBackendNames(dir);
-  const hasLegacyMapsFile = names.files.includes(LEGACY_KNOWLEDGE_MAPS_FILE);
 
   // 快照命中：日期目录没变就直接用，不再逐文件读取
-  // （只比日期集合：分类文件由本应用自己维护，应用写入时主动使旧快照失效）
+  // （只比日期集合：分类文件由本应用自己维护，外部改动靠「重新扫描」）
   if (!old) {
-    const snap = await readSnapshot(dir);
+    let snap = await readSnapshot(dir);
+    if (snap && dataHasPendingGardenEncryption(snap.data)) {
+      await clearSnapshot();
+      snap = null;
+    }
     // 快照写入时可能列出全部类别文件，而某些类别文件尚未创建；只看磁盘上实际存在的文件是否都被快照覆盖。
     const knownCategoryFiles = new Set<string>(Object.values(CATEGORY_FILES));
     const diskCategoryFiles = names.files.filter(file => knownCategoryFiles.has(file));
     if (snap && sameNames(snap.dates, names.dates) && filesCover(snap.files, diskCategoryFiles)) {
-      return { data: snap.data, oldFormat: false, hasPreviousState: true, hasLegacyMapsFile };
+      return { data: snap.data, oldFormat: false, hasPreviousState: true };
     }
   }
 
   const data = await readNewStructure(dir);
-  if (data) {
+  if (data && !data.longTermGoals.some(g => g.kind === 'wish' && !g.encrypted) && !data.trashItems.some(t => t.originalTable === 'longTermGoals' && t.originalData?.kind === 'wish' && !t.originalData?.encrypted) && !data.activityEvents.some(e => e.category === 'wish-milestone' && !e.encrypted)) {
     const names = await listBackendNames(dir);
     const { dates, files } = namesFromData(data);
     await writeSnapshot({
@@ -624,112 +652,28 @@ async function readBackend(): Promise<{
       data,
     });
   }
-  // 旧文件或目录仍表示设备上已有数据。
+  // Empty or damaged data files and backups are still evidence of prior use.
   const hasPreviousState = !!old || !!data || names.dates.length > 0 || names.files.length > 0;
-  return { data, oldFormat: false, hasPreviousState, hasLegacyMapsFile };
+  return { data, oldFormat: false, hasPreviousState };
+}
+
+/** 探测指定路径的数据（不切换当前路径） */
+async function readBackendAt(path: string): Promise<StorageData | 'CORRUPT' | null> {
+  const old = await readOldSingleFile(path);
+  if (old === 'CORRUPT') return 'CORRUPT';
+  if (old) return old;
+  return await readNewStructure(path);
 }
 
 // ============ 持久化队列（增量写 + 快照捕获） ============
 
 let persistQueue: Promise<unknown> = Promise.resolve();
 let lastPersistError: string | null = null;
-let preferences = defaultPreferences();
-let preferencesConfigured = false;
-const preferenceListeners = new Set<() => void>();
-
-export function getPreferences(): UserPreferences {
-  return preferences;
-}
-
-export function subscribePreferences(listener: () => void): () => void {
-  preferenceListeners.add(listener);
-  return () => { preferenceListeners.delete(listener); };
-}
-
-function publishPreferences(next: UserPreferences, configured: boolean): void {
-  preferences = next;
-  preferencesConfigured = configured;
-  for (const listener of preferenceListeners) listener();
-  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-    window.dispatchEvent(new Event(PREFERENCES_CHANGED));
-  }
-}
-
-function preferencesWrite(value = preferences): FileWrite {
-  return { relPath: PREFERENCES_FILE, json: JSON.stringify(value, null, 2), table: 'preferences' };
-}
-
-function writePreferences(value = preferences): Promise<boolean> {
-  return enqueue(() => ({ writes: [preferencesWrite(value)], deletes: [] }));
-}
-
-function replacePreferences(next: UserPreferences): Promise<boolean> {
-  const write = writePreferences(next);
-  publishPreferences(next, true);
-  return write;
-}
-
-export function updatePreferences(partial: PreferencesPatch): Promise<boolean> {
-  const patch = parsePreferencesPatch(partial);
-  return patch ? replacePreferences(mergePreferences(preferences, patch)) : Promise.resolve(true);
-}
-
-export function resetPreferences(): Promise<boolean> {
-  return replacePreferences(defaultPreferences());
-}
-
-function readLegacyPreference(key: string): unknown {
-  try {
-    return JSON.parse(localStorage.getItem(key) ?? 'null');
-  } catch {
-    return undefined;
-  }
-}
-
-function removeLegacyPreference(key: string): void {
-  try { localStorage.removeItem(key); } catch { /* Backing JSON is already authoritative. */ }
-}
-
-async function readSavedPreferences(dir: string): Promise<PreferencesPatch | 'CORRUPT' | null> {
-  const json = await readFile(dir, PREFERENCES_FILE);
-  if (json == null) return null;
-  try {
-    const value: unknown = JSON.parse(json);
-    if (value && typeof value === 'object' && !Array.isArray(value)) return parsePreferencesPatch(value) ?? {};
-  } catch { /* Report corruption without preventing access to other data. */ }
-  console.warn('偏好设置文件损坏:', dir);
-  return 'CORRUPT';
-}
-
-async function initializePreferences(fromLegacyFile?: PreferencesPatch): Promise<boolean> {
-  const saved = await readSavedPreferences(getStoragePath());
-  const defaults = defaultPreferences();
-  const legacy = parsePreferencesPatch(readLegacyPreference(LEGACY_PREFERENCES_KEY));
-  const legacyAlarm = parsePreferencesPatch({ homeAlarm: readLegacyPreference(LEGACY_HOME_ALARM_KEY) })?.homeAlarm;
-  const hasSaved = saved !== null && saved !== 'CORRUPT';
-  const migrateAlarm = legacyAlarm && !fromLegacyFile?.homeAlarm && (!hasSaved || !saved.homeAlarm);
-  const fromLegacy = mergePreferences(defaults, {
-    ...(!hasSaved ? legacy : undefined),
-    homeAlarm: migrateAlarm ? legacyAlarm : undefined,
-  });
-  const next = mergePreferences(fromLegacy, hasSaved ? saved : fromLegacyFile ?? {});
-
-  if ((saved === null && (legacy || legacyAlarm || fromLegacyFile)) || (hasSaved && migrateAlarm)) {
-    if (!(await replacePreferences(next))) return true;
-  } else {
-    publishPreferences(next, hasSaved);
-  }
-  if (saved !== 'CORRUPT') {
-    if (legacy) removeLegacyPreference(LEGACY_PREFERENCES_KEY);
-    if (legacyAlarm) removeLegacyPreference(LEGACY_HOME_ALARM_KEY);
-  }
-  return saved !== null || !!legacy || !!legacyAlarm;
-}
 
 interface FileWrite {
   relPath: string;
   json: string;
-  table: AnyStoreTable | 'preferences';
+  table: AnyStoreTable;
 }
 
 
@@ -745,7 +689,7 @@ function enqueue(build: () => { writes: FileWrite[]; deletes: string[] }, cleanO
   const dir = getStoragePath();
   const { writes, deletes } = build();
   const job = persistQueue.then(async () => {
-    if (writes.some(write => write.table !== 'preferences') || deletes.length || cleanOrphans) {
+    if (writes.length || deletes.length || cleanOrphans) {
       // A reload can interrupt the debounced refresh. Invalidate the old snapshot
       // before changing any backing file, even if the file names do not change.
       if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
@@ -798,6 +742,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
     ['reflections', 'reflections'],
     ['harvests', 'harvests'],
     ['tasks', 'taskItems'],
+    ['activity', 'activityEvents'],
   ];
   for (const [type, table] of dayMaps) {
     for (const [date, items] of groupByDate(store[table] as unknown as { date: string }[])) {
@@ -807,7 +752,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
   for (const { table, file } of CATEGORY_TABLES) {
     writes.push({ relPath: file, json: JSON.stringify(store[table], null, 2), table });
   }
-  if (preferencesConfigured) writes.push(preferencesWrite());
+  writes.sort((a, b) => Number(b.table === 'gardenKeys') - Number(a.table === 'gardenKeys'));
   return { writes, deletes: [] };
 }
 
@@ -815,7 +760,7 @@ function buildWriteSetFromStore(): { writes: FileWrite[]; deletes: string[] } {
 
 interface Fp {
   planDates: Map<string, string>;
-  dayDates: Record<'reflections' | 'harvests' | 'tasks', Map<string, string>>;
+  dayDates: Record<'reflections' | 'harvests' | 'tasks' | 'activity', Map<string, string>>;
   longTermGoals: string;
   fixedRoutines: string;
   taskTemplates: string;
@@ -823,9 +768,13 @@ interface Fp {
   semester: string;
   ddls: string;
   important: string;
+  backlog: string;
+   ideas: string;
   taskBoard: string;
   linkGroups: string;
   trashItems: string;
+  gardenKeys: string;
+  knowledgeMaps: string;
   knowledgeCards: string;
 }
 
@@ -846,6 +795,7 @@ function fingerprint(): Fp {
       reflections: mk(store.reflections),
       harvests: mk(store.harvests),
       tasks: mk(store.taskItems),
+      activity: mk(store.activityEvents),
     },
     longTermGoals: JSON.stringify(store.longTermGoals),
     fixedRoutines: JSON.stringify(store.fixedRoutines),
@@ -854,9 +804,13 @@ function fingerprint(): Fp {
     semester: JSON.stringify(store.semester),
     ddls: JSON.stringify(store.ddls),
     important: JSON.stringify(store.important),
+    backlog: JSON.stringify(store.backlog),
+     ideas: JSON.stringify(store.ideas),
     taskBoard: JSON.stringify(store.taskBoard),
     linkGroups: JSON.stringify(store.linkGroups),
     trashItems: JSON.stringify(store.trashItems),
+    gardenKeys: JSON.stringify(store.gardenKeys),
+    knowledgeMaps: JSON.stringify(store.knowledgeMaps),
     knowledgeCards: JSON.stringify(store.knowledgeCards),
   };
 }
@@ -883,6 +837,7 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
     ['reflections', 'reflections'],
     ['harvests', 'harvests'],
     ['tasks', 'taskItems'],
+    ['activity', 'activityEvents'],
   ];
   for (const [type, table] of dayMaps) {
     for (const date of changedKeys(a.dayDates[type], b.dayDates[type])) {
@@ -902,7 +857,7 @@ function buildWriteSetDirty(a: Fp, b: Fp, order?: AnyStoreTable[]): { writes: Fi
   // writeOrder：跨文件操作控制写序（先写"新增"侧，再写"移除"侧）
   const orderIndex = new Map<string, number>();
   (order ?? DEFAULT_WRITE_ORDER).forEach((t, i) => orderIndex.set(t, i));
-  writes.sort((x, y) => (orderIndex.get(x.table) ?? 999) - (orderIndex.get(y.table) ?? 999));
+  writes.sort((x, y) => Number(y.table === 'gardenKeys') - Number(x.table === 'gardenKeys') || (orderIndex.get(x.table) ?? 999) - (orderIndex.get(y.table) ?? 999));
 
   return { writes, deletes };
 }
@@ -927,12 +882,21 @@ export function getLastPersistError(): string | null {
  * 同步改 store → 增量持久化（只写被改到的文件）。
  * opts.writeOrder：本操作涉及多文件时指定写序，先写"新增"侧再写"移除"侧。
  */
-export async function mutate(fn: () => void, opts?: { writeOrder?: AnyStoreTable[] }): Promise<boolean> {
+export async function mutate(fn: () => void, opts?: ActivityOptions & { writeOrder?: AnyStoreTable[] }): Promise<boolean> {
   const before = fingerprint();
+  const activityBefore = opts?.skipActivity ? null : deepClone(store);
   fn();
+  const events = activityBefore ? detectActivity(activityBefore, store, opts) : [];
+  store.activityEvents.push(...events);
   const after = fingerprint();
   const ok = await enqueue(() => buildWriteSetDirty(before, after, opts?.writeOrder));
-  if (ok) scheduleSnapshot();
+  if (ok) {
+    scheduleSnapshot();
+    // 有新交互记录才通知；测试桩等无 dispatchEvent 的环境静默跳过
+    if (events.length && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new Event('dailynote-activity-changed'));
+    }
+  }
   return ok;
 }
 
@@ -951,6 +915,79 @@ function deepClone<T>(v: T): T {
   } catch {
     return JSON.parse(JSON.stringify(v)) as T;
   }
+}
+
+/** 导入合并：导入数据优先（存在则更新，不存在则新增）。保留导入文件的时间戳。 */
+function mergeIntoStore(data: StorageData): number {
+  let count = 0;
+
+  // dailyPlans：按 date 匹配
+  for (const p of data.dailyPlans) {
+    const idx = store.dailyPlans.findIndex(x => x.date === p.date);
+    if (idx >= 0) {
+      store.dailyPlans[idx] = { ...p, id: store.dailyPlans[idx].id };
+    } else {
+      store.dailyPlans.push({ ...p, id: allocId('dailyPlans') });
+    }
+    count++;
+  }
+
+  // 按 id 匹配的表
+  const tables: { key: AnyStoreTable; items: any[]; numeric: boolean }[] = [
+    { key: 'longTermGoals', items: data.longTermGoals, numeric: true },
+    { key: 'reflections', items: data.reflections, numeric: true },
+    { key: 'harvests', items: data.harvests, numeric: true },
+    { key: 'fixedRoutines', items: data.fixedRoutines, numeric: true },
+    { key: 'taskItems', items: data.taskItems, numeric: false },
+    { key: 'taskTemplates', items: data.taskTemplates, numeric: true },
+    { key: 'courses', items: data.courses, numeric: true },
+    { key: 'semester', items: data.semester, numeric: true },
+    { key: 'ddls', items: data.ddls, numeric: true },
+    { key: 'important', items: data.important, numeric: true },
+    { key: 'backlog', items: data.backlog, numeric: true },
+     { key: 'ideas', items: data.ideas, numeric: true },
+    { key: 'taskBoard', items: data.taskBoard, numeric: true },
+    { key: 'linkGroups', items: data.linkGroups, numeric: true },
+    { key: 'trashItems', items: data.trashItems, numeric: true },
+    { key: 'knowledgeMaps', items: data.knowledgeMaps, numeric: true },
+
+  ];
+  for (const { key, items, numeric } of tables) {
+    for (const rec of items) {
+      if (rec?.id == null) continue;
+      const arr = store[key] as any[];
+      const idx = arr.findIndex(x => x.id === rec.id);
+      if (idx >= 0) {
+        arr[idx] = rec;
+      } else {
+        arr.push({ ...rec, id: numeric ? allocId(key as NumericTable) : rec.id });
+      }
+      count++;
+    }
+  }
+
+  if (data.knowledgeCards?.length) {
+    const imported = data.knowledgeCards[0];
+    const existing = store.knowledgeCards[0];
+    if (!existing || (imported.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) store.knowledgeCards = [{ ...imported, id: 1 }];
+    else store.knowledgeCards = [{ ...existing, id: 1 }];
+    count += 1;
+  }
+
+  for (const envelope of data.gardenKeys) {
+    const existing = store.gardenKeys.find(k => k.keyId === envelope.keyId);
+    if (!existing) store.gardenKeys.push(envelope);
+    else if ((envelope.updatedAt ?? 0) > (existing.updatedAt ?? 0)) Object.assign(existing, envelope, { id: existing.id });
+    count++;
+  }
+
+  // Immutable event IDs survive backup roundtrips; importing twice cannot duplicate history.
+  const eventIds = new Set(store.activityEvents.map(e => e.id));
+  for (const event of data.activityEvents) if (!eventIds.has(event.id)) {
+    store.activityEvents.push(event);
+    eventIds.add(event.id);
+  }
+  return count;
 }
 
 /** 迁移合并：文件与旧 Dexie 表取"更新者胜"并集，避免旧文件丢防抖窗口内写入 */
@@ -977,6 +1014,8 @@ function mergeLegacy(legacy: Partial<StoreShape>): void {
     { key: 'semester', items: legacy.semester },
     { key: 'ddls', items: legacy.ddls },
     { key: 'important', items: legacy.important },
+    { key: 'backlog', items: legacy.backlog },
+     { key: 'ideas', items: legacy.ideas },
     { key: 'taskBoard', items: legacy.taskBoard },
     { key: 'linkGroups', items: legacy.linkGroups },
     { key: 'trashItems', items: legacy.trashItems },
@@ -1008,8 +1047,11 @@ function liveArr(table: string): any[] {
     case 'courses': return store.courses;
     case 'ddls': return store.ddls;
     case 'important': return store.important;
+    case 'backlog': return store.backlog;
+     case 'ideas': return store.ideas;
     case 'taskBoard': return store.taskBoard;
     case 'linkGroups': return store.linkGroups;
+    case 'knowledgeMaps': return store.knowledgeMaps;
     case 'knowledgeCards': return store.knowledgeCards;
     default: return [];
   }
@@ -1031,7 +1073,6 @@ function healTrashDuplicates(): boolean {
   const seen = new Set<string>();
   const out: TrashItem[] = [];
   for (const t of store.trashItems) {
-    if (isRetiredTrashItem(t)) { out.push(t); continue; }
     const key = `${t.originalTable}:${t.originalId}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -1057,7 +1098,7 @@ export async function initStore(): Promise<number> {
   // 权限被阻塞时不动内存 store：既不能把磁盘数据误判为空，更不能把空数组写回覆盖磁盘
   if (await storageAccessBlocked()) return INIT_STORAGE_BLOCKED;
 
-  const { data: backend, oldFormat, hasPreviousState, archive, hasLegacyMapsFile, legacyMaps = [] } = await readBackend();
+  const { data: backend, oldFormat, hasPreviousState } = await readBackend();
   // Avoid creating a legacy database on first launch. If the check fails, still
   // try the migration and don't report the store as fresh.
   const hadLegacy = await legacyDatabaseExists().catch(() => true);
@@ -1065,8 +1106,6 @@ export async function initStore(): Promise<number> {
 
   clearStore();
   if (backend) applyData(backend);
-  // Preferences stay independent of the startup data snapshot so edits are read on every launch.
-  const hadPreferences = await initializePreferences(oldFormat ? backend?.preferences : undefined);
 
   const legacyHasData = legacy ? Object.values(legacy).some(arr => Array.isArray(arr) && arr.length > 0) : false;
   if (legacyHasData && legacy) mergeLegacy(legacy);
@@ -1075,32 +1114,11 @@ export async function initStore(): Promise<number> {
 
   const healed = healTrashDuplicates();
   const boundCourses = bindLegacyCourses(store.semester[0]?.startDate);
+  const linkedMindTasks = syncMindTasks(store);
+  const recoveredActivity = recoverTimestampedActivity(store);
 
-  if (archive) {
-    const dir = getStoragePath();
-    const name = 'dailynote-legacy-archive.json';
-    const existing = await readFile(dir, name);
-    if (existing !== archive && (existing !== null || !await writeFile(dir, name, archive))) {
-      throw new Error('无法保存旧版数据归档');
-    }
-  }
-
-  const dir = getStoragePath();
-  const storedCards = oldFormat ? await readCategory<KnowledgeCardLibrary>(dir, CATEGORY_FILES.knowledgeCards) : null;
-  const storedLibrary = storedCards?.find(library => library.id === 1) ?? storedCards?.[0];
-  // A restart can occur after a full write but before removal of the old bundle.
-  if (storedLibrary?.legacyMapsMigrated) store.knowledgeCards = storedCards!;
-  const currentLibrary = store.knowledgeCards.find(library => library.id === 1) ?? store.knowledgeCards[0];
-  const storedMaps = !currentLibrary?.legacyMapsMigrated && (hasLegacyMapsFile || oldFormat)
-    ? await readCategory<LegacyKnowledgeMap>(dir, LEGACY_KNOWLEDGE_MAPS_FILE)
-    : null;
-  const libraries = currentLibrary?.legacyMapsMigrated ? store.knowledgeCards : [...(storedCards ?? []), ...store.knowledgeCards];
-  const migratedCards = migrateLegacyKnowledgeCards([...(storedMaps ?? []), ...legacyMaps], libraries);
-
-  if (legacyHasData || oldFormat || healed || boundCourses) {
-    if (migratedCards) store.knowledgeCards = migratedCards;
+  if (legacyHasData || oldFormat || healed || boundCourses || linkedMindTasks || recoveredActivity) {
     const ok = await persist();
-    if (!ok && migratedCards) throw new Error('无法保存迁移的知识卡片');
     if (ok) {
       if (oldFormat) {
         await deleteFile(getStoragePath(), oldSingleRel());
@@ -1113,17 +1131,10 @@ export async function initStore(): Promise<number> {
         }
       }
     }
-  } else if (migratedCards) {
-    // Save the records and the completion flag together before exposing the collector.
-    const previous = store.knowledgeCards;
-    if (!await mutate(() => { store.knowledgeCards = migratedCards; })) {
-      store.knowledgeCards = previous;
-      throw new Error('无法保存迁移的知识卡片');
-    }
   }
 
   const total = countData();
-  if (!hasPreviousState && !hadLegacy && !hadPreferences) return -1;
+  if (!hasPreviousState && !hadLegacy) return -1;
   return total;
 }
 
@@ -1142,6 +1153,146 @@ async function readLegacyTablesSafe(): Promise<Partial<StoreShape> | null> {
   }
 }
 
+// ============ 导入 / 导出 ============
+
+/** 从 JSON 字符串导入（备份包格式；纯合并：存在则更新、不存在则新增）。返回合并的记录数 */
+export async function importJSONIntoStore(json: string): Promise<number> {
+  const clean = json.codePointAt(0) === 0xFEFF ? json.slice(1) : json;
+  const trimmed = clean.trimStart();
+  if (!trimmed) throw new Error('文件内容为空，无法导入');
+  if (!trimmed.startsWith('{')) throw new Error('文件内容不是 JSON 文本');
+  try {
+    JSON.parse(trimmed);
+  } catch {
+    throw new Error('文件内容不是有效的 JSON');
+  }
+  const data = parseStorageData(trimmed);
+  if (!data) throw new Error('不是 DailyNote 数据文件');
+  const referenced = [...data.longTermGoals.map(g => g.encrypted?.keyId), ...data.trashItems.map(t => t.originalData?.encrypted?.keyId), ...data.activityEvents.map(e => e.encrypted?.keyId)].filter(Boolean);
+  for (const keyId of referenced) if (![...data.gardenKeys, ...store.gardenKeys].some(k => k.keyId === keyId)) throw new Error('备份缺少花园密钥，无法安全导入');
+  const security = await import('./gardenSecurity'); security.lockGarden();
+  // 导入旧备份时，先按备份自己的学期补归属，避免误绑成本机学期。
+  const importedStart = data.semester[0]?.startDate;
+  if (importedStart) {
+    for (const course of data.courses) course.semesterStartDate ??= importedStart;
+    for (const item of data.trashItems) {
+      if (item.originalTable === 'courses' && item.originalData) item.originalData.semesterStartDate ??= importedStart;
+    }
+  }
+  let count = 0;
+  await mutate(() => {
+    bindLegacyCourses(store.semester[0]?.startDate);
+    count = mergeIntoStore(data);
+    bindLegacyCourses(store.semester[0]?.startDate);
+    syncMindTasks(store);
+    recoverTimestampedActivity(store);
+  }, { skipActivity: true });
+  resetNextId();
+  // Older backups omit preferences: preserve this device's combinations in that case.
+  const imported = JSON.parse(trimmed);
+  if (Array.isArray(imported.courseTimeCombinations)) {
+    saveCourseTimeCombinations(imported.courseTimeCombinations);
+  }
+  return count;
+}
+
+/** 当前内存数据的 JSON 字符串（手动导出 / 备份包） */
+export function exportJSON(): string {
+  if (pendingGardenEncryption()) throw new Error('请先进入秘密花园，验证原密码并完成加密迁移，再导出备份');
+  return JSON.stringify({ ...snapshot(), courseTimeCombinations: loadCourseTimeCombinations() }, null, 2);
+}
+
+function backupFileName(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `dailynote-backup-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.json`;
+}
+
+/**
+ * 导出备份文件：
+ * - Web：触发浏览器下载，返回下载文件名
+ * - Android：写入 Documents/<dir>/<文件名>，返回完整显示路径
+ * 备份文件仅作存档，不会被读取逻辑当作运行期存储。
+ */
+export async function exportBackupFile(): Promise<string> {
+  const json = exportJSON();
+  const name = backupFileName();
+  if (isCapacitor()) {
+    const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+    const dir = getStoragePath();
+    const rel = nativePath(dir, name);
+    // 与 writeFile 相同：缺省 encoding 会被当 base64 写出乱码
+    await Filesystem.writeFile({ path: rel, data: json, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
+    return `Documents/${rel}`;
+  }
+  // Web：触发浏览器下载
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return name;
+}
+
+/** 后端是否已有数据（供首次向导 / 恢复提示使用） */
+export async function storeHasData(): Promise<boolean> {
+  const { data } = await readBackend();
+  return data ? hasAny(data) : false;
+}
+
+/** 探测某路径是否已有数据（不切换当前路径）。返回 false 也可能表示该处文件损坏。 */
+export async function hasDataAt(path: string): Promise<boolean> {
+  const probe = await readBackendAt(path);
+  if (!probe || probe === 'CORRUPT') return false;
+  return hasAny(probe);
+}
+
+/** 列出 Documents 根目录下的子目录，供「浏览已有目录」点选。
+ *  - Android：真实读取系统 Documents 下的文件夹（与存储模型 Documents/<子目录> 一致）
+ *  - Web：无真实目录，返回空数组（Web 数据在浏览器内置存储，路径仅作区分） */
+export async function listSubdirs(): Promise<string[]> {
+  if (!isCapacitor()) return [];
+  try {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const res = await Filesystem.readdir({ path: '', directory: Directory.Documents });
+    return (res.files || [])
+      .filter(f => f.type === 'directory')
+      .map(f => f.name)
+      .sort();
+  } catch (e) {
+    console.error('读取 Documents 目录失败:', e);
+    return [];
+  }
+}
+
+/**
+ * 更改存储位置。
+ * - 新位置已有有效数据 → 切换并恢复该处数据（原位置数据保留在盘上）
+ * - 新位置无数据/文件损坏 → 报错（损坏不覆盖）；无数据则把当前数据写入新位置
+ */
+export async function changeStoragePath(path: string): Promise<{ recovered: boolean; count: number }> {
+  // 未授权时探测必然失败，随后会把空数据写往新位置覆盖磁盘——先拒绝
+  if (await storageAccessBlocked()) throw new Error('需要先授予「所有文件访问」权限');
+  await flush();
+  const probe = await readBackendAt(path);
+  if (probe === 'CORRUPT') throw new Error('目标位置存在文件但已损坏，未做任何更改');
+  const hasData = !!probe && hasAny(probe);
+
+  setStoragePath(path);
+
+  if (hasData) {
+    const count = await initStore();
+    return { recovered: true, count };
+  }
+  const ok = await persist();
+  if (!ok) throw new Error('写入新位置失败');
+  return { recovered: false, count: countData() };
+}
+
 // ============ 供 CRUD 使用 ============
 
 export function getStore(): StoreShape {
@@ -1150,6 +1301,15 @@ export function getStore(): StoreShape {
 
 export { deepClone, countData, store };
 
+/**
+ * 忽略快照，按磁盘现状全量重读（外部改过文件时用）。
+ * 返回与 initStore 相同：-2 权限阻塞 / -1 首次使用 / >0 记录数。
+ */
+export async function rescanFromDisk(): Promise<number> {
+  await flush();
+  await clearSnapshot();
+  return initStore();
+}
 // ============ 测试专用重置 ============
 
 export async function _resetForTest(): Promise<void> {
@@ -1157,9 +1317,6 @@ export async function _resetForTest(): Promise<void> {
   if (snapTimer) clearTimeout(snapTimer);
   snapTimer = null;
   clearStore();
-  preferences = defaultPreferences();
-  preferencesConfigured = false;
-  preferenceListeners.clear();
   for (const table of Object.keys(nextId) as NumericTable[]) nextId[table] = 1;
   persistQueue = Promise.resolve();
   lastPersistError = null;

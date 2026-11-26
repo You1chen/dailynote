@@ -1,12 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-export type SwipeSurface = 'home' | 'navigation' | 'quick-note';
-
-export function routeSwipeSurface(pathname: string, navigationOpen: boolean, quickNoteOpen: boolean): SwipeSurface | undefined {
-  if (quickNoteOpen) return 'quick-note';
-  if (pathname !== '/') return undefined;
-  return navigationOpen ? 'navigation' : 'home';
-}
+export type SwipeSurface = 'page' | 'home' | 'navigation' | 'quick-note';
 export type SwipeAction = 'open-navigation' | 'close-navigation' | 'open-quick-note' | 'close-quick-note';
 export interface SwipePreview { action: SwipeAction; distance: number }
 
@@ -23,7 +17,7 @@ const CLICK_SUPPRESSION_MS = 350;
 const EXCLUDED_TARGET = [
   'input', 'textarea', 'select', 'audio', 'video', '[contenteditable]:not([contenteditable="false"])',
   '[data-app-swipe="off"]', '.task-ball', '.tb-mask', '.tb-sheet', '.modal-overlay', '.cd-mask',
-  '.course-modal-overlay', '.fs-overlay', '.bs-overlay', '.pref-overlay',
+  '.course-modal-overlay', '.fs-overlay', '.bs-overlay', '.pref-overlay', '.mind-mask',
   '.kce-add', '.kce[aria-busy="true"]', '.kce-export-backdrop', '.kce-image-menu-backdrop', '.kce-comments',
 ].join(', ');
 

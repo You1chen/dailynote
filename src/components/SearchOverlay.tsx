@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { searchEverything } from '../db';
 import type { SearchHit } from '../utils/search';
+import { hiddenGardenEntries } from '../utils/gardenEntry';
 import './SearchOverlay.css';
 
 interface Props {
@@ -32,6 +33,8 @@ export default function SearchOverlay({ open, onClose, onNavigate }: Props) {
   useEffect(() => {
     if (!open) return undefined;
     let alive = true;
+    const hidden = hiddenGardenEntries(q);
+    if (hidden.length) { setHits(hidden); setBusy(false); return undefined; }
     const text = q.trim();
     if (!text) { setHits([]); setBusy(false); return undefined; }
     setBusy(true);
@@ -74,8 +77,9 @@ export default function SearchOverlay({ open, onClose, onNavigate }: Props) {
         </div>
 
         <div className="sr-body">
-          {!q.trim() ? null
-            : busy && hits.length === 0 ? (
+          {!q.trim() ? (
+            <div className="sr-empty">输入要查找的内容</div>
+          ) : busy && hits.length === 0 ? (
             <div className="sr-empty">搜索中...</div>
           ) : hits.length === 0 ? (
             <div className="sr-empty">没有找到</div>

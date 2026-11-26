@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useRouteBack } from '../hooks/useRouteBack';
 import { ArrowLeft, History, Filter, Pencil, X } from 'lucide-react';
 import { getCards } from '../db/knowledgeCards';
+import { getAllIdeas } from '../db';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import { useSheetDrag } from '../hooks/useSheetDrag';
 import { collectMemories, deal, matchesDay, type Memory } from '../utils/wanderDeck';
@@ -28,7 +29,7 @@ export default function Walk() {
     let live = true;
     setError(false);
     getCards().then(async cards => {
-      const memories = cards.length ? deal(collectMemories(cards)) : [];
+      const memories = cards.length ? deal(collectMemories(cards, await getAllIdeas())) : [];
       if (live) setAll(memories);
     }).catch(() => {
       if (live) setError(true);
@@ -81,7 +82,10 @@ export default function Walk() {
             : all.length ? <>
               <p>{hist ? '往年的今天还没有记录' : '这段时间没有记录'}</p>
               <button onClick={() => { setHist(false); setRange(['', '']); }}>查看全部时间</button>
-            </> : <Link className="walk-create-card" to="/reflection?cards=new">创建第一张卡片</Link>}
+            </> : <>
+              <p>回忆会随机翻出你以前创建的卡片。</p>
+              <Link className="walk-create-card" to="/reflection?cards=new">创建第一张卡片</Link>
+            </>}
         </div>
       )}
       <dialog ref={dialog} className="walk-dialog" aria-label={sheet ? '时间区间筛选' : '阅读原文'} onCancel={e => {
@@ -107,7 +111,7 @@ export default function Walk() {
             <article className="walk-detail-card" onClick={e => { if (!(e.target as HTMLElement).closest('audio,img,button')) beginEdit(); }}>
               <time>{detail.day} · {new Date(detail.time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</time>
               <h2>{detail.title}</h2>
-              {detail.blocks.map(block => (
+              {detail.kind === '灵感' ? <p>{detail.text}</p> : detail.blocks.map(block => (
                 <div key={block.id}>
                   {block.kind === 'text' ? <p>{block.text}</p> : block.kind === 'image' ? <img src={block.data} alt="卡片图片" /> : <audio controls preload="none" src={block.data} />}
                 </div>

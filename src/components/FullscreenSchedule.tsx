@@ -175,7 +175,7 @@ export default function FullscreenSchedule({
                       {block.startTime}-{block.endTime}
                     </span>
                     <span className="fs-time-block-title">
-                      {block.taskTitle}
+                      {block.taskTitle || '点击编辑...'}
                     </span>
                     {clTotal > 0 && (
                       <span className="fs-time-block-meta">

@@ -14,27 +14,41 @@ export default defineConfig({
       : [
           VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['icons/icon.svg'],
+            includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'],
             manifest: {
-              name: '记',
-              short_name: '记',
-              description: '计划·反思·收获 — 三位一体的日程管理系统',
-              theme_color: '#1a1a2e',
-              background_color: '#ffffff',
+              name: 'DailyNote · 日程与卡片',
+              short_name: 'DailyNote',
+              description: '两页的日程、待办、卡片关系网，本地优先。',
+              lang: 'zh-CN',
+              theme_color: '#f5f5f7',
+              background_color: '#f5f5f7',
               display: 'standalone',
               orientation: 'portrait',
               start_url: '/',
               icons: [
                 {
+                  src: 'icons/icon-192.png',
+                  sizes: '192x192',
+                  type: 'image/png',
+                  purpose: 'any',
+                },
+                {
+                  src: 'icons/icon-512.png',
+                  sizes: '512x512',
+                  type: 'image/png',
+                  purpose: 'any',
+                },
+                {
                   src: 'icons/icon.svg',
                   sizes: '512x512',
                   type: 'image/svg+xml',
-                  purpose: 'any maskable',
+                  purpose: 'maskable',
                 },
               ],
             },
             workbox: {
-              globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+              globPatterns: ['**/*.{js,css,html,ico,png,svg,traineddata}'],
+              maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
               runtimeCaching: [
                 {
                   urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

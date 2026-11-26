@@ -35,20 +35,24 @@ vi.mock('react-router-dom', () => ({
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
   NavLink: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }));
-vi.mock('../src/db/knowledgeCards', () => ({
-  getCards: async () => state.cards,
-  getCardAudioExportPath: async () => 'Music/Notes',
+vi.mock('../src/db', () => ({ getAllIdeas: vi.fn(async () => [{ id: 1, kind: 'idea', text: '一条旧灵感', date: '2026-11-20', createdAt: 1 }]) }));
+vi.mock('../src/db/knowledgeCards', () => ({ getCards: async () => state.cards }));
+vi.mock('../src/hooks/useIdeas', () => ({
+  useIdeas: () => ({ byKind: { wish: [{ id: 1 }, { id: 3 }], chore: [{ id: 2 }], idea: [{ date: '2026-11-20' }] }, countByDate: () => ({}) }),
 }));
 vi.mock('../src/contexts/BackButtonContext', () => ({ useRegisterBackHandler: vi.fn() }));
 vi.mock('../src/hooks/useRouteBack', () => ({ useRouteBack: () => state.back }));
 vi.mock('../src/components/DayNavigator', () => ({ default: () => null }));
+vi.mock('../src/components/MindSheet', () => ({ default: () => null }));
 vi.mock('../src/components/KnowledgeCardEditor', () => ({ default: () => null }));
 vi.mock('../src/components/ConfirmDialog', () => ({ default: () => null }));
 vi.mock('../src/components/WalkEdit', () => ({ default: () => null }));
 vi.mock('../src/pages/WalkMotion', () => ({ default: () => null }));
 
+import { getAllIdeas } from '../src/db';
 import KnowledgeCardCollector from '../src/components/KnowledgeCardCollector';
 import KnowledgeCardEditor from '../src/components/KnowledgeCardEditor';
+import MindSheet from '../src/components/MindSheet';
 import ReflectionPage from '../src/pages/Reflection';
 import Walk from '../src/pages/Walk';
 import WalkMotion from '../src/pages/WalkMotion';
@@ -81,10 +85,14 @@ beforeEach(() => {
 });
 
 describe('记事 and 回忆 navigation', () => {
-  it('keeps only the card collector entry on 记事', () => {
-    const page = renderPage(ReflectionPage);
-    expect(find(page, withLabel('杂念'))).toBeUndefined();
-    expect(find(page, withLabel('卡片收集器'))).toBeDefined();
+  it('opens the three-kind sheet from the single 杂念 entry', () => {
+    const notes = () => renderPage(ReflectionPage);
+    find(notes(), withLabel('杂念'))!.props.onClick();
+    const sheet = find(notes(), el => el.type === MindSheet)!;
+    expect(sheet.props).toMatchObject({ initialKind: 'wish', date: '2026-11-20' });
+    expect(sheet.props.kinds).toBeUndefined();
+    sheet.props.onClose();
+    expect(find(notes(), el => el.type === MindSheet)).toBeUndefined();
   });
 
   it('opens a fresh composer from home and closes it directly back to home', () => {
@@ -105,9 +113,10 @@ describe('记事 and 回忆 navigation', () => {
   it('opens the new card editor from the empty recall page and clears its query on close', async () => {
     renderPage(Walk);
     state.effects.forEach(effect => effect());
-    await vi.waitFor(() => expect(renderToStaticMarkup(renderPage(Walk))).toContain('创建第一张卡片'));
+    await vi.waitFor(() => expect(renderToStaticMarkup(renderPage(Walk))).toContain('回忆会随机翻出你以前创建的卡片。'));
     const link = find(renderPage(Walk), el => el.props.to === '/reflection?cards=new');
     expect(link?.props.children).toBe('创建第一张卡片');
+    expect(getAllIdeas).not.toHaveBeenCalled();
 
     state.values = [];
     state.params = new URLSearchParams('cards=new&date=2026-11-20');
@@ -123,52 +132,13 @@ describe('记事 and 回忆 navigation', () => {
     expect(editor.props.card).toMatchObject({ title: '', contents: [] });
   });
 
-  it('opens the exact encoded card from search and preserves the date when closing', async () => {
-    const id = '卡片 & #+/%2F';
-    const card = { id, title: '目标卡片', contents: [], createdAt: 1, updatedAt: 1 };
-    state.cards = [{ ...card, id: 'another' }, card];
-    state.params = new URLSearchParams(`date=2026-11-20&card=${encodeURIComponent(id)}`);
-    const collector = find(renderPage(ReflectionPage), el => el.type === KnowledgeCardCollector)!;
-    expect(collector.props).toMatchObject({ initialCardId: id, startWithNewCard: false });
-    state.params = new URLSearchParams('date=2026-11-20&card=another');
-    const anotherCollector = find(renderPage(ReflectionPage), el => el.type === KnowledgeCardCollector)!;
-    expect(anotherCollector.key).not.toBe(collector.key);
-
-    state.values = [];
-    const renderCollector = () => renderPage(() => KnowledgeCardCollector(collector.props));
-    renderCollector();
-    state.effects.forEach(effect => effect());
-    await vi.waitFor(() => {
-      const editor = renderCollector();
-      expect(editor.type).toBe(KnowledgeCardEditor);
-      expect(editor.props).toMatchObject({ card, audioExportPath: 'Music/Notes' });
-    });
-    renderCollector().props.onClose();
-    expect(renderCollector().type).not.toBe(KnowledgeCardEditor);
-    collector.props.onClose();
-    expect(state.setParams.mock.lastCall?.[0].toString()).toBe('date=2026-11-20');
-    expect(state.setParams.mock.lastCall?.[1]).toEqual({ replace: true });
-  });
-
-  it('shows a missing card message and keeps the collector available', async () => {
-    const renderCollector = () => renderPage(() => KnowledgeCardCollector({ initialCardId: 'missing', onClose: vi.fn() }));
-    renderCollector();
-    state.effects.forEach(effect => effect());
-    await vi.waitFor(() => {
-      const collector = renderCollector();
-      expect(collector.type).not.toBe(KnowledgeCardEditor);
-      expect(find(collector, el => el.props.role === 'alert')?.props.children).toBe('未找到这张卡片。');
-      expect(find(collector, withLabel('建立第一张卡片'))).toBeDefined();
-    });
-  });
-
-  it('continues to show saved cards in the recall deck', async () => {
+  it('continues to include cards and ideas when a saved card exists', async () => {
     state.cards = [{ id: 'card-1', title: '旧卡片', contents: [], createdAt: 1, updatedAt: 1 }];
     renderPage(Walk);
     state.effects.forEach(effect => effect());
     await vi.waitFor(() => {
       const deck = find(renderPage(Walk), el => el.type === WalkMotion);
-      expect(deck?.props.items.map((item: { kind: string }) => item.kind)).toEqual(['卡片']);
+      expect(deck?.props.items.map((item: { kind: string }) => item.kind)).toEqual(expect.arrayContaining(['卡片', '灵感']));
     });
   });
 });

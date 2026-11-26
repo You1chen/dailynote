@@ -4,23 +4,51 @@ import TaskBall from './components/TaskBall';
 import SideNav, { type NavGroup } from './components/SideNav';
 import DailyPlanPage from './pages/DailyPlan';
 import LongTermGoalsPage from './pages/LongTermGoals';
+import GardenGate from './components/GardenGate';
+import GardenPage from './pages/GardenPage';
 import ReflectionPage from './pages/Reflection';
 import TrashPage from './pages/Trash';
+import BackupRestorePage from './pages/BackupRestore';
 import SettingsPage from './pages/SettingsPage';
 import CoursesPage from './pages/CoursesPage';
 import WeekViewPage from './pages/WeekViewPage';
 import DdlPage from './pages/DdlPage';
 import ImportantPage from './pages/ImportantPage';
+import BacklogPage from './pages/BacklogPage';
+import SettlementPage from './pages/Settlement';
+import HelpDialog from './components/HelpDialog';
+import UpdateApkDialog from './components/UpdateApkDialog';
+import { apkUpdateSupported, findAutoUpdate } from './services/apkUpdate';
+import type { ApkFileInfo } from './utils/apkUpdate';
 import { BackButtonProvider, useRegisterBackHandler } from './contexts/BackButtonContext';
+import { usePreferences, type ThemeMode } from './hooks/usePreferences';
+import { useBacklogBadge } from './hooks/useBacklog';
 import { useDdlBadge } from './hooks/useDdlBadge';
 import { useImportantBadge } from './hooks/useImportantBadge';
 import { watchServiceWorkerUpdate } from './services/swUpdate';
-import { routeSwipeSurface, useAppSwipe, type SwipePreview } from './hooks/useAppSwipe';
+import { useAppSwipe, type SwipePreview } from './hooks/useAppSwipe';
 import KnowledgeCardCollector from './components/KnowledgeCardCollector';
 import type { QuickCardBackDetail } from './components/KnowledgeCardEditor';
 import HomeAlarm from './components/HomeAlarm';
 import { useRouteBack } from './hooks/useRouteBack';
 import './App.css';
+
+const AUTO_UPDATE_SKIP_KEY = 'dailynote_update_skip';
+
+/** 同一个 APK（路径、大小、修改时间）只自动提示一次。 */
+function autoUpdateKey(file: ApkFileInfo): string {
+  return `${file.path}|${file.size}|${file.modified}`;
+}
+
+function applyTheme(theme: ThemeMode) {
+  const root = document.documentElement;
+  if (theme === 'system') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = prefersDark ? 'dark' : 'light';
+  } else {
+    root.dataset.theme = theme;
+  }
+}
 
 const Walk = ReactLazy(() => import('./pages/Walk'));
 const SWIPE_SETTLE_MS = 240;
@@ -30,14 +58,16 @@ function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const routeBack = useRouteBack();
+  const inGarden = location.pathname === '/garden' || location.pathname.startsWith('/garden/');
+  const immersive = inGarden || location.pathname === '/wander';
   const home = location.pathname === '/';
   const quickNote = location.pathname === '/reflection' && !!location.state?.fromHomeQuickNote;
   const marker = location.state?.fullscreenNavigation as { base: Location; group?: NavGroup } | undefined;
-  const homeNavigation = home && marker?.base?.pathname === '/' ? marker : undefined;
-  const navOpen = !!homeNavigation;
+  const navOpen = !!marker;
   const quickBase = location.state?.quickCardBase as Location | undefined;
-  const underlying = homeNavigation?.base ?? (quickNote ? quickBase ?? { ...location, pathname: '/', hash: '', search: '', state: null } : location);
+  const underlying = marker?.base ?? (quickNote ? quickBase ?? { ...location, pathname: '/', hash: '', search: '', state: null } : location);
   const [searchKey, setSearchKey] = useState<string>();
+  const [helpOpen, setHelpOpen] = useState(false);
   const searchOpen = navOpen && searchKey === location.key;
   const showNav = useCallback((base: Location, group?: NavGroup) => {
     navigate(`${base.pathname}${base.search}${base.hash}`, {
@@ -45,9 +75,7 @@ function AppShell() {
       preventScrollReset: true,
     });
   }, [navigate]);
-  const openNav = useCallback(() => {
-    if (home && !navOpen) showNav(underlying);
-  }, [home, navOpen, showNav, underlying]);
+  const openNav = useCallback(() => showNav(underlying), [showNav, underlying]);
   const closeNav = useCallback(() => navigate(-1), [navigate]);
   const openSearch = useCallback(() => setSearchKey(location.key), [location.key]);
   const closeSearch = useCallback(() => setSearchKey(undefined), []);
@@ -74,7 +102,7 @@ function AppShell() {
   useEffect(() => {
     if (navOpen) {
       const onKey = (event: KeyboardEvent) => {
-        if (event.key !== 'Escape') return;
+        if (event.key !== 'Escape' || helpOpen) return;
         event.preventDefault();
         event.stopPropagation();
         if (searchOpen) closeSearch();
@@ -88,7 +116,7 @@ function AppShell() {
     }
     if (previouslyOpen.current) opener.current?.focus({ preventScroll: true });
     previouslyOpen.current = false;
-  }, [navOpen, searchOpen, closeNav, closeSearch]);
+  }, [navOpen, searchOpen, helpOpen, closeNav, closeSearch]);
 
   useRegisterBackHandler(() => {
     if (!navOpen) return false;
@@ -179,7 +207,7 @@ function AppShell() {
     }
   }
 
-  const swipeSurface = searchOpen ? undefined : routeSwipeSurface(location.pathname, navOpen, quickNote);
+  const swipeSurface = searchOpen || helpOpen || immersive ? undefined : navOpen ? 'navigation' : quickNote ? 'quick-note' : home ? 'home' : 'page';
   useAppSwipe({
     context: `${location.key}:${swipeSurface}`,
     // Let a started gesture own its direction, but block new gestures during a settling animation.
@@ -190,38 +218,98 @@ function AppShell() {
   const openingQuick = motion?.action === 'open-quick-note';
   const renderQuick = quickNote || openingQuick;
   useLayoutEffect(() => { quickPanel.current?.toggleAttribute('inert', !quickNote); }, [quickNote, renderQuick]);
+  const { prefs } = usePreferences();
+  const backlogBadge = useBacklogBadge();
   const ddlBadge = useDdlBadge();
   const importantBadge = useImportantBadge();
   // 有新版本接管（PWA）：提示刷新，避免一直看在旧缓存上
   const [updateReady, setUpdateReady] = useState(false);
   useEffect(() => { watchServiceWorkerUpdate(() => setUpdateReady(true)); }, []);
 
+  // 首次引导最后一步直接指向说明书：打开应用内「帮助」。
+  useEffect(() => {
+    const openHelp = () => setHelpOpen(true);
+    window.addEventListener('dailynote-open-help', openHelp);
+    return () => window.removeEventListener('dailynote-open-help', openHelp);
+  }, []);
+
+  // 应用内更新：设置页入口与启动时自动检测更高版本的安装包。
+  // 自动提示被关掉后，同一个 APK 不再打扰；换成新文件会重新提示。
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [pendingAutoUpdate, setPendingAutoUpdate] = useState<ApkFileInfo | null>(null);
+  useEffect(() => {
+    const openUpdate = () => {
+      setPendingAutoUpdate(null);
+      setUpdateOpen(true);
+    };
+    window.addEventListener('dailynote-open-update', openUpdate);
+    return () => window.removeEventListener('dailynote-open-update', openUpdate);
+  }, []);
+  useEffect(() => {
+    if (!apkUpdateSupported()) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void findAutoUpdate().then(file => {
+        if (cancelled || !file) return;
+        let skipped: string | null = null;
+        try { skipped = localStorage.getItem(AUTO_UPDATE_SKIP_KEY); } catch { /* 隐私模式 */ }
+        if (skipped === autoUpdateKey(file)) return;
+        setPendingAutoUpdate(file);
+        setUpdateOpen(true);
+      });
+    }, 1600);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
+  const closeUpdate = () => {
+    if (pendingAutoUpdate) {
+      try { localStorage.setItem(AUTO_UPDATE_SKIP_KEY, autoUpdateKey(pendingAutoUpdate)); } catch { /* 忽略 */ }
+      setPendingAutoUpdate(null);
+    }
+    setUpdateOpen(false);
+  };
+
+  // 应用主题
+  useEffect(() => {
+    applyTheme(prefs.theme);
+    if (prefs.theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = () => applyTheme('system');
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+  }, [prefs.theme]);
+
   return (
     <div ref={swipeShell} className="app-gesture-shell" data-swipe={motion?.action} data-swipe-phase={motion?.phase}>
-      {home && <SideNav open={navOpen} group={marker?.group} onGroup={group => showNav(underlying, group)} searchOpen={searchOpen}
-        ddlBadge={ddlBadge} importantBadge={importantBadge}
-        onClose={closeNav} onShowSearch={openSearch} onCloseSearch={closeSearch} onSelect={selectRoute} />}
+      {!immersive && <SideNav open={navOpen} group={marker?.group} onGroup={group => showNav(underlying, group)} searchOpen={searchOpen} avatar={prefs.avatar} username={prefs.username}
+        badge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge}
+        onClose={closeNav} onHelp={() => setHelpOpen(true)} onShowSearch={openSearch} onCloseSearch={closeSearch} onSelect={selectRoute} />}
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <UpdateApkDialog open={updateOpen} onClose={closeUpdate} />
 
       <div ref={page} className="app-page" aria-hidden={navOpen || quickNote || undefined}>
-        {home && <button type="button" ref={opener} className="app-nav-toggle" onClick={openNav}
+        {!immersive && !quickNote && <button type="button" ref={opener} className="app-nav-toggle" onClick={openNav}
           aria-haspopup="dialog" aria-expanded={navOpen} aria-controls="app-navigation">打开导航</button>}
         <div className="app-main">
         <Routes location={underlying}>
           <Route path="/wander" element={<Suspense fallback={null}><Walk /></Suspense>} />
-          <Route path="/" element={<DailyPlanPage alarm={<HomeAlarm ddlBadge={ddlBadge} importantBadge={importantBadge} />} />} />
+          <Route path="/" element={<DailyPlanPage alarm={<HomeAlarm backlogBadge={backlogBadge} ddlBadge={ddlBadge} importantBadge={importantBadge} />} />} />
           <Route path="/goals" element={<LongTermGoalsPage />} />
+          <Route path="/garden/*" element={<GardenGate><GardenPage /></GardenGate>} />
+          <Route path="/backlog" element={<BacklogPage />} />
           <Route path="/reflection" element={<ReflectionPage />} />
           <Route path="/harvest" element={<Navigate to={`/reflection${location.search}`} replace />} />
           <Route path="/trash" element={<TrashPage />} />
+          <Route path="/backup" element={<BackupRestorePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/week" element={<WeekViewPage />} />
           <Route path="/ddl" element={<DdlPage />} />
           <Route path="/important" element={<ImportantPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/settlement" element={<SettlementPage />} />
         </Routes>
         </div>
-        {home && <TaskBall />}
+        {!immersive && !quickNote && underlying.pathname !== '/settings' && <TaskBall />}
 
         {updateReady && (
           <div className="app-update-bar" role="status">
@@ -237,11 +325,12 @@ function AppShell() {
   );
 }
 
-export default function App() {
+export default function App({ children }: { children?: React.ReactNode }) {
   return (
     <BackButtonProvider>
       <HashRouter>
         <AppShell />
+        {children}
       </HashRouter>
     </BackButtonProvider>
   );

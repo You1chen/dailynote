@@ -1,6 +1,6 @@
 # Android 离线 OCR 模型
 
-记（DailyNote）的图片文字识别使用 Google ML Kit 中文文字识别：
+DailyNote 的图片文字识别使用 Google ML Kit 中文文字识别：
 
 ```gradle
 implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
@@ -29,7 +29,7 @@ Gradle 解析依赖后，会把 AAR 里的模型资源合并进 APK。安装后�
 构建后检查 APK：
 
 ```bash
-unzip -l android/app/build/outputs/apk/debug/记.apk | grep mlkit-google-ocr-models
+unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep mlkit-google-ocr-models
 ```
 
 应能看到 `assets/mlkit-google-ocr-models/` 下的模型文件。

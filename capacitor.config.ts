@@ -1,8 +1,8 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.ji.note',
-  appName: '记',
+  appId: 'com.dailynote.app',
+  appName: 'DailyNote',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

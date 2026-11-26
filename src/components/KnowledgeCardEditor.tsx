@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Download, Eye, Image as ImageIcon, MessageCircle, Mic, Plus, RefreshCw, Square, Trash2, X } from 'lucide-react';
 import type { KnowledgeCard, KnowledgeCardContent, KnowledgeStatus } from '../types/knowledge';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
-import { fileToCompressedDataURL } from '../utils/imageCompression';
+import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { DEFAULT_AUDIO_EXPORT_PATH, copyImageBlob, exportAudioBlob, exportCardData, exportImageBlob } from '../utils/knowledgeCards';
 import ConfirmDialog from './ConfirmDialog';
 import CardTypeMenu from './CardTypeMenu';
@@ -519,9 +519,10 @@ export function KnowledgeCardEditor({ card, onSave, onClose, audioExportPath = D
     {fullscreenImage && <div className="kce-fullscreen" role="dialog" aria-modal="true" aria-label="全屏图片"><button type="button" onClick={() => setFullscreenImage(null)} aria-label="关闭全屏图片"><X size={25} /></button><img src={fullscreenImage} alt="卡片图片全屏预览" /></div>}
     {exportOpen && <div className="kce-export-backdrop" onClick={() => setExportOpen(false)}><section className="kce-export-dialog" role="dialog" aria-modal="true" aria-label={exportKind === 'image' ? '保存图片' : '导出卡片'} onClick={event => event.stopPropagation()}>
       <h3>{exportKind === 'image' ? '保存图片' : '导出卡片'}</h3>
+      <p>{exportKind === 'image' ? '图片会保存为单独文件。' : '完整卡片数据会导出为 JSON，包含文字、图片、录音和评论。'}</p>
       {Capacitor.isNativePlatform()
         ? <label>保存位置<input value={exportPath} onChange={event => { setExportPath(event.target.value); setExportError(''); }} placeholder="例如 DailyNote/cards" autoFocus /></label>
-        : null}
+        : <small>确认后选择保存位置；浏览器不支持选择器时会下载到默认目录。</small>}
       {exportError && <p className="kce-error" role="alert">{exportError}</p>}
       <div className="kce-export-actions"><button type="button" onClick={() => setExportOpen(false)}>取消</button><button type="button" className="kce-primary" disabled={exportingCard} onClick={() => void confirmExport()}>{exportingCard ? '导出中…' : '确认导出'}</button></div>
     </section></div>}

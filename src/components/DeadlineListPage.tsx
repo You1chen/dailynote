@@ -16,7 +16,7 @@ import {
   type PlannedRow,
 } from '../utils/extract';
 import { linkIcon, linkKey, linkText, normalizeLinks } from '../utils/ddlLinks';
-import { fileToCompressedDataURL } from '../utils/imageCompression';
+import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { recognizeImage, ocrAvailable } from '../services/ocr';
 import ConfirmDialog from './ConfirmDialog';
 import Lightbox from './Lightbox';
@@ -551,7 +551,9 @@ export default function DeadlineListPage<T extends DeadlineBase>({
                       </span>
                     ))}
                   </div>
-                ) : null}
+                ) : (
+                  <p className="ddl-hint">可关联本学期在上的课程，或自定义分组里的条目</p>
+                )}
               </div>
             )}
 

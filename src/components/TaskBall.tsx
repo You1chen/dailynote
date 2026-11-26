@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTaskBoard } from '../hooks/useTaskBoard';
+import MindSheet from './MindSheet';
+import { usePreferences } from '../hooks/usePreferences';
 import { useSheetDrag } from '../hooks/useSheetDrag';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import ConfirmDialog from './ConfirmDialog';
@@ -105,9 +108,12 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export default function TaskBall() {
+  const navigate = useNavigate();
   const { nodes, leaves, shelved, undone, saveTree, toggle, toggleTimer, remove, shelve, reorder, clearExpired } = useTaskBoard();
+  const { prefs } = usePreferences();
 
   const [panel, setPanel] = useState<Panel>(null);
+  const [mindOpen, setMindOpen] = useState(false);
   const [lines, setLines] = useState<TaskRow[]>([]);
   const [draftRowId, setDraftRowId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ index: number; title: string } | null>(null);
@@ -463,11 +469,12 @@ export default function TaskBall() {
     if (confirmAction) { setConfirmAction(null); return true; }
     if (deleteLineIndex !== null) { setDeleteLineIndex(null); return true; }
     if (lineMenu !== null) { setLineMenu(null); return true; }
+    if (mindOpen) return false; // MindSheet handles its own sub-editor before closing.
     if (chain) { setChain(null); return true; }
     if (panel === 'editor') { void saveAndExitEditor(null); return true; }
     if (panel) { setPanel(null); return true; }
     return false;
-  }, [confirmAction, deleteLineIndex, lineMenu, chain, panel, busy, lines, editing, saveTree]);
+  }, [confirmAction, deleteLineIndex, lineMenu, chain, panel, mindOpen, busy, lines, editing, saveTree]);
 
   async function listAction(action: () => Promise<void>) {
     if (actionPending.current) return;
@@ -724,6 +731,7 @@ export default function TaskBall() {
   return (
     <>
       <button
+        data-tour="todo-ball"
         className={`task-ball ${undone > 0 ? 'task-ball--num' : 'task-ball--word'}`}
         style={{ right: pos.right, bottom: pos.bottom }}
         onPointerDown={onBallPointerDown}
@@ -742,6 +750,7 @@ export default function TaskBall() {
             <div className="tb-head">
               <span className="tb-title">任务清单</span>
               <span className="tb-head-acts">
+                <button className="tb-link" onClick={() => setMindOpen(true)}>杂念</button>
                 <button className="tb-link" disabled={listBusy || !!listDrag} onClick={openEditor}>编辑任务</button>
               </span>
             </div>
@@ -760,7 +769,9 @@ export default function TaskBall() {
             </div>
 
             {saveError && <p className="tb-error" role="alert">{saveError}</p>}
-            {listDrag?.backlog && <p className="tb-list-hint tb-list-hint--active">松手移入遗留</p>}
+            {leaves.length > 0 && <p className={`tb-list-hint${listDrag?.backlog ? ' tb-list-hint--active' : ''}`}>
+              {listDrag ? (listDrag.backlog ? '松手移入遗留' : '拖过末行可移入遗留') : '单击计时 · 双击完成或撤销 · 长按拖动'}
+            </p>}
             <div className="tb-foot tb-foot--split">
               <span>待办 {undone} · 已结束 {done}</span>
               <button className="tb-link" onClick={() => setPanel('shelved')}>
@@ -796,7 +807,7 @@ export default function TaskBall() {
             </div>
 
             {saveError && <p className="tb-error" role="alert">{saveError}</p>}
-            <div className="tb-foot">遗留 {shelved.length} 条</div>
+            <div className="tb-foot">遗留 {shelved.length} 条 · 并入后回到原位置</div>
           </div>
         </div>
       )}
@@ -816,7 +827,7 @@ export default function TaskBall() {
 
               <>
                 <div className="tb-lines" onClick={() => { if (!lines.length && !editing) newLine(); }}>
-                  {lines.length === 0 && <div className="tb-empty">还没有任务</div>}
+                  {lines.length === 0 && <div className="tb-empty">点按这里新增第一行</div>}
                   {/* Keep the focused input's DOM position stable; CSS order follows the tree. */}
                   {lines.map((l, i) => ({ l, i })).sort((a, b) => Number(b.i === editing?.index) - Number(a.i === editing?.index)).map(({ l, i }) => {
                     const isEditing = editing?.index === i;
@@ -923,10 +934,17 @@ export default function TaskBall() {
         </div>
       )}
 
+      {mindOpen && (
+        <MindSheet
+          onClose={() => setMindOpen(false)}
+          onBrowseDates={() => { setMindOpen(false); navigate('/reflection'); }}
+        />
+      )}
       {/* 全部完成：自动跳出庆祝 */}
       <CelebrationDialog
         open={celebration !== null}
         count={celebration ?? 0}
+        username={prefs.username}
         onClose={() => setCelebration(null)}
       />
     </>

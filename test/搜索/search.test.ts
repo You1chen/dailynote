@@ -26,6 +26,9 @@ const store = {
       taskTitle: '数学作业',
       plannedContent: '第3章习题',
       checklist: [{ id: 'c1', text: '清单项甲', done: false }],
+      actualExecution: '',
+      focusScore: 0,
+      efficiencyScore: 0,
       completed: false,
       notes: '备注乙',
     }],
@@ -56,6 +59,10 @@ const store = {
   important: [{
     id: 1, name: '毕业答辩', deadlineDate: '2026-08-20', deadlineTime: '',
     location: '一教 101', notes: '带三份材料', images: [], createdAt: 0, updatedAt: 0,
+  }],
+  backlog: [{
+    id: 1, title: '口语表达未突破', startMode: 'text', startAt: null, startText: '小时候',
+    blocker: '能力不足', detail: '需要环境', status: 'blocked', createdAt: 0, updatedAt: 0,
   }],
   taskBoard: [{
     id: 1,
@@ -99,6 +106,11 @@ describe('全局内容搜索', () => {
     expect(find('毕业答辩')[0].route).toBe('/important');
     expect(find('三份材料')[0].route).toBe('/important');
     expect(find('一教 101')[0].route).toBe('/important');
+  });
+
+  it('命中遗留问题的困难与详情', () => {
+    expect(find('能力不足')[0].route).toBe('/backlog');
+    expect(find('需要环境')[0].route).toBe('/backlog');
   });
 
   it('命中目标子任务', () => {

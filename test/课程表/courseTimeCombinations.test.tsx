@@ -18,8 +18,8 @@ vi.mock('react', async importOriginal => ({
 vi.mock('../../src/db', () => ({ getSemester: vi.fn(), saveCourse: vi.fn() }));
 import CourseEditModal from '../../src/components/CourseEditModal';
 import CourseTimeSettings from '../../src/components/CourseTimeSettings';
-import { DEFAULT_COURSE_TIME_COMBINATIONS, loadCourseTimeCombinations, normalizeCourseTimeCombinations } from '../../src/utils/courseTimeCombinations';
-import { _resetForTest, initStore } from '../../src/services/store';
+import { DEFAULT_COURSE_TIME_COMBINATIONS, loadCourseTimeCombinations, normalizeCourseTimeCombinations, saveCourseTimeCombinations } from '../../src/utils/courseTimeCombinations';
+import { _resetForTest, exportJSON, importJSONIntoStore } from '../../src/services/store';
 import type { Course } from '../../src/types';
 
 type Element = ReactElement<Record<string, any>>;
@@ -34,20 +34,6 @@ function find(node: ReactNode, predicate: (element: Element) => boolean): Elemen
   throw new Error('Element not found');
 }
 const memory: Record<string, string> = {};
-async function seedLegacyFile(data: Record<string, unknown>): Promise<void> {
-  const database = await new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open('dailynote_kv', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('kv');
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-  await new Promise<void>((resolve, reject) => {
-    const tx = database.transaction('kv', 'readwrite');
-    tx.objectStore('kv').put(JSON.stringify({ version: 1, savedAt: 0, dailyPlans: [], ...data }), 'dailynote-data');
-    tx.oncomplete = () => { database.close(); resolve(); };
-    tx.onerror = () => { database.close(); reject(tx.error); };
-  });
-}
 beforeEach(async () => {
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => memory[key] ?? null,
@@ -98,18 +84,20 @@ describe('课程时间组合', () => {
     expect(input(tree, '课程结束时间').props.value).toBe('11:00');
   });
 
-  it('prefills grid selections and exposes course deletion without a map entry', () => {
+  it('prefills grid selections and exposes optional actions only for an existing course', () => {
     const onDelete = vi.fn();
-    const draft = CourseEditModal({ course: null, initialSlot: { dayOfWeek: [6], startTime: '08:00', endTime: '08:35' }, onClose: vi.fn(), onSaved: vi.fn(), onDelete });
+    const onKnowledgeMap = vi.fn();
+    const draft = CourseEditModal({ course: null, initialSlot: { dayOfWeek: [6], startTime: '08:00', endTime: '08:35' }, onClose: vi.fn(), onSaved: vi.fn(), onDelete, onKnowledgeMap });
     expect(input(draft, '课程开始时间').props.value).toBe('08:00');
     expect(input(draft, '课程结束时间').props.value).toBe('08:35');
     expect(find(draft, element => element.props.children === '周六').props.className).toContain('settings-chip--active');
     expect(() => input(draft, '删除课程')).toThrow();
     hooks.values = []; hooks.index = 0;
-    const edit = CourseEditModal({ course, onClose: vi.fn(), onSaved: vi.fn(), onDelete });
+    const edit = CourseEditModal({ course, onClose: vi.fn(), onSaved: vi.fn(), onDelete, onKnowledgeMap });
     input(edit, '删除课程').props.onClick();
+    find(edit, element => element.type === 'button' && element.props.children === '知识地图').props.onClick();
     expect(onDelete).toHaveBeenCalledOnce();
-    expect(() => find(edit, element => element.type === 'button' && element.props.children === '知识地图')).toThrow();
+    expect(onKnowledgeMap).toHaveBeenCalledOnce();
   });
 
   it('creates, edits, rejects duplicates, and deletes combinations in settings', () => {
@@ -136,16 +124,17 @@ describe('课程时间组合', () => {
     expect(combinations).toHaveLength(3);
   });
 
-  it('旧单文件里的时间组合迁入偏好；显式空组合保持为空', async () => {
+  it('persists custom and empty combinations through backup import/export; old backups retain local choices', async () => {
     const custom = [{ startTime: '12:10', endTime: '13:20' }];
-    await seedLegacyFile({ courseTimeCombinations: custom });
-    await initStore();
+    saveCourseTimeCombinations(custom);
+    const backup = exportJSON();
+    expect(JSON.parse(backup).courseTimeCombinations).toEqual(custom);
+    saveCourseTimeCombinations([]);
+    await importJSONIntoStore(backup);
     expect(loadCourseTimeCombinations()).toEqual(custom);
-  });
-
-  it('没有时间组合字段的旧单文件沿用默认组合', async () => {
-    await seedLegacyFile({});
-    await initStore();
-    expect(loadCourseTimeCombinations()).toEqual(DEFAULT_COURSE_TIME_COMBINATIONS);
+    await importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [] }));
+    expect(loadCourseTimeCombinations()).toEqual(custom);
+    await importJSONIntoStore(JSON.stringify({ version: 1, dailyPlans: [], courseTimeCombinations: [] }));
+    expect(loadCourseTimeCombinations()).toEqual([]);
   });
 });

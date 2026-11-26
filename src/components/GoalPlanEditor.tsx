@@ -270,7 +270,7 @@ function ContentEditor({ initial, onDone, onBack }: { initial: GoalNode[]; onDon
         <span className="gp-row-handle gp-row-handle--append" aria-hidden="true"><GripVertical size={16} /></span>
         <input ref={appendInput} autoFocus enterKeyHint="next" value={append} placeholder="添加下一步" aria-label="添加下一步" onChange={event => { setAppend(event.target.value); setError(''); }} onKeyDown={onLineKey} />
       </div>
-    </div> : <div className="gp-text-wrap"><textarea spellCheck={false} aria-label="Markdown 目标内容" placeholder={'- 第一步\n\t- 子步骤'} value={text} onChange={event => { setText(event.target.value); setError(''); }} onKeyDown={onTextKeyDown} /></div>}
+    </div> : <div className="gp-text-wrap"><textarea spellCheck={false} aria-label="Markdown 目标内容" placeholder={'- 第一步\n\t- 子步骤'} value={text} onChange={event => { setText(event.target.value); setError(''); }} onKeyDown={onTextKeyDown} /><small>每行 - 标题；支持 Tab 或每层 2 / 4 个空格缩进</small></div>}
     {error && <p className="gp-error" role="alert">{error}</p>}
     {mode === 'text' && parsed?.error && !error && <p className="gp-error" role="alert">{parsed.error}</p>}
     {menuRow && <div className="gp-row-menu-mask" onClick={() => setMenu(null)}><section className="gp-row-menu" role="dialog" aria-modal="true" aria-label="目标行操作" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') setMenu(null); }}>

@@ -52,6 +52,21 @@
   color: var(--color-text);
 }
 
+.celebration-lead {
+  margin: 6px 0 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.celebration-msg {
+  margin: 12px 0 0;
+  font-size: var(--font-sm);
+  line-height: 1.75;
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
 .celebration-count {
   margin: 12px 0 16px;
   font-size: 11px;

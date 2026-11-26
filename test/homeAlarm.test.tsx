@@ -4,7 +4,8 @@ import { StaticRouter } from 'react-router-dom/server';
 import HomeAlarm from '../src/components/HomeAlarm';
 import SideNav, { type NavGroup } from '../src/components/SideNav';
 import {
-  alarmFlashState, alarmPauseDeadline, DEFAULT_ALARM_PAUSE_MINUTES,
+  alarmFlashState, alarmPauseDeadline, DEFAULT_ALARM_PAUSE_MINUTES, HOME_ALARM_STORAGE_KEY,
+  loadAlarmPreference, saveAlarmPreference,
 } from '../src/utils/homeAlarm';
 import { navigationBadges, sumBadges } from '../src/utils/navigationBadges';
 
@@ -13,29 +14,30 @@ vi.mock('../src/components/SearchOverlay', () => ({ default: () => null }));
 function renderNav(group?: NavGroup) {
   return renderToStaticMarkup(
     <StaticRouter location="/ddl">
-      <SideNav open group={group} onGroup={vi.fn()} searchOpen={false}
-        ddlBadge={8} importantBadge={5} onClose={vi.fn()}
-        onShowSearch={vi.fn()} onCloseSearch={vi.fn()} onSelect={vi.fn()} />
+      <SideNav open group={group} onGroup={vi.fn()} searchOpen={false} avatar="" username=""
+        badge={4} ddlBadge={8} importantBadge={5} onClose={vi.fn()}
+        onHelp={vi.fn()} onShowSearch={vi.fn()} onCloseSearch={vi.fn()} onSelect={vi.fn()} />
     </StaticRouter>,
   );
 }
 
 describe('navigation badge routing', () => {
-  it('shares both badge sources and adds their exact counts', () => {
-    const badges = navigationBadges({ ddlBadge: 8, importantBadge: 5 });
+  it('shares all three badge sources and adds their exact counts', () => {
+    const badges = navigationBadges({ ddlBadge: 8, importantBadge: 5, backlogBadge: 4 });
     expect(badges).toEqual([
       { to: '/ddl', label: 'DDL', count: 8 },
       { to: '/important', label: '重要', count: 5 },
+      { to: '/backlog', label: '遗留', count: 4 },
     ]);
-    expect(sumBadges(badges)).toBe(13);
+    expect(sumBadges(badges)).toBe(17);
     expect(sumBadges(navigationBadges({}))).toBe(0);
   });
 
   it('shows each group total without counting other groups or displaying zero badges', () => {
     const html = renderNav();
     expect(html).toMatch(/事项信息<\/span><span[^>]+aria-label="13 项提醒">13<\/span>/);
-    expect(html).not.toContain('遗留');
-    expect(html.match(/class="side-nav-badge"/g)).toHaveLength(1);
+    expect(html).toMatch(/规划<\/span><span[^>]+aria-label="4 项提醒">4<\/span>/);
+    expect(html.match(/class="side-nav-badge"/g)).toHaveLength(2);
   });
 
   it('keeps a nested group as an ordered layout of individual destination rows and shows leaf badges', () => {
@@ -46,25 +48,12 @@ describe('navigation badge routing', () => {
     expect(html).toMatch(/重要<\/span><span[^>]+aria-label="5 项提醒">5<\/span>/);
     expect(html.match(/<li>/g)).toHaveLength(4);
     expect(html).not.toContain('href="/backlog"');
-    expect(html).not.toContain('href="/garden');
-    expect(html).not.toContain('href="/backup"');
-    expect(html).not.toContain('href="/settlement"');
-  });
-
-  it('offers only the remaining entry points', () => {
-    const html = renderNav();
-    for (const href of ['/reflection', '/wander', '/settings']) expect(html).toContain(`href="${href}"`);
-    for (const label of ['帮助', '个人与外观', 'ID', '未设置']) expect(html).not.toContain(label);
-    const data = renderNav('data');
-    expect(data).toContain('href="/trash"');
-    expect(data).not.toContain('备份');
   });
 
   it('renders the Home alarm trigger only when there are reminders', () => {
-    const active = renderToStaticMarkup(<HomeAlarm ddlBadge={8} importantBadge={5} />);
-    expect(active).toContain('aria-label="警报，13 项提醒"');
+    const active = renderToStaticMarkup(<HomeAlarm ddlBadge={8} importantBadge={5} backlogBadge={4} />);
+    expect(active).toContain('aria-label="警报，17 项提醒"');
     expect(active).toContain('home-alarm-trigger--flashing');
-    expect(active).not.toContain('/backlog');
     expect(renderToStaticMarkup(<HomeAlarm />)).toBe('');
   });
 });
@@ -87,7 +76,16 @@ describe('Home alarm flash preferences', () => {
     }
   });
 
-  it('honors permanent disabling even after the pause deadline', () => {
-    expect(alarmFlashState({ flashDisabled: true, pausedUntil: now - 1 }, now)).toBe('disabled');
+  it('restores pause and permanent disabling from storage and falls back for malformed values', () => {
+    const values = new Map<string, string>();
+    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: values.set.bind(values) };
+    const paused = { flashDisabled: false, pausedUntil: now + 10_000 };
+    saveAlarmPreference(paused, storage);
+    expect(loadAlarmPreference(storage)).toEqual(paused);
+    expect(alarmFlashState(loadAlarmPreference(storage), now)).toBe('paused');
+    saveAlarmPreference({ flashDisabled: true, pausedUntil: 0 }, storage);
+    expect(alarmFlashState(loadAlarmPreference(storage), now + 10_001)).toBe('disabled');
+    values.set(HOME_ALARM_STORAGE_KEY, '{');
+    expect(alarmFlashState(loadAlarmPreference(storage), now)).toBe('active');
   });
 });

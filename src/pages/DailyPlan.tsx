@@ -28,7 +28,7 @@ const WEEK_TYPE_LABELS: Record<Course['weekType'], string> = {
   even: '双周',
 };
 
-/** 是否为清单型任务（有子任务清单 = 轻量任务，完成状态由子项决定） */
+/** 是否为清单型任务（有子任务清单 = 轻量任务：不验收、不评分） */
 function isChecklistTask(b: TimeBlock): boolean {
   return Array.isArray(b.checklist) && b.checklist.length > 0;
 }
@@ -93,6 +93,7 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
   const [templateList, setTemplateList] = useState<TaskTemplate[]>([]);
   const [hasLegacyRoutines, setHasLegacyRoutines] = useState(false);
   useEffect(() => { void getAllRoutines().then(items => setHasLegacyRoutines(items.length > 0)); }, []);
+  const [acceptingBlock, setAcceptingBlock] = useState<TimeBlock | null>(null);
   // 课程表（只读展示：渲染时按日期实时计算，不写入当天计划）
   const [courses, setCourses] = useState<Course[]>([]);
   const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
@@ -140,10 +141,11 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
   useRegisterBackHandler(() => {
     if (fullscreen) { setFullscreen(false); return true; }
     if (showPrefs) { setShowPrefs(false); return true; }
+    if (acceptingBlock) { setAcceptingBlock(null); return true; }
     if (editingBlock) { setEditingBlock(null); return true; }
     if (viewingCourse) { setViewingCourse(null); return true; }
     return false;
-  }, [editingBlock, fullscreen, showPrefs, viewingCourse]);
+  }, [editingBlock, acceptingBlock, fullscreen, showPrefs, viewingCourse]);
 
   // 当前时间每分钟更新
   useEffect(() => {
@@ -222,6 +224,9 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
       taskTitle: '',
       plannedContent: '',
       checklist: [],
+      actualExecution: '',
+      focusScore: 0,
+      efficiencyScore: 0,
       completed: false,
       notes: '',
     });
@@ -238,10 +243,14 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
     return topToMinutes(y, dayGeometry) ?? 0;
   }
 
-  // --- 新建/编辑保存（展开保留历史块上的旧字段，不清洗存储） ---
+  // --- 新建/编辑保存（保存前钳制数值范围） ---
   const handleSaveBlock = async () => {
     if (!editingBlock) return;
-    const safe = { ...editingBlock };
+    const safe = {
+      ...editingBlock,
+      focusScore: Math.min(10, Math.max(0, editingBlock.focusScore ?? 0)),
+      efficiencyScore: Math.min(10, Math.max(0, editingBlock.efficiencyScore ?? 0)),
+    };
     // 兼容历史清单块：完成状态仍由子项决定，不再自动改写时间范围。
     if (isChecklistTask(safe)) safe.completed = safe.checklist!.every(item => item.done);
     if (safe.id) {
@@ -259,6 +268,32 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
     setEditingBlock(null);
   };
 
+  // --- 验收：独立弹窗，仅对已存在的时间块开放；保存后视为任务完成 ---
+  const openAcceptance = () => {
+    if (!editingBlock || !editingBlock.id) return;
+    setAcceptingBlock({ ...editingBlock, checklist: editingBlock.checklist || [] });
+  };
+
+  const handleAcceptBlock = async () => {
+    if (!acceptingBlock || !acceptingBlock.id) return;
+    const safe = {
+      ...acceptingBlock,
+      focusScore: Math.min(10, Math.max(0, acceptingBlock.focusScore ?? 0)),
+      efficiencyScore: Math.min(10, Math.max(0, acceptingBlock.efficiencyScore ?? 0)),
+      completed: true,
+    };
+    await updateBlock(safe.id, safe);
+    setAcceptingBlock(null);
+    setEditingBlock(null);
+  };
+
+  const handleUnacceptBlock = async () => {
+    if (!acceptingBlock || !acceptingBlock.id) return;
+    await updateBlock(acceptingBlock.id, { completed: false });
+    setAcceptingBlock(null);
+    setEditingBlock(null);
+  };
+
   // 从模板导入
   const handleImportRoutine = async () => {
     const routines = await getAllRoutines();
@@ -273,6 +308,9 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
       endTime: rb.endTime,
       taskTitle: rb.taskTitle,
       plannedContent: rb.plannedContent,
+      actualExecution: '',
+      focusScore: 0,
+      efficiencyScore: 0,
       completed: false,
       notes: '',
     }));
@@ -342,6 +380,9 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
         taskTitle: '',
         plannedContent: '',
         checklist: [],
+        actualExecution: '',
+        focusScore: 0,
+        efficiencyScore: 0,
         completed: false,
         notes: '',
       });
@@ -349,8 +390,16 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
     navigate(`/?date=${date}`, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, plan, searchParams, date]);
-  /** 顶部概览：当天时间块总数 */
-  const summary = useMemo(() => ({ total: plan?.timeBlocks.length ?? 0 }), [plan]);
+  /** 顶部概览：块数 / 已验收 / 专注均值（只算已评分的块） */
+  const summary = useMemo(() => {
+    const blocks = plan?.timeBlocks ?? [];
+    const done = blocks.filter(b => b.completed).length;
+    const scored = blocks.filter(b => b.focusScore > 0);
+    const avg = scored.length
+      ? Math.round((scored.reduce((s, b) => s + b.focusScore, 0) / scored.length) * 10) / 10
+      : 0;
+    return { total: blocks.length, done, avg };
+  }, [plan]);
   const showNowLine = isToday && (futureGeo !== null || !(hideSleep && isInSleepPeriod(nowMinutes, prefs.sleepStart, prefs.sleepEnd)));
   const hourLabels = futureGeo ? futureHourLabels(futureGeo) : getVisibleHourLabels();
   const slotTops = [firstGridY, ...hourLabels.map(label => label.top).filter(top => top > firstGridY && top < gridHeight)];
@@ -387,6 +436,7 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
           <span className="dp-date-sub">{WEEKDAY_LABELS[dateObj(date).getDay()]}</span>
         </button>
         <div className="dp-top-actions">
+          <button className="dp-today" onClick={() => navigate(`/settlement?date=${date}`)}>结算</button>
           <button className="dp-arrow" onClick={() => setDate(shiftDate(date, -1))} aria-label="前一天">‹</button>
           <button className="dp-arrow" onClick={() => setDate(shiftDate(date, 1))} aria-label="后一天">›</button>
           {date !== todayStr() && (
@@ -426,6 +476,10 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
       {/* 一行统计 + 工具 */}
       <div className="dp-stats">
         <span><b>{summary.total}</b> 块</span>
+        <span className="dp-sep">·</span>
+        <span><b>{summary.done}</b> 已验收</span>
+        <span className="dp-sep">·</span>
+        <span>专注 <b>{summary.avg || '—'}</b></span>
         <div className="dp-tools">
           {isToday && (
             <button
@@ -555,7 +609,7 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
                     {block.startTime}-{block.endTime}
                   </span>
                   <span className="time-block-title">
-                    {block.taskTitle}
+                    {block.taskTitle || '点击编辑...'}
                   </span>
                   {(block.checklist?.length ?? 0) > 0 && (
                     <span className="time-block-checklist">
@@ -570,8 +624,12 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
                       {block.checklist?.filter(c => c.done).length ?? 0}/{block.checklist?.length ?? 0}
                     </span>
                   )}
-                  {!isChecklistTask(block) && block.completed && (
-                    <span className="time-block-status">已完成</span>
+                  {!isChecklistTask(block) && (
+                    <span className="time-block-scores">
+                      {block.focusScore > 0 || block.efficiencyScore > 0
+                        ? `专${block.focusScore} 效${block.efficiencyScore}`
+                        : '未验收'}
+                    </span>
                   )}
                 </span>
               </button>
@@ -777,6 +835,11 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
 
             {/* 固定底部操作栏 */}
             <div className="bs-footer">
+              {editingBlock.id && !isChecklistTask(editingBlock) && (
+                <button className="btn btn-sm btn-outline" onClick={openAcceptance} title="验收并完成">
+                  <CheckCircle2 size={16} /> 验收
+                </button>
+              )}
               <button className="btn btn-primary" onClick={handleSaveBlock}>
                 <Save size={16} /> 保存
               </button>
@@ -786,6 +849,102 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
                 </button>
               )}
               <button className="btn btn-ghost" onClick={() => setEditingBlock(null)}>
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 验收弹窗（独立于编辑面板，保存后视为任务完成） */}
+      {acceptingBlock && (
+        <div className="accept-overlay" onClick={() => setAcceptingBlock(null)}>
+          <div className="accept-modal" onClick={e => e.stopPropagation()}>
+            <h3 className="accept-title">✅ 任务验收</h3>
+            {acceptingBlock.taskTitle && (
+              <div className="accept-task-title">{acceptingBlock.taskTitle}</div>
+            )}
+
+            <div className="form-group">
+              <label className="label">实际执行情况</label>
+              <textarea
+                className="input textarea"
+                value={acceptingBlock.actualExecution}
+                onChange={e => setAcceptingBlock({ ...acceptingBlock, actualExecution: e.target.value })}
+                placeholder="实际完成情况"
+                rows={3}
+              />
+            </div>
+
+            <div className="bs-scores">
+              <div className="form-group">
+                <label className="label">专注度</label>
+                <input
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={acceptingBlock.focusScore || ''}
+                  placeholder="0=未评分"
+                  onChange={e => {
+                    const raw = e.target.value;
+                    if (raw === '') { setAcceptingBlock({ ...acceptingBlock, focusScore: 0 }); return; }
+                    const n = parseInt(raw, 10);
+                    if (!isNaN(n)) setAcceptingBlock({ ...acceptingBlock, focusScore: n });
+                  }}
+                  onBlur={() => {
+                    const clamped = Math.min(10, Math.max(0, acceptingBlock.focusScore || 0));
+                    if (clamped !== acceptingBlock.focusScore) {
+                      setAcceptingBlock({ ...acceptingBlock, focusScore: clamped });
+                    }
+                  }}
+                />
+              </div>
+              <div className="form-group">
+                <label className="label">效率</label>
+                <input
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={acceptingBlock.efficiencyScore || ''}
+                  placeholder="0=未评分"
+                  onChange={e => {
+                    const raw = e.target.value;
+                    if (raw === '') { setAcceptingBlock({ ...acceptingBlock, efficiencyScore: 0 }); return; }
+                    const n = parseInt(raw, 10);
+                    if (!isNaN(n)) setAcceptingBlock({ ...acceptingBlock, efficiencyScore: n });
+                  }}
+                  onBlur={() => {
+                    const clamped = Math.min(10, Math.max(0, acceptingBlock.efficiencyScore || 0));
+                    if (clamped !== acceptingBlock.efficiencyScore) {
+                      setAcceptingBlock({ ...acceptingBlock, efficiencyScore: clamped });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="label">备注</label>
+              <input
+                className="input"
+                value={acceptingBlock.notes}
+                onChange={e => setAcceptingBlock({ ...acceptingBlock, notes: e.target.value })}
+                placeholder="备注"
+              />
+            </div>
+
+            <div className="accept-actions">
+              {acceptingBlock.completed && (
+                <button className="btn btn-sm btn-ghost" onClick={handleUnacceptBlock} title="撤销验收">
+                  撤销验收
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={handleAcceptBlock}>
+                <CheckCircle2 size={16} /> 验收完成
+              </button>
+              <button className="btn btn-ghost" onClick={() => setAcceptingBlock(null)}>
                 取消
               </button>
             </div>
@@ -832,6 +991,7 @@ export default function DailyPlanPage({ alarm }: { alarm?: React.ReactNode } = {
                 <span className="course-modal-label">当前</span>
                 <span>{week > 0 ? `第 ${week} 周` : '未开学或未设置开学时间'}</span>
               </div>
+              <p className="course-modal-hint">课程为只读展示，如需修改请到「课程表」页</p>
               <div className="course-modal-actions">
                 <button className="btn btn-ghost" onClick={() => setViewingCourse(null)}>关闭</button>
               </div>

@@ -49,18 +49,8 @@ async function kvKeys(): Promise<string[]> {
   });
 }
 
-async function kvPut(key: string, value: string): Promise<void> {
-  const db = await openKvDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(KV_STORE, 'readwrite');
-    tx.objectStore(KV_STORE).put(value, key);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-}
-
 import {
-  initStore, _resetForTest } from '../../src/services/store';
+  initStore, importJSONIntoStore, _resetForTest } from '../../src/services/store';
 import * as db from '../../src/db';
 import type { TaskNode } from '../../src/types';
 import {
@@ -345,8 +335,10 @@ describe('任务板持久化', () => {
   it('migrates legacy path order and preserves slots when a node is renamed', async () => {
     const nodes = linesToTree(parseTaskText('- A\n- B\n- C'));
     const [a, b, c] = executionLeavesOf(nodes).map(l => l.key);
-    await kvPut('taskboard.json', JSON.stringify([{ id: 1, nodes, order: ['C', 'deleted', 'A', 'A'], updatedAt: 1 }]));
-    await initStore();
+    await importJSONIntoStore(JSON.stringify({
+      version: 1, savedAt: 0, dailyPlans: [],
+      taskBoard: [{ id: 1, nodes, order: ['C', 'deleted', 'A', 'A'], updatedAt: 1 }],
+    }));
     expect((await db.getTaskBoard()).order).toEqual([c, a, b]);
 
     await db.saveTaskTree(nodes.map(n => n.title === 'C' ? { ...n, title: 'C renamed' } : n));
@@ -422,14 +414,13 @@ describe('任务板持久化', () => {
     expect(await db.getTaskBoard()).toMatchObject({ nodes: [], order: [] });
   });
 
-  it('旧单文件缺少 taskBoard 字段时按空数组兼容', async () => {
+  it('旧备份缺少 taskBoard 字段时按空数组兼容', async () => {
     const old = JSON.stringify({
       version: 1, savedAt: 0, dailyPlans: [], longTermGoals: [], reflections: [],
       harvests: [], fixedRoutines: [], taskItems: [], taskTemplates: [], trashItems: [],
-      courses: [], semester: [], ddls: [],
+      courses: [], semester: [], ddls: [], backlog: [],
     });
-    await kvPut('dailynote-data', old);
-    await initStore();
+    await expect(importJSONIntoStore(old)).resolves.toBe(0);
     const board = await db.getTaskBoard();
     expect(board.nodes).toEqual([]);
     expect(board.order).toEqual([]);

@@ -351,6 +351,30 @@ body {
   .app-gesture-shell { --swipe-settle-duration: 0ms; }
 }
 
+/* ============ 深色主题 ============ */
+[data-theme="dark"] {
+  --color-bg: #0f0f1a;
+  --color-surface: #1a1a2e;
+  --color-primary: #818cf8;
+  --color-primary-light: #a5b4fc;
+  --color-primary-bg: #1e1b4b;
+  --color-text: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #2d2d4a;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-heatmap-1: #1e1b4b;
+  --color-heatmap-2: #3730a3;
+  --color-heatmap-3: #6366f1;
+  --color-heatmap-4: #a5b4fc;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
 /* ============ 动画 ============ */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(12px); }
@@ -362,13 +386,13 @@ body {
 }
 
 /* Grab area stays large enough for a fingertip; the visible bar is decorative only. */
-.bs-handle, .pref-handle, .bk-grip, .tb-grip, .sheet-grip {
+.bs-handle, .pref-handle, .mind-grip, .bk-grip, .tb-grip, .sheet-grip {
   width: 100% !important; height: 30px !important; margin: 0 !important;
   background: transparent !important; border-radius: 0 !important;
   flex-shrink: 0; display: grid; place-items: center;
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
-.bs-handle::before, .pref-handle::before, .bk-grip::before,
+.bs-handle::before, .pref-handle::before, .mind-grip::before, .bk-grip::before,
 .tb-grip::before, .sheet-grip::before {
   content: ''; display: block; width: 38px; height: 4px; border-radius: 3px; background: var(--color-border);
 }

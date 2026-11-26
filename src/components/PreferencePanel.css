@@ -61,6 +61,13 @@
   padding-top: 0;
 }
 
+/* 提示文字 */
+.pref-hint {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
 /* 时间选择行 */
 .pref-time-row {
   display: flex;

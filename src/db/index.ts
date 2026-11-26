@@ -7,14 +7,16 @@
  */
 
 import type {
- DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, TaskBoard, TaskNode, ImportantItem, LinkGroup } from '../types';
+  KnowledgeMap, KnowledgeNode, KnowledgeStatus, KnowledgeCardLibrary,
+ DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, BacklogItem, BacklogStatus, TaskBoard, TaskNode, ImportantItem, LinkGroup, Idea } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, bindLegacyCourses, type AnyStoreTable } from '../services/store';
 import { toggleLeafDone, removeLeaf, setLeafShelved, normalizeExecutionOrder, reorderExecutionLeaves, pruneExpiredTasks, pruneDoneLeaves, isExpiredTask, updateLeaf } from '../utils/taskTree';
+import { EMPTY_TASK_BOARD, isMindTask, mindTaskLeaves, putTaskBoard, syncMindTasks } from '../utils/mindTasks';
 import { elapsedTaskMs } from '../utils/taskTiming';
 import { searchStore, type SearchHit } from '../utils/search';
 import { DDL_DEFAULT_TIME } from '../utils/ddl';
-import { isRetiredPrivateGoal, isRetiredTrashItem } from '../utils/retiredRecords';
+import { decryptGoals, encryptWish } from '../services/gardenSecurity';
 
 // ============ 每日计划 CRUD ============
 
@@ -46,7 +48,8 @@ export async function getAllPlans(): Promise<DailyPlan[]> {
 // ============ 长期目标 CRUD ============
 
 export async function getAllGoals(): Promise<LongTermGoal[]> {
-  return deepClone(store.longTermGoals.filter(goal => !isRetiredPrivateGoal(goal)).sort((a, b) => b.createdAt - a.createdAt));
+  const goals = deepClone([...store.longTermGoals].sort((a, b) => b.createdAt - a.createdAt));
+  return decryptGoals(goals);
 }
 
 export async function saveGoal(goal: LongTermGoal): Promise<number> {
@@ -59,11 +62,7 @@ export async function saveGoal(goal: LongTermGoal): Promise<number> {
  * 又不想破坏 `saveGoal` 原有的 number 返回值。
  */
 export async function saveGoalDetailed(goal: LongTermGoal): Promise<{ id: number; ok: boolean }> {
-  const clean = deepClone(goal);
-  if (isRetiredPrivateGoal(clean)) return { id: clean.id ?? 0, ok: false };
-  if (clean.id != null && store.longTermGoals.some(goal => goal.id === clean.id && isRetiredPrivateGoal(goal))) {
-    return { id: clean.id, ok: false };
-  }
+  const clean = await encryptWish(deepClone(goal));
   let resultId = 0;
   const ok = await mutate(() => {
     if (clean.id != null) {
@@ -81,13 +80,13 @@ export async function saveGoalDetailed(goal: LongTermGoal): Promise<{ id: number
 export async function deleteGoal(id: number): Promise<boolean> {
   return mutate(() => {
     const goal = store.longTermGoals.find(g => g.id === id);
-    if (goal && !isRetiredPrivateGoal(goal)) {
+    if (goal) {
       store.trashItems.push({
         id: allocId('trashItems'),
         originalTable: 'longTermGoals',
         originalId: id,
         originalData: deepClone(goal),
-        title: goal.title,
+        title: goal.kind === 'wish' ? '秘密花园条目' : goal.title,
         deletedAt: Date.now(),
       });
       store.longTermGoals = store.longTermGoals.filter(g => g.id !== id);
@@ -263,6 +262,49 @@ export async function saveCourse(course: Course): Promise<number> {
   return resultId;
 }
 
+export async function getKnowledgeCardLibrary(): Promise<import('../types/knowledge').KnowledgeCardLibrary | undefined> {
+  const library = store.knowledgeCards.find(item => item.id === 1) ?? store.knowledgeCards[0];
+  return library ? deepClone(library) : undefined;
+}
+
+export async function saveKnowledgeCardLibrary(library: import('../types/knowledge').KnowledgeCardLibrary): Promise<number> {
+  const clean = deepClone(library);
+  const id = 1;
+  await mutate(() => {
+    store.knowledgeCards = [{ ...clean, id, updatedAt: Date.now() }];
+  });
+  return id;
+}
+
+export async function saveKnowledgeCardRecords(library: import('../types/knowledge').KnowledgeCardLibrary): Promise<void> {
+  await mutate(() => { store.knowledgeCards = [deepClone({ ...library, id: 1, updatedAt: Date.now() })]; });
+}
+
+export async function getKnowledgeMap(courseId: number): Promise<KnowledgeMap | undefined> {
+  const map = store.knowledgeMaps.find(item => item.courseId === courseId);
+  return map ? deepClone(map) : undefined;
+}
+
+export async function saveKnowledgeMap(map: KnowledgeMap): Promise<number> {
+  const clean = deepClone(map);
+  let resultId = 0;
+  await mutate(() => {
+    const idx = store.knowledgeMaps.findIndex(item => item.courseId === clean.courseId);
+    if (idx >= 0) {
+      resultId = store.knowledgeMaps[idx].id!;
+      store.knowledgeMaps[idx] = { ...clean, id: resultId, updatedAt: Date.now() };
+    } else {
+      resultId = allocId('knowledgeMaps');
+      store.knowledgeMaps.push({ ...clean, id: resultId, createdAt: clean.createdAt || Date.now(), updatedAt: Date.now() });
+    }
+  });
+  return resultId;
+}
+
+export async function deleteKnowledgeMap(courseId: number): Promise<void> {
+  await mutate(() => { store.knowledgeMaps = store.knowledgeMaps.filter(item => item.courseId !== courseId); });
+}
+
 export async function deleteCourse(id: number): Promise<void> {
   await mutate(() => {
     const course = store.courses.find(c => c.id === id);
@@ -391,7 +433,7 @@ export async function deleteLinkGroup(id: number): Promise<void> {
 // ============ 回收站 CRUD ============
 
 export async function getTrashItems(): Promise<TrashItem[]> {
-  return deepClone(store.trashItems.filter(item => !isRetiredTrashItem(item)).sort((a, b) => b.deletedAt - a.deletedAt));
+  return deepClone([...store.trashItems].sort((a, b) => b.deletedAt - a.deletedAt));
 }
 
 /** 回收站条目对应的原表（timeBlocks 还原到当天计划） */
@@ -405,16 +447,20 @@ const TRASH_TARGET: Record<string, AnyStoreTable> = {
   courses: 'courses',
   ddls: 'ddls',
   important: 'important',
+  backlog: 'backlog',
+  ideas: 'ideas',
   linkGroups: 'linkGroups',
   timeBlocks: 'dailyPlans',
 };
 
 export async function restoreFromTrash(trashId: number): Promise<boolean> {
   const item = store.trashItems.find(t => t.id === trashId);
-  if (!item || isRetiredTrashItem(item)) return false;
+  if (!item) return false;
   // 先写"新增"侧（原表），再写"移除"侧（回收站），崩溃中断不丢数据
   const target = TRASH_TARGET[item.originalTable];
-  const writeOrder: AnyStoreTable[] | undefined = target ? [target, 'trashItems'] : undefined;
+  const writeOrder: AnyStoreTable[] | undefined = target === 'ideas'
+    ? ['ideas', 'taskBoard', 'trashItems']
+    : target ? [target, 'trashItems'] : undefined;
   let ok = false;
   await mutate(() => {
     const it = store.trashItems.find(t => t.id === trashId);
@@ -476,6 +522,19 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
           store.important.push(rec);
           break;
         }
+        case 'backlog': {
+          const rec = originalData as BacklogItem;
+          if (rec.id != null && store.backlog.some(b => b.id === rec.id)) { ok = false; return; }
+          store.backlog.push(rec);
+          break;
+        }
+        case 'ideas': {
+          const rec = originalData as Idea;
+          if (rec.id != null && store.ideas.some(i => i.id === rec.id)) { ok = false; return; }
+          store.ideas.push(rec);
+          syncMindTasks(store);
+          break;
+        }
         case 'linkGroups': {
           const rec = originalData as LinkGroup;
           if (rec.id != null && store.linkGroups.some(g => g.id === rec.id)) { ok = false; return; }
@@ -493,7 +552,11 @@ export async function restoreFromTrash(trashId: number): Promise<boolean> {
     } catch {
       ok = false;
     }
-  }, { writeOrder });
+  }, { writeOrder, skipActivity: true });
+  if (ok && item.originalTable === 'ideas') {
+    notifyIdeasChanged();
+    if (isMindTask(item.originalData)) notifyTaskBoardChanged();
+  }
   return ok;
 }
 
@@ -521,12 +584,16 @@ function restoreTimeBlockSync(block: any): void {
 
 export async function permanentlyDelete(trashId: number): Promise<void> {
   await mutate(() => {
-    store.trashItems = store.trashItems.filter(t => t.id !== trashId || isRetiredTrashItem(t));
+    store.trashItems = store.trashItems.filter(t => t.id !== trashId);
   });
 }
 
-export async function clearAllTrash(): Promise<void> {
-  await mutate(() => { store.trashItems = store.trashItems.filter(isRetiredTrashItem); });
+export async function clearAllTrash(publicOnly = false): Promise<void> {
+  await mutate(() => {
+    store.trashItems = publicOnly
+      ? store.trashItems.filter(item => item.originalTable === 'longTermGoals' && item.originalData?.kind === 'wish')
+      : [];
+  });
 }
 
 /** 清理超过30天的回收站项 */
@@ -538,7 +605,7 @@ export async function cleanOldTrash(): Promise<void> {
 
 function cleanOldTrashSync(): void {
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  store.trashItems = store.trashItems.filter(t => t.deletedAt >= cutoff || isRetiredTrashItem(t));
+  store.trashItems = store.trashItems.filter(t => t.deletedAt >= cutoff);
 }
 
 /** 将时间块移入回收站 */
@@ -643,9 +710,143 @@ export async function deleteTaskTemplate(id: number): Promise<void> {
   }, { writeOrder: ['trashItems', 'taskTemplates'] });
 }
 
-// ============ 任务树 CRUD（单记录数组表，id 恒 1） ============
+// ============ 杂念（小愿望 / 琐事 / 灵感） CRUD ============
 
-const EMPTY_TASK_BOARD: TaskBoard = { id: 1, nodes: [], order: [], updatedAt: 0 };
+/**
+ * 杂念变更通知：计划页的分类计数、收获页的按日统计各自持有 useIdeas 实例，
+ * 靠这个事件立即刷新，而不是等切换页面重新挂载。
+ */
+function notifyIdeasChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('dailynote-ideas-changed'));
+}
+
+/** 按日期倒序、同日按创建时间倒序 */
+export async function getAllIdeas(): Promise<Idea[]> {
+  // The TODO panel can be unmounted while Mind is open on another page.
+  const board = store.taskBoard.find(b => b.id === 1);
+  if (board) {
+    const now = Date.now();
+    if ([...mindTaskLeaves(board.nodes).values()].some(node => isExpiredTask(node, now))) {
+      try {
+        await mutateTaskBoard(current => pruneTaskBoard(current, node => !!node.mindLinked && isExpiredTask(node, now)));
+        notifyTaskBoardChanged();
+      } catch (error) {
+        console.error('清理已完成的杂念任务失败:', error);
+      }
+    }
+  }
+  return deepClone([...store.ideas].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return b.createdAt - a.createdAt;
+  }));
+}
+
+function notifyTaskBoardChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('dailynote-task-changed'));
+}
+
+export async function saveIdea(item: Idea): Promise<number> {
+  item = deepClone(item);
+  let resultId = 0;
+  let boardChanged = false;
+  await mutate(() => {
+    const board = store.taskBoard.find(b => b.id === 1);
+    const now = Date.now();
+    if (item.id != null) {
+      resultId = item.id;
+      const idx = store.ideas.findIndex(x => x.id === item.id);
+      if (idx < 0) return;
+      const previous = store.ideas[idx];
+      store.ideas[idx] = { ...item, taskNodeId: isMindTask(item) ? previous.taskNodeId : undefined, updatedAt: now };
+    } else {
+      resultId = allocId('ideas');
+      store.ideas.push({ ...item, taskNodeId: undefined, id: resultId, createdAt: now, updatedAt: now });
+    }
+    syncMindTasks(store);
+    boardChanged = store.taskBoard.find(b => b.id === 1) !== board;
+  }, { writeOrder: ['ideas', 'taskBoard'] });
+  notifyIdeasChanged();
+  if (boardChanged) notifyTaskBoardChanged();
+  return resultId;
+}
+
+function trashIdea(item: Idea): void {
+  const label = item.kind === 'wish' ? '小愿望' : item.kind === 'chore' ? '琐事' : '灵感';
+  store.trashItems.push({
+    id: allocId('trashItems'),
+    originalTable: 'ideas',
+    originalId: item.id!,
+    title: `${label} - ${item.text.slice(0, 12)}`,
+    originalData: deepClone(item),
+    deletedAt: Date.now(),
+  });
+}
+
+export async function deleteIdea(id: number, intent?: 'complete'): Promise<void> {
+  let boardChanged = false;
+  await mutate(() => {
+    const item = store.ideas.find(x => x.id === id);
+    if (!item) return;
+    const board = store.taskBoard.find(b => b.id === 1);
+    trashIdea(item);
+    store.ideas = store.ideas.filter(x => x.id !== id);
+    syncMindTasks(store);
+    boardChanged = store.taskBoard.find(b => b.id === 1) !== board;
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'ideas', 'taskBoard'], activityIntent: intent === 'complete' ? 'complete-idea' : undefined });
+  notifyIdeasChanged();
+  if (boardChanged) notifyTaskBoardChanged();
+}
+// ============ 遗留问题 CRUD ============
+
+export async function getAllBacklog(): Promise<BacklogItem[]> {
+  return deepClone([...store.backlog]);
+}
+
+export async function saveBacklog(item: BacklogItem): Promise<number> {
+  item = deepClone(item);
+  let resultId = 0;
+  await mutate(() => {
+    if (item.id != null) {
+      const idx = store.backlog.findIndex(x => x.id === item.id);
+      if (idx >= 0) store.backlog[idx] = { ...item, updatedAt: Date.now() };
+      resultId = item.id;
+      return;
+    }
+    resultId = allocId('backlog');
+    store.backlog.push({ ...item, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
+  });
+  return resultId;
+}
+
+/** 只改状态：更新时间戳即"重新计时"（气泡不催刚动过的） */
+export async function setBacklogStatus(id: number, status: BacklogStatus): Promise<void> {
+  await mutate(() => {
+    const idx = store.backlog.findIndex(x => x.id === id);
+    if (idx >= 0) store.backlog[idx] = { ...store.backlog[idx], status, updatedAt: Date.now() };
+  });
+}
+
+export async function deleteBacklog(id: number): Promise<void> {
+  await mutate(() => {
+    const item = store.backlog.find(x => x.id === id);
+    if (item) {
+      store.trashItems.push({
+        id: allocId('trashItems'),
+        originalTable: 'backlog',
+        originalId: id,
+        originalData: deepClone(item),
+        title: `遗留问题 - ${item.title?.slice(0, 30) || '无标题'}`,
+        deletedAt: Date.now(),
+      });
+      store.backlog = store.backlog.filter(x => x.id !== id);
+    }
+    cleanOldTrashSync();
+  }, { writeOrder: ['trashItems', 'backlog'] });
+}
+
+
+// ============ 任务树 CRUD（单记录数组表，id 恒 1） ============
 
 export async function getTaskBoard(): Promise<TaskBoard> {
   const board = store.taskBoard.find(b => b.id === 1) ?? EMPTY_TASK_BOARD;
@@ -655,17 +856,47 @@ export async function getTaskBoard(): Promise<TaskBoard> {
 async function mutateTaskBoard(update: (board: TaskBoard) => TaskBoard): Promise<void> {
   let previous: TaskBoard | undefined;
   let next: TaskBoard | undefined;
+  const previousIdeas = store.ideas;
+  const previousTrash = store.trashItems;
+  let nextIdeas = previousIdeas;
+  let nextTrash = previousTrash;
   const ok = await mutate(() => {
     previous = store.taskBoard.find(b => b.id === 1);
     const current = previous ?? EMPTY_TASK_BOARD;
     const updated = update(current);
     if (updated === current) return;
 
+    const oldLinks = mindTaskLeaves(current.nodes);
+    const newLinks = mindTaskLeaves(updated.nodes);
+    if (oldLinks.size) {
+      const now = Date.now();
+      const removed: Idea[] = [];
+      const ideas = store.ideas.flatMap(idea => {
+        if (!isMindTask(idea) || !idea.taskNodeId || !oldLinks.has(idea.taskNodeId)) return [idea];
+        const leaf = newLinks.get(idea.taskNodeId);
+        if (!leaf) {
+          removed.push(idea);
+          return [];
+        }
+        return [leaf.title !== idea.text ? { ...idea, text: leaf.title, updatedAt: now } : idea];
+      });
+      if (ideas.length !== store.ideas.length || ideas.some((idea, index) => idea !== store.ideas[index])) {
+        nextIdeas = store.ideas = ideas;
+      }
+      if (removed.length) {
+        store.trashItems = [...store.trashItems];
+        removed.forEach(trashIdea);
+        cleanOldTrashSync();
+        nextTrash = store.trashItems;
+      }
+    }
     next = { ...updated, updatedAt: Date.now() };
-    if (previous) store.taskBoard[store.taskBoard.indexOf(previous)] = next;
-    else store.taskBoard.push(next);
-  });
-  if (ok) return;
+    putTaskBoard(store, next);
+  }, { writeOrder: ['trashItems', 'ideas', 'taskBoard'] });
+  if (ok) {
+    if (nextIdeas !== previousIdeas) notifyIdeasChanged();
+    return;
+  }
 
   // mutate applies in memory before persisting. Do not undo a newer write.
   if (next) {
@@ -673,6 +904,8 @@ async function mutateTaskBoard(update: (board: TaskBoard) => TaskBoard): Promise
     if (index >= 0) {
       if (previous) store.taskBoard[index] = previous;
       else store.taskBoard.splice(index, 1);
+      if (store.ideas === nextIdeas) store.ideas = previousIdeas;
+      if (store.trashItems === nextTrash) store.trashItems = previousTrash;
     }
   }
   throw new Error('保存任务清单失败');
@@ -688,22 +921,32 @@ function mergeTaskEdits(current: TaskNode[], edited: TaskNode[], base?: TaskNode
   };
   const currentById = collect(current);
   const baseById = base ? collect(base) : currentById;
-  const merge = (nodes: TaskNode[]): TaskNode[] => nodes.map(node => {
+  const editedById = collect(edited);
+  const merge = (nodes: TaskNode[]): TaskNode[] => nodes.flatMap(node => {
     const latest = currentById.get(node.id);
     const initial = baseById.get(node.id);
     const children = merge(node.children);
-    if (!latest) return { ...node, children };
-    return {
+    // An old editor must not recreate a deleted Mind task or overwrite newer timer state.
+    if (!latest && (node.mindLinked || initial?.mindLinked)) return children;
+    if (!latest) return [{ ...node, children }];
+    const result: TaskNode = {
       ...node,
       title: initial?.title === node.title ? latest.title : node.title,
       done: latest.done,
       doneAt: latest.doneAt,
       shelved: initial?.shelved === node.shelved ? latest.shelved : node.shelved,
+      mindLinked: latest.mindLinked,
       taskTiming: latest.taskTiming,
       children,
     };
+    return result.mindLinked && children.length ? [{ ...result, children: [] }, ...children] : [result];
   });
-  return merge(edited);
+  const merged = merge(edited);
+  // Mind can add tasks while the editor is open. Only omitted rows the editor saw are deletes.
+  if (base) for (const [id, node] of mindTaskLeaves(current)) {
+    if (!baseById.has(id) && !editedById.has(id)) merged.push(node);
+  }
+  return merged;
 }
 
 export async function saveTaskBoard(next: { nodes: TaskNode[]; order: string[] }): Promise<void> {

@@ -5,7 +5,6 @@ import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import GoalPlanEditor from '../components/GoalPlanEditor';
 import GoalMap from '../components/GoalMap';
-import GroupedPageHeader from '../components/GroupedPageHeader';
 import type { GoalNode, LongTermGoal } from '../types';
 import { effectiveNodes, percentLabel, toggleNode, treeProgress, treeStats } from '../utils/goalTree';
 import './LongTermGoals.css';
@@ -15,8 +14,9 @@ export default function LongTermGoalsPage() {
   const [goalEditor, setGoalEditor] = useState<{ id: number | null } | null>(null);
   const [goalMapId, setGoalMapId] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<{ message: string; info?: boolean; onConfirm?: () => void } | null>(null);
-  const mappedGoal = goals.find(goal => goal.id === goalMapId);
-  const editingGoal = goals.find(goal => goal.id === goalEditor?.id);
+  const plainGoals = goals.filter(g => g.kind !== 'wish');
+  const mappedGoal = plainGoals.find(goal => goal.id === goalMapId);
+  const editingGoal = plainGoals.find(goal => goal.id === goalEditor?.id);
   async function saveGoalPlan(input: { title: string; description: string; nodes: GoalNode[] }): Promise<boolean> {
     if (!goalEditor) return false;
     const { id } = goalEditor;
@@ -43,18 +43,18 @@ export default function LongTermGoalsPage() {
     if (goalMapId !== null && goalEditor === null) { setGoalMapId(null); return true; }
     return false;
   }, [confirm, goalMapId, goalEditor]);
-  if (loading) return <div className="app-container"><GroupedPageHeader title="目标" /><p>加载中...</p></div>;
+  if (loading) return <div className="app-container"><div className="page-header"><h1 className="page-title">目标</h1></div><p>加载中...</p></div>;
   return <div className="app-container">
-    <GroupedPageHeader title="目标" blocked={!!confirm || !!mappedGoal || goalEditor !== null}>
-      <button className="btn btn-primary btn-sm" onClick={() => setGoalEditor({ id: null })}><Plus size={16} /> 目标</button>
-    </GroupedPageHeader>
+    <div className="page-header"><h1 className="page-title">目标</h1><button className="btn btn-primary btn-sm" onClick={() => setGoalEditor({ id: null })}><Plus size={16} /> 目标</button></div>
       <section className="goal-section">
         <div className="section-title">
           <Target size={14} /> 长期目标
-          <span className="section-count">{goals.length}</span>
+          <span className="section-count">{plainGoals.length}</span>
         </div>
 
-        {goals.map(goal => {
+        {plainGoals.length === 0 ? (
+          <p className="wish-empty-hint">把想做到的事拆成能推进的目标。</p>
+        ) : plainGoals.map(goal => {
           const nodes = effectiveNodes(goal);
           const percent = percentLabel(treeProgress(nodes));
           const stats = treeStats(nodes);

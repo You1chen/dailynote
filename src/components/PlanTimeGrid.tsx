@@ -49,8 +49,9 @@ export default function PlanTimeGrid({ className, firstY, height, hourTops, minu
     const canSelect = y >= firstY && y <= height && !target.closest(INTERACTIVE)
       && (!touch || !!target.closest('.dp-time-slot'));
     const parent = event.currentTarget.parentElement;
-    // Full-screen schedule scrolls locally. The home timeline scrolls the page.
-    const scroller = canSelect && touch && parent
+    // Touch scrolling is done manually by this component (the grid uses
+    // touch-action: none), so a swipe can never cancel a long-press range.
+    const scroller = touch && parent
       ? parent.scrollHeight > parent.clientHeight && /^(auto|scroll)$/.test(getComputedStyle(parent).overflowY)
         ? parent
         : (document.scrollingElement as HTMLElement | null)
@@ -66,15 +67,24 @@ export default function PlanTimeGrid({ className, firstY, height, hourTops, minu
     const dy = event.clientY - start.clientY;
     if (start.mode === 'pending' && Math.hypot(dx, dy) > TAP_SLOP) {
       suppressClick.current = true;
-      if ((start.touch && isAppSwipeClaimed()) || Math.abs(dx) >= Math.abs(dy) || !start.canSelect) start.mode = 'ignored';
-      else if (start.touch && Date.now() - start.startedAt < TOUCH_HOLD_MS) {
-        start.mode = 'scroll';
-        blockAppSwipeForCurrentTouch();
-      }
-      else if (Math.abs(dy) >= RANGE_SLOP) {
-        if (start.touch) blockAppSwipeForCurrentTouch();
-        else event.currentTarget.setPointerCapture?.(event.pointerId);
+      if (start.touch && isAppSwipeClaimed()) {
+        start.mode = 'ignored';
+      } else if (Math.abs(dx) >= Math.abs(dy)) {
+        start.mode = 'ignored';
+      } else if (start.touch) {
+        // Quick swipe = manual scroll; only a held press can start a range.
+        if (!start.canSelect || Date.now() - start.startedAt < TOUCH_HOLD_MS) {
+          start.mode = 'scroll';
+          blockAppSwipeForCurrentTouch();
+        } else if (Math.abs(dy) >= RANGE_SLOP) {
+          blockAppSwipeForCurrentTouch();
+          start.mode = 'range';
+        }
+      } else if (start.canSelect && Math.abs(dy) >= RANGE_SLOP) {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
         start.mode = 'range';
+      } else {
+        start.mode = 'ignored';
       }
     }
     if (start.mode === 'scroll' && start.scroller) start.scroller.scrollTop = start.scrollTop - dy;
@@ -113,7 +123,7 @@ export default function PlanTimeGrid({ className, firstY, height, hourTops, minu
   }
 
   return (
-    <div className={`${className} dp-time-grid`} role="group" aria-label="当天时间轴" style={{ height }}
+    <div className={`${className} dp-time-grid`} data-tour="time-grid" role="group" aria-label="当天时间轴" style={{ height }}
       onPointerDown={startSelection} onPointerMove={moveSelection} onPointerUp={endSelection}
       onPointerCancel={cancelSelection} onLostPointerCapture={cancelSelection}
       onPointerLeave={event => { if (gesture.current?.mode === 'pending') cancelSelection(event); }}

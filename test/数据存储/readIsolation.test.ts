@@ -25,18 +25,18 @@ describe('DB 边界的对象隔离', () => {
   });
 
   it('保存入口复制调用方对象，后续外部修改不污染 store', async () => {
-    const group = { name: '读书', items: [{ id: 'i1', name: '原标签' }], createdAt: 1, updatedAt: 1 } as any;
-    await db.saveLinkGroup(group);
-    group.items[0].name = '外部修改';
-    expect(getStore().linkGroups[0].items[0].name).toBe('原标签');
+    const idea = { text: '原文', date: '2026-10-28', createdAt: 1, updatedAt: 1, links: [{ label: '原标签' }] } as any;
+    await db.saveIdea(idea);
+    idea.links[0].label = '外部修改';
+    expect(getStore().ideas[0].links[0].label).toBe('原标签');
   });
 
-  it('回收站还原按原表先于回收站写入', async () => {
-    const id = await db.saveLinkGroup({ name: '待还原', items: [{ id: 'i1', name: '课本章节' }], createdAt: 1, updatedAt: 1 });
-    await db.deleteLinkGroup(id);
+  it('灵感还原按原表先于回收站写入', async () => {
+    const id = await db.saveIdea({ text: '待还原', date: '2026-10-28', createdAt: 1, updatedAt: 1 } as any);
+    await db.deleteIdea(id);
     const trash = (await db.getTrashItems()).find(item => item.originalId === id)!;
     expect(await db.restoreFromTrash(trash.id!)).toBe(true);
-    expect(getStore().linkGroups.some(item => item.id === id)).toBe(true);
+    expect(getStore().ideas.some(item => item.id === id)).toBe(true);
     expect(getStore().trashItems.some(item => item.id === trash.id)).toBe(false);
   });
 });

@@ -6,7 +6,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="true">
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -20,6 +21,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 课程网站抓取：应用内 WebView 登录后读取当前页 HTML -->
+        <activity
+            android:name=".CourseGrabActivity"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false"
+            android:configChanges="orientation|keyboardHidden|screenSize|locale|uiMode|navigation|density" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -28,6 +36,9 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
     </application>
+
+    <!-- 应用内更新：校验同签名后调起系统安装器覆盖安装 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Permissions -->
 

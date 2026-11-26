@@ -89,7 +89,10 @@ export default function LinkPicker({ open, links, onChange, onClose }: Props) {
       <div className="lp-sheet" style={sheet.style} onClick={e => e.stopPropagation()}>
         <div className="sheet-grip" {...sheet.handlers} aria-hidden="true" />
         <div className="lp-head">
-          <div className="lp-title">关联内容</div>
+          <div>
+            <div className="lp-title">关联内容</div>
+            <div className="lp-sub">课程组随课程表自动同步，分组可自己加</div>
+          </div>
           <button className="lp-close" onClick={onClose} aria-label="关闭"><X size={18} /></button>
         </div>
 
@@ -103,7 +106,9 @@ export default function LinkPicker({ open, links, onChange, onClose }: Props) {
               </span>
             </div>
 
-            {!semester?.startDate ? null : week < 1 ? (
+            {!semester?.startDate ? (
+              <p className="lp-empty">在「课程表」设置开学时间后，这里会自动列出正在上的课</p>
+            ) : week < 1 ? (
               <p className="lp-empty">还没开学，暂时没有可关联的课程</p>
             ) : validCourses.length === 0 ? (
               <p className="lp-empty">当前没有可关联课程</p>

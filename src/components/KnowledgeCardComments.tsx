@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useSheetDrag } from '../hooks/useSheetDrag';
 import { Image as ImageIcon, Pencil, Trash2, X } from 'lucide-react';
 import type { KnowledgeCardContent, KnowledgeComment } from '../types/knowledge';
-import { fileToCompressedDataURL } from '../utils/imageCompression';
+import { fileToCompressedDataURL } from '../utils/avatarCrop';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
 import ConfirmDialog from './ConfirmDialog';
 import './KnowledgeCardComments.css';

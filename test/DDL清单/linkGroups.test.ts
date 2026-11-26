@@ -2,7 +2,7 @@
  * 关联分组（linkGroups）存储测试
  *
  * 覆盖新增表的完整链路：CRUD、软删除进回收站、落盘 linkGroups.json、
- * 启动重载、旧单文件兼容，以及 DDL 上的关联快照。
+ * 启动重载、旧备份兼容、导入导出往返，以及 DDL 上的关联快照。
  */
 
 import 'fake-indexeddb/auto';
@@ -39,17 +39,8 @@ async function kvKeys(): Promise<string[]> {
     kreq.onerror = () => { db.close(); resolve([]); };
   });
 }
-async function kvPut(key: string, value: string): Promise<void> {
-  const db = await openKvDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(KV_STORE, 'readwrite');
-    tx.objectStore(KV_STORE).put(value, key);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-}
 
-import { initStore, _resetForTest } from '../../src/services/store';
+import { initStore, importJSONIntoStore, exportJSON, _resetForTest } from '../../src/services/store';
 import * as db from '../../src/db';
 import type { DdlItem, LinkGroup } from '../../src/types';
 
@@ -126,23 +117,30 @@ describe('关联分组持久化', () => {
     expect(list[0].items[0].name).toBe('服务器 A');
   });
 
-  it('旧单文件没有 linkGroups 字段 → 按空数组兼容，不报错', async () => {
+  it('旧备份没有 linkGroups 字段 → 按空数组兼容，不报错', async () => {
     const old = JSON.stringify({
       version: 1, savedAt: 0, dailyPlans: [], longTermGoals: [], reflections: [],
       harvests: [], fixedRoutines: [], taskItems: [], taskTemplates: [], trashItems: [],
-      courses: [], semester: [], ddls: [], taskBoard: [],
+      courses: [], semester: [], ddls: [], backlog: [], taskBoard: [],
     });
-    await kvPut('dailynote-data', old);
-    await initStore();
+    await expect(importJSONIntoStore(old)).resolves.toBe(0);
     expect(await db.getAllLinkGroups()).toHaveLength(0);
   });
 
-  it('重载后分组与条目标识保持不变', async () => {
+  it('导出包含关联分组，导入后往返一致', async () => {
     const id = await db.saveLinkGroup(makeGroup('实验', [{ id: 'i1', name: '服务器 A' }]));
-    await initStore();
-    const [group] = await db.getAllLinkGroups();
-    expect(group.id).toBe(id);
-    expect(group.items[0].id).toBe('i1');
+    const exported = JSON.parse(exportJSON());
+    expect(exported.linkGroups).toHaveLength(1);
+    expect(exported.linkGroups[0].name).toBe('实验');
+
+    // 清空后再导入
+    await _resetForTest();
+    expect(await db.getAllLinkGroups()).toHaveLength(0);
+    const n = await importJSONIntoStore(JSON.stringify(exported));
+    expect(n).toBe(1);
+    const list = await db.getAllLinkGroups();
+    expect(list[0].id).toBe(id);
+    expect(list[0].items[0].id).toBe('i1');
   });
 });
 

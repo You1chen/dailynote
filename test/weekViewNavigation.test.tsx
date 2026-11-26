@@ -27,7 +27,7 @@ import WeekViewPage from '../src/pages/WeekViewPage';
 const plan: DailyPlan = {
   date: '2026-10-26', createdAt: 1, updatedAt: 1, timeBlocks: [{
     id: 'user-created', taskTitle: '学😀习计划详情', startTime: '08:00', endTime: '10:00',
-    plannedContent: '详情', completed: false, notes: '',
+    plannedContent: '详情', actualExecution: '', focusScore: 0, efficiencyScore: 0, completed: false, notes: '',
   }],
 };
 const course: Course = {

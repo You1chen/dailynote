@@ -1,5 +1,6 @@
-import type { KnowledgeCard, KnowledgeCardLibrary } from '../types/knowledge';
+import type { KnowledgeCard, KnowledgeCardLibrary, KnowledgeMap } from '../types/knowledge';
 import { deepClone, mutate, store } from '../services/store';
+import { normalizeKnowledgeData } from '../utils/knowledgeMigration';
 
 let pending: Promise<unknown> = Promise.resolve();
 
@@ -16,17 +17,41 @@ function library(): KnowledgeCardLibrary {
 }
 
 async function transaction(change: () => void): Promise<void> {
-  let before: KnowledgeCardLibrary[] | undefined;
+  let before: { knowledgeCards: KnowledgeCardLibrary[]; knowledgeMaps: KnowledgeMap[] } | undefined;
   try {
     const ok = await mutate(() => {
-      before = store.knowledgeCards;
+      before = deepClone({ knowledgeCards: store.knowledgeCards, knowledgeMaps: store.knowledgeMaps });
       change();
-    });
+    }, { writeOrder: ['knowledgeCards', 'knowledgeMaps'], skipActivity: true });
     if (!ok) throw new Error('Failed to save knowledge cards');
   } catch (error) {
-    if (before) store.knowledgeCards = before;
+    if (before) {
+      store.knowledgeCards = before.knowledgeCards;
+      store.knowledgeMaps = before.knowledgeMaps;
+    }
     throw error;
   }
+}
+
+/** Persist migrated records before removing the legacy source fields on disk. */
+export function initializeKnowledgeCards(): Promise<void> {
+  const hasLegacy = store.knowledgeMaps.some(map => map.nodes.some(node => {
+    const legacy = node as typeof node & { cards?: unknown; note?: unknown };
+    return 'cards' in legacy || 'note' in legacy;
+  }));
+  if (!hasLegacy) return Promise.resolve();
+  return serialized(() => transaction(() => {
+    const normalized = normalizeKnowledgeData(store);
+    for (const map of normalized.knowledgeMaps) {
+      for (const node of map.nodes) {
+        const legacy = node as typeof node & { cards?: unknown; note?: unknown };
+        delete legacy.cards;
+        delete legacy.note;
+      }
+    }
+    store.knowledgeCards = normalized.knowledgeCards;
+    store.knowledgeMaps = normalized.knowledgeMaps;
+  }));
 }
 
 export async function getCards(): Promise<KnowledgeCard[]> {
@@ -81,17 +106,127 @@ export function removeCustomCardType(value: string): Promise<void> {
 export function deleteCard(id: string): Promise<void> {
   return serialized(() => transaction(() => {
     const current = deepClone(library());
-    store.knowledgeCards = [{ ...current, id: 1, records: current.records.filter(record => record.id !== id), updatedAt: Date.now() }];
+    const records = current.records
+      .filter(record => record.id !== id)
+      .map(record => {
+        if (!record.card.links?.includes(id) && !record.card.ignoredLinks?.includes(id)) return record;
+        return {
+          ...record,
+          card: {
+            ...record.card,
+            links: (record.card.links ?? []).filter(link => link !== id),
+            ignoredLinks: (record.card.ignoredLinks ?? []).filter(link => link !== id),
+          },
+        };
+      });
+    store.knowledgeCards = [{ ...current, id: 1, records, updatedAt: Date.now() }];
+    for (const map of store.knowledgeMaps) {
+      for (const node of map.nodes) {
+        if (node.cardIds?.includes(id)) {
+          node.cardIds = node.cardIds.filter(cardId => cardId !== id);
+          map.updatedAt = Date.now();
+        }
+      }
+    }
   }));
 }
 
-export async function getCardAudioExportPath(): Promise<string> {
-  await pending;
-  return library().audioExportPath;
+function updateCardPair(
+  leftId: string,
+  rightId: string,
+  change: (card: KnowledgeCard, otherId: string) => void,
+): Promise<void> {
+  return serialized(() => transaction(() => {
+    const current = deepClone(library());
+    const left = current.records.find(record => record.id === leftId);
+    const right = current.records.find(record => record.id === rightId);
+    if (!left || !right) throw new Error('Knowledge card does not exist');
+    if (leftId === rightId) throw new Error('Cannot link a card to itself');
+    const now = Date.now();
+    for (const [record, otherId] of [[left, rightId], [right, leftId]] as const) {
+      change(record.card, otherId);
+      record.card.updatedAt = now;
+      record.updatedAt = now;
+    }
+    store.knowledgeCards = [{ ...current, id: 1, updatedAt: now }];
+  }));
 }
 
-export function setCardAudioExportPath(path: string): Promise<void> {
+/** Accept a discovery: both cards get the explicit link; rejection feedback clears. */
+export function confirmCardLink(leftId: string, rightId: string): Promise<void> {
+  return updateCardPair(leftId, rightId, (card, otherId) => {
+    card.links = [...new Set([...(card.links ?? []), otherId])];
+    card.ignoredLinks = (card.ignoredLinks ?? []).filter(id => id !== otherId);
+  });
+}
+
+/** Remove an explicitly confirmed link from both cards (undo / manual unlink). */
+export function removeCardLink(leftId: string, rightId: string): Promise<void> {
+  return updateCardPair(leftId, rightId, (card, otherId) => {
+    card.links = (card.links ?? []).filter(id => id !== otherId);
+  });
+}
+
+/** Negative feedback for a suggestion; remembered on both cards. */
+export function ignoreCardLinkSuggestion(leftId: string, rightId: string): Promise<void> {
+  return updateCardPair(leftId, rightId, (card, otherId) => {
+    card.ignoredLinks = [...new Set([...(card.ignoredLinks ?? []), otherId])];
+  });
+}
+
+/** Undo a single "ignore" action. */
+export function restoreCardLinkSuggestion(leftId: string, rightId: string): Promise<void> {
+  return updateCardPair(leftId, rightId, (card, otherId) => {
+    card.ignoredLinks = (card.ignoredLinks ?? []).filter(id => id !== otherId);
+  });
+}
+
+/** Clear the whole negative-feedback set so ignored suggestions can surface again. */
+export function restoreIgnoredCardLinks(): Promise<number> {
+  return serialized(async () => {
+    let pairs = 0;
+    await transaction(() => {
+      const current = deepClone(library());
+      const now = Date.now();
+      const removed = new Set<string>();
+      for (const record of current.records) {
+        if (!record.card.ignoredLinks?.length) continue;
+        for (const target of record.card.ignoredLinks) {
+          removed.add(record.id < target ? `${record.id}\u0000${target}` : `${target}\u0000${record.id}`);
+        }
+        record.card.ignoredLinks = [];
+        record.card.updatedAt = now;
+        record.updatedAt = now;
+      }
+      pairs = removed.size;
+      if (!pairs) return;
+      store.knowledgeCards = [{ ...current, id: 1, updatedAt: now }];
+    });
+    return pairs;
+  });
+}
+
+export function linkCard(cardId: string, courseId: number, nodeId: string, options: { move?: true } = {}): Promise<void> {
   return serialized(() => transaction(() => {
-    store.knowledgeCards = [{ ...library(), id: 1, audioExportPath: path, updatedAt: Date.now() }];
+    if (!library().records.some(record => record.id === cardId)) throw new Error('Knowledge card does not exist');
+    const targetMap = store.knowledgeMaps.find(map => map.courseId === courseId);
+    const target = targetMap?.nodes.find(node => node.id === nodeId);
+    if (!target || !targetMap) throw new Error('Knowledge node does not exist');
+    if (target.children.length || targetMap.nodes.some(node => node.parentId === target.id)) throw new Error('Cards can only be linked to leaf nodes');
+    if (options.move) {
+      for (const map of store.knowledgeMaps) {
+        for (const node of map.nodes) {
+          if (node.cardIds?.includes(cardId)) {
+            node.cardIds = node.cardIds.filter(id => id !== cardId);
+            map.updatedAt = Date.now();
+          }
+        }
+      }
+    }
+    target.cardIds ??= [];
+    if (!target.cardIds.includes(cardId)) {
+      target.cardIds.push(cardId);
+      targetMap.updatedAt = Date.now();
+    }
   }));
 }

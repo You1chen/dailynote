@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type PointerEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useRouteBack } from '../hooks/useRouteBack';
 import { Trash2 } from 'lucide-react';
+import KnowledgeMapPanel from '../components/KnowledgeMapPanel';
 import { getAllCourses, deleteCourse, getSemester, saveSemester, saveCourse } from '../db';
 import type { Course, SemesterRecord } from '../types';
 import { useRegisterBackHandler } from '../contexts/BackButtonContext';
@@ -34,6 +36,7 @@ type EditingState = { course: Course | null; slot?: CourseSlot };
 
 export default function CoursesPage() {
   const routeBack = useRouteBack();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { prefs } = usePreferences();
   const [courses, setCourses] = useState<Course[]>([]);
   const [semester, setSemester] = useState<SemesterRecord | undefined>(undefined);
@@ -45,6 +48,8 @@ export default function CoursesPage() {
   const gesture = useRef<GridGesture | null>(null);
   const [askDeleteCourse, setAskDeleteCourse] = useState<Course | null>(null);
   const [askDeleteSpecial, setAskDeleteSpecial] = useState<number | null>(null);
+  const [knowledgeCourse, setKnowledgeCourse] = useState<Course | null>(null);
+  const [knowledgeNodeId, setKnowledgeNodeId] = useState<string | null>(null);
 
   // 特殊日期表单
   const [semesterOpen, setSemesterOpen] = useState(false);
@@ -60,6 +65,7 @@ export default function CoursesPage() {
   const [importWeekCount, setImportWeekCount] = useState('');
   const [importWeekType, setImportWeekType] = useState<'all' | 'odd' | 'even'>('all');
 
+  const closeKnowledge = useCallback(() => { setKnowledgeCourse(null); setKnowledgeNodeId(null); }, []);
   const closeImport = () => { if (!importBusy) setImportOpen(false); };
   const importSheet = useSheetDrag(closeImport, importOpen && !importBusy);
   const semesterSheet = useSheetDrag(() => setSemesterOpen(false), semesterOpen && !importOpen);
@@ -67,6 +73,7 @@ export default function CoursesPage() {
   const handleBack = useCallback(() => {
     if (askDeleteSpecial !== null) setAskDeleteSpecial(null);
     else if (askDeleteCourse) setAskDeleteCourse(null);
+    else if (knowledgeCourse) closeKnowledge();
     else if (editing) setEditing(null);
     else if (importOpen) {
       if (!importBusy) {
@@ -75,23 +82,25 @@ export default function CoursesPage() {
       }
     } else if (semesterOpen) setSemesterOpen(false);
     else routeBack();
-  }, [askDeleteSpecial, askDeleteCourse, editing, importOpen, importBusy, importStep, semesterOpen, routeBack]);
+  }, [askDeleteSpecial, askDeleteCourse, knowledgeCourse, closeKnowledge, editing, importOpen, importBusy, importStep, semesterOpen, routeBack]);
 
+  // The knowledge map registers its own nested handler; let it run first.
   useRegisterBackHandler(() => {
+    if (knowledgeCourse) return false;
     handleBack();
     return true;
-  }, [handleBack]);
+  }, [handleBack, knowledgeCourse]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (!askDeleteSpecial && !askDeleteCourse && !editing && !importOpen && !semesterOpen) return;
+      if (!askDeleteSpecial && !askDeleteCourse && !knowledgeCourse && !editing && !importOpen && !semesterOpen) return;
       event.preventDefault();
       handleBack();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleBack, askDeleteSpecial, askDeleteCourse, editing, importOpen, semesterOpen]);
+  }, [handleBack, askDeleteSpecial, askDeleteCourse, knowledgeCourse, editing, importOpen, semesterOpen]);
 
   const load = useCallback(async () => {
     const [cs, sem] = await Promise.all([getAllCourses(), getSemester()]);
@@ -103,6 +112,16 @@ export default function CoursesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const courseId = Number(searchParams.get('knowledgeCourse'));
+    if (!Number.isSafeInteger(courseId) || courseId <= 0) return;
+    const course = courses.find(item => item.id === courseId);
+    if (!course) return;
+    setKnowledgeCourse(course);
+    setKnowledgeNodeId(searchParams.get('knowledgeNode'));
+    setSearchParams({}, { replace: true });
+  }, [courses, searchParams, setSearchParams]);
 
   // ============ 学期设置 ============
 
@@ -331,10 +350,12 @@ export default function CoursesPage() {
           <div className="sheet-grip" aria-hidden="true" {...importSheet.handlers} />
           <h3 className="modal-title" id="course-import-title">粘贴课表</h3>
           {importStep === 'text' ? <>
+            <p className="modal-hint">每行：周一 08:00-09:40 高等数学 @教1-101</p>
             <textarea className="input textarea" rows={8} value={importText} onChange={event => { setImportText(event.target.value); setImportError(''); }} placeholder={'周一 08:00-09:40 高等数学 @教1-101\n周三 14:30-16:10 大学物理'} autoFocus />
-            {importError && <p className="courses-warn" role="alert">{importError}</p>}
+            {importError && <p className="knowledge-error" role="alert">{importError}</p>}
             <div className="modal-actions"><button className="btn btn-ghost" onClick={closeImport}>取消</button><button className="btn btn-primary" disabled={!importText.trim()} onClick={parseImport}>解析预览</button></div>
           </> : <>
+            <p className="modal-hint">确认识别结果，可直接修改；周次不会自动猜测。</p>
             <div className="courses-import-list">{importPreview.map((row, index) => <div key={index} className="courses-import-row">
               <input className="input input-sm" aria-label={`课程 ${index + 1} 名称`} value={row.name} onChange={event => updateImportRow(index, { name: event.target.value })} />
               <div className="courses-import-grid">
@@ -351,7 +372,7 @@ export default function CoursesPage() {
               <span>周</span>
               <select className="input input-sm" value={importWeekType} onChange={event => setImportWeekType(event.target.value as 'all' | 'odd' | 'even')}><option value="all">每周</option><option value="odd">单周</option><option value="even">双周</option></select>
             </div>
-            {importError && <p className="courses-warn" role="alert">{importError}</p>}
+            {importError && <p className="knowledge-error" role="alert">{importError}</p>}
             <div className="modal-actions"><button className="btn btn-ghost" disabled={importBusy} onClick={backFromPreview}>返回</button><button className="btn btn-primary" disabled={importBusy || !importStartWeek || !importWeekCount} onClick={() => void importCourses()}>{importBusy ? '导入中…' : '确认导入'}</button></div>
           </>}
         </section>
@@ -363,8 +384,10 @@ export default function CoursesPage() {
           onClose={() => setEditing(null)}
           onSaved={handleCourseSaved}
           onDelete={editing.course?.id != null ? () => setAskDeleteCourse(editing.course) : undefined}
+          onKnowledgeMap={editing.course?.id != null ? () => setKnowledgeCourse(editing.course) : undefined}
         />
       )}
+      {knowledgeCourse && <KnowledgeMapPanel course={knowledgeCourse} initialNodeId={knowledgeNodeId} onClose={closeKnowledge} />}
       <ConfirmDialog
         open={askDeleteCourse !== null}
         message={askDeleteCourse ? `确定删除课程「${askDeleteCourse.name}」？删除后可在回收站恢复。` : ''}
