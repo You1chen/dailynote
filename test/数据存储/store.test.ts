@@ -82,6 +82,8 @@ import {
 import { emptyStore } from '../../src/services/storeSchema';
 import { searchStore } from '../../src/utils/search';
 import * as db from '../../src/db';
+import { deleteCard, getCards } from '../../src/db/knowledgeCards';
+import { clearSnapshot } from '../../src/services/snapshot';
 import { legacyDb, readLegacyTables } from '../../src/db/legacy';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -483,6 +485,48 @@ describe('旧版单文件迁移', () => {
     expect(await db.getPlanByDate('2026-07-02')).toBeDefined();
     expect(await kvGet('dailynote-legacy-archive.json')).toBe(bundle);
     expect(await kvGet('dailynote-data')).toBeNull();
+  });
+});
+
+describe('知识地图退役迁移', () => {
+  function map(title: string, id = 1) {
+    return { id, courseId: id, createdAt: 1, nodes: [{ id: 'node', title, cards: [{ text: title }] }] };
+  }
+
+  it('迁移地图独有的数据并原样保留文件，清空快照后不会恢复已删除卡片', async () => {
+    const original = JSON.stringify([map('旧地图卡片')], null, 2);
+    await kvPut('knowledge-maps.json', original);
+    expect(await initStore()).toBe(1);
+    expect(getStore()).not.toHaveProperty('knowledgeMaps');
+    const [card] = await getCards();
+    expect(card.title).toBe('旧地图卡片');
+    await deleteCard(card.id);
+    await persist();
+    await flush();
+    await clearSnapshot();
+    await initStore();
+    expect(await getCards()).toEqual([]);
+    expect(JSON.parse((await kvGet('knowledge-cards.json'))!)[0].legacyMapsMigrated).toBe(true);
+    expect(await kvGet('knowledge-maps.json')).toBe(original);
+  });
+
+  it('归档旧单文件，合并独有卡片并以分类文件的重复条目为准', async () => {
+    const bundle = JSON.stringify({ version: 1, dailyPlans: [], knowledgeMaps: [map('旧的重复卡片'), map('旧单文件独有卡片', 2)] });
+    const mapFile = JSON.stringify([map('分类文件的卡片')]);
+    await kvPut('dailynote-data', bundle);
+    await kvPut('knowledge-maps.json', mapFile);
+    await initStore();
+    const cards = await getCards();
+    expect(cards.map(card => card.title)).toEqual(['分类文件的卡片', '旧单文件独有卡片']);
+    expect(await kvGet('knowledge-maps.json')).toBe(mapFile);
+    expect(await kvGet('dailynote-legacy-archive.json')).toBe(bundle);
+    expect(await kvGet('dailynote-data')).toBeNull();
+
+    await deleteCard(cards[0].id);
+    // Simulate recovery when the original bundle is still present after the cards file was saved.
+    await kvPut('dailynote-data', bundle);
+    await initStore();
+    expect((await getCards()).map(card => card.title)).toEqual(['旧单文件独有卡片']);
   });
 });
 

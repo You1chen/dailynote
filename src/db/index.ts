@@ -7,7 +7,6 @@
  */
 
 import type {
-  KnowledgeMap, KnowledgeNode, KnowledgeStatus, KnowledgeCardLibrary,
  DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem, TaskTemplate, TrashItem, Course, SemesterRecord, DdlItem, TaskBoard, TaskNode, ImportantItem, LinkGroup } from '../types';
 import { normalizeCourseDayOfWeek } from '../types';
 import { store, mutate, allocId, deepClone, bindLegacyCourses, type AnyStoreTable } from '../services/store';
@@ -262,49 +261,6 @@ export async function saveCourse(course: Course): Promise<number> {
     store.courses.push({ ...clean, semesterStartDate: clean.semesterStartDate ?? store.semester[0]?.startDate ?? undefined, id: resultId, createdAt: Date.now(), updatedAt: Date.now() });
   });
   return resultId;
-}
-
-export async function getKnowledgeCardLibrary(): Promise<import('../types/knowledge').KnowledgeCardLibrary | undefined> {
-  const library = store.knowledgeCards.find(item => item.id === 1) ?? store.knowledgeCards[0];
-  return library ? deepClone(library) : undefined;
-}
-
-export async function saveKnowledgeCardLibrary(library: import('../types/knowledge').KnowledgeCardLibrary): Promise<number> {
-  const clean = deepClone(library);
-  const id = 1;
-  await mutate(() => {
-    store.knowledgeCards = [{ ...clean, id, updatedAt: Date.now() }];
-  });
-  return id;
-}
-
-export async function saveKnowledgeCardRecords(library: import('../types/knowledge').KnowledgeCardLibrary): Promise<void> {
-  await mutate(() => { store.knowledgeCards = [deepClone({ ...library, id: 1, updatedAt: Date.now() })]; });
-}
-
-export async function getKnowledgeMap(courseId: number): Promise<KnowledgeMap | undefined> {
-  const map = store.knowledgeMaps.find(item => item.courseId === courseId);
-  return map ? deepClone(map) : undefined;
-}
-
-export async function saveKnowledgeMap(map: KnowledgeMap): Promise<number> {
-  const clean = deepClone(map);
-  let resultId = 0;
-  await mutate(() => {
-    const idx = store.knowledgeMaps.findIndex(item => item.courseId === clean.courseId);
-    if (idx >= 0) {
-      resultId = store.knowledgeMaps[idx].id!;
-      store.knowledgeMaps[idx] = { ...clean, id: resultId, updatedAt: Date.now() };
-    } else {
-      resultId = allocId('knowledgeMaps');
-      store.knowledgeMaps.push({ ...clean, id: resultId, createdAt: clean.createdAt || Date.now(), updatedAt: Date.now() });
-    }
-  });
-  return resultId;
-}
-
-export async function deleteKnowledgeMap(courseId: number): Promise<void> {
-  await mutate(() => { store.knowledgeMaps = store.knowledgeMaps.filter(item => item.courseId !== courseId); });
 }
 
 export async function deleteCourse(id: number): Promise<void> {

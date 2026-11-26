@@ -38,7 +38,8 @@ export type { AnyStoreTable, StorageData, StoreShape } from '../types/storage';
 import { readLegacyTables, deleteLegacyDB, legacyDatabaseExists } from '../db/legacy';
 import { registerPlugin } from '@capacitor/core';
 import { readSnapshot, writeSnapshot, clearSnapshot, sameNames, filesCover } from './snapshot';
-import type { KnowledgeMap } from '../types/knowledge';
+import type { KnowledgeCardLibrary } from '../types/knowledge';
+import { migrateLegacyKnowledgeCards, type LegacyKnowledgeMap } from '../utils/knowledgeMigration';
 import { isRetiredTrashItem } from '../utils/retiredRecords';
 
 // ============ 布局常量 ============
@@ -51,6 +52,7 @@ export const OLD_SINGLE_REL = 'dailynote-data.json';
 function oldSingleRel(): string {
   return isCapacitor() ? 'dailynote-data.json' : 'dailynote-data';
 }
+const LEGACY_KNOWLEDGE_MAPS_FILE = 'knowledge-maps.json';
 const PREFERENCES_FILE = 'preferences.json';
 const DAY_DIR = 'days';
 const DAY_TYPES = ['reflections', 'harvests', 'tasks'] as const;
@@ -370,14 +372,16 @@ async function listManagedDayFiles(dir: string): Promise<string[]> {
 
 // ============ 解析 ============
 
-function parseStorageData(text: string): { data: StorageData; archive?: string } | null {
+function parseStorageData(text: string): { data: StorageData; legacyMaps: LegacyKnowledgeMap[]; archive?: string } | null {
   try {
     const data = JSON.parse(text);
     if (!data || data.version !== 1 || !Array.isArray(data.dailyPlans)) return null;
-    const hasRetiredData = ['backlog', 'ideas', 'activityEvents', 'gardenKeys'].some(key =>
+    const legacyMaps = Array.isArray(data.knowledgeMaps) ? data.knowledgeMaps : [];
+    const hasRetiredData = legacyMaps.length > 0 || ['backlog', 'ideas', 'activityEvents', 'gardenKeys'].some(key =>
       Array.isArray(data[key]) && data[key].length > 0,
     );
     return {
+      legacyMaps,
       archive: hasRetiredData ? text : undefined,
       data: {
         version: 1,
@@ -401,7 +405,6 @@ function parseStorageData(text: string): { data: StorageData; archive?: string }
         important: Array.isArray(data.important) ? data.important : [],
         taskBoard: Array.isArray(data.taskBoard) ? data.taskBoard : [],
         linkGroups: Array.isArray(data.linkGroups) ? data.linkGroups : [],
-        knowledgeMaps: Array.isArray(data.knowledgeMaps) ? data.knowledgeMaps : [],
         knowledgeCards: Array.isArray(data.knowledgeCards) ? data.knowledgeCards : [],
       },
     };
@@ -465,9 +468,8 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
   const important = await readCategory<ImportantItem>(dir, CATEGORY_FILES.important);
   const taskBoard = await readCategory<TaskBoard>(dir, CATEGORY_FILES.taskBoard);
   const linkGroups = await readCategory<LinkGroup>(dir, CATEGORY_FILES.linkGroups);
-  const knowledgeMaps = await readCategory<KnowledgeMap>(dir, CATEGORY_FILES.knowledgeMaps);
-  const knowledgeCards = await readCategory<any>(dir, CATEGORY_FILES.knowledgeCards);
-  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !taskBoard && !linkGroups && !knowledgeMaps && !knowledgeCards) return null;
+  const knowledgeCards = await readCategory<KnowledgeCardLibrary>(dir, CATEGORY_FILES.knowledgeCards);
+  if (dates.length === 0 && !longTermGoals && !fixedRoutines && !trashItems && !taskTemplates && !courses && !semester && !ddls && !important && !taskBoard && !linkGroups && !knowledgeCards) return null;
   return {
     version: 1,
     savedAt: 0,
@@ -485,7 +487,6 @@ async function readNewStructure(dir: string): Promise<StorageData | null> {
     important: important ?? [],
     taskBoard: taskBoard ?? [],
     linkGroups: linkGroups ?? [],
-    knowledgeMaps: knowledgeMaps ?? [],
     knowledgeCards: knowledgeCards ?? [],
   };
 }
@@ -582,14 +583,22 @@ async function flushSnapshot(): Promise<void> {
 }
 
 /** 读取当前路径的后端数据（新布局优先；旧单文件存在则视为迁移未完成，优先取它） */
-async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boolean; hasPreviousState: boolean; archive?: string }> {
+async function readBackend(): Promise<{
+  data: StorageData | null;
+  oldFormat: boolean;
+  hasPreviousState: boolean;
+  hasLegacyMapsFile?: boolean;
+  legacyMaps?: LegacyKnowledgeMap[];
+  archive?: string;
+}> {
   const dir = getStoragePath();
 
   // 旧单文件仍在 → 走迁移路径（本来就要读它）
   const old = await readOldSingleFile(dir);
   if (old === 'CORRUPT') console.warn('旧版数据文件损坏，尝试读取新布局:', dir);
-  if (old && old !== 'CORRUPT') return { data: old.data, oldFormat: true, hasPreviousState: true, archive: old.archive };
+  if (old && old !== 'CORRUPT') return { ...old, oldFormat: true, hasPreviousState: true };
   const names = await listBackendNames(dir);
+  const hasLegacyMapsFile = names.files.includes(LEGACY_KNOWLEDGE_MAPS_FILE);
 
   // 快照命中：日期目录没变就直接用，不再逐文件读取
   // （只比日期集合：分类文件由本应用自己维护，应用写入时主动使旧快照失效）
@@ -599,7 +608,7 @@ async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boo
     const knownCategoryFiles = new Set<string>(Object.values(CATEGORY_FILES));
     const diskCategoryFiles = names.files.filter(file => knownCategoryFiles.has(file));
     if (snap && sameNames(snap.dates, names.dates) && filesCover(snap.files, diskCategoryFiles)) {
-      return { data: snap.data, oldFormat: false, hasPreviousState: true };
+      return { data: snap.data, oldFormat: false, hasPreviousState: true, hasLegacyMapsFile };
     }
   }
 
@@ -617,7 +626,7 @@ async function readBackend(): Promise<{ data: StorageData | null; oldFormat: boo
   }
   // 旧文件或目录仍表示设备上已有数据。
   const hasPreviousState = !!old || !!data || names.dates.length > 0 || names.files.length > 0;
-  return { data, oldFormat: false, hasPreviousState };
+  return { data, oldFormat: false, hasPreviousState, hasLegacyMapsFile };
 }
 
 // ============ 持久化队列（增量写 + 快照捕获） ============
@@ -817,7 +826,6 @@ interface Fp {
   taskBoard: string;
   linkGroups: string;
   trashItems: string;
-  knowledgeMaps: string;
   knowledgeCards: string;
 }
 
@@ -849,7 +857,6 @@ function fingerprint(): Fp {
     taskBoard: JSON.stringify(store.taskBoard),
     linkGroups: JSON.stringify(store.linkGroups),
     trashItems: JSON.stringify(store.trashItems),
-    knowledgeMaps: JSON.stringify(store.knowledgeMaps),
     knowledgeCards: JSON.stringify(store.knowledgeCards),
   };
 }
@@ -1003,7 +1010,6 @@ function liveArr(table: string): any[] {
     case 'important': return store.important;
     case 'taskBoard': return store.taskBoard;
     case 'linkGroups': return store.linkGroups;
-    case 'knowledgeMaps': return store.knowledgeMaps;
     case 'knowledgeCards': return store.knowledgeCards;
     default: return [];
   }
@@ -1051,7 +1057,7 @@ export async function initStore(): Promise<number> {
   // 权限被阻塞时不动内存 store：既不能把磁盘数据误判为空，更不能把空数组写回覆盖磁盘
   if (await storageAccessBlocked()) return INIT_STORAGE_BLOCKED;
 
-  const { data: backend, oldFormat, hasPreviousState, archive } = await readBackend();
+  const { data: backend, oldFormat, hasPreviousState, archive, hasLegacyMapsFile, legacyMaps = [] } = await readBackend();
   // Avoid creating a legacy database on first launch. If the check fails, still
   // try the migration and don't report the store as fresh.
   const hadLegacy = await legacyDatabaseExists().catch(() => true);
@@ -1079,8 +1085,22 @@ export async function initStore(): Promise<number> {
     }
   }
 
+  const dir = getStoragePath();
+  const storedCards = oldFormat ? await readCategory<KnowledgeCardLibrary>(dir, CATEGORY_FILES.knowledgeCards) : null;
+  const storedLibrary = storedCards?.find(library => library.id === 1) ?? storedCards?.[0];
+  // A restart can occur after a full write but before removal of the old bundle.
+  if (storedLibrary?.legacyMapsMigrated) store.knowledgeCards = storedCards!;
+  const currentLibrary = store.knowledgeCards.find(library => library.id === 1) ?? store.knowledgeCards[0];
+  const storedMaps = !currentLibrary?.legacyMapsMigrated && (hasLegacyMapsFile || oldFormat)
+    ? await readCategory<LegacyKnowledgeMap>(dir, LEGACY_KNOWLEDGE_MAPS_FILE)
+    : null;
+  const libraries = currentLibrary?.legacyMapsMigrated ? store.knowledgeCards : [...(storedCards ?? []), ...store.knowledgeCards];
+  const migratedCards = migrateLegacyKnowledgeCards([...(storedMaps ?? []), ...legacyMaps], libraries);
+
   if (legacyHasData || oldFormat || healed || boundCourses) {
+    if (migratedCards) store.knowledgeCards = migratedCards;
     const ok = await persist();
+    if (!ok && migratedCards) throw new Error('无法保存迁移的知识卡片');
     if (ok) {
       if (oldFormat) {
         await deleteFile(getStoragePath(), oldSingleRel());
@@ -1092,6 +1112,13 @@ export async function initStore(): Promise<number> {
           console.warn('旧数据库清理失败（不影响使用）:', e);
         }
       }
+    }
+  } else if (migratedCards) {
+    // Save the records and the completion flag together before exposing the collector.
+    const previous = store.knowledgeCards;
+    if (!await mutate(() => { store.knowledgeCards = migratedCards; })) {
+      store.knowledgeCards = previous;
+      throw new Error('无法保存迁移的知识卡片');
     }
   }
 

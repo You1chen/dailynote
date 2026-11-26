@@ -11,7 +11,6 @@ export interface CategoryTableMeta {
 
 export const CATEGORY_TABLES = [
   { table: 'knowledgeCards', file: 'knowledge-cards.json', numericId: true, writeOrder: 4 },
-  { table: 'knowledgeMaps', file: 'knowledge-maps.json', numericId: true, writeOrder: 5 },
   { table: 'longTermGoals', file: 'goals.json', numericId: true, writeOrder: 6 },
   { table: 'fixedRoutines', file: 'routines.json', numericId: true, writeOrder: 7 },
   { table: 'taskTemplates', file: 'templates.json', numericId: true, writeOrder: 8 },
@@ -39,13 +38,13 @@ export const DEFAULT_WRITE_ORDER: AnyStoreTable[] = [
 export const NUMERIC_TABLES: NumericTable[] = [
   'dailyPlans', 'longTermGoals', 'reflections', 'harvests', 'fixedRoutines',
   'taskTemplates', 'trashItems', 'courses', 'semester', 'ddls', 'important',
-  'taskBoard', 'linkGroups', 'knowledgeMaps', 'knowledgeCards',
+  'taskBoard', 'linkGroups', 'knowledgeCards',
 ];
 
 export const EMPTY_STORE: StoreShape = {
   dailyPlans: [], longTermGoals: [], reflections: [], harvests: [], fixedRoutines: [],
   taskItems: [], taskTemplates: [], trashItems: [], courses: [], semester: [],
-  ddls: [], important: [], taskBoard: [], linkGroups: [], knowledgeMaps: [], knowledgeCards: [],
+  ddls: [], important: [], taskBoard: [], linkGroups: [], knowledgeCards: [],
 };
 
 export function emptyStore(): StoreShape {

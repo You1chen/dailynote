@@ -14,28 +14,31 @@ export default function ReflectionPage() {
   const back = useRouteBack();
   const quickComposer = location.state?.fromHomeQuickNote === true;
   const [date, setDate] = useState(params.get('date') || todayStr());
-  const [collectorMode, setCollectorMode] = useState<'browse' | 'new' | null>(params.get('cards') === 'new' ? 'new' : null);
+  const [browseCards, setBrowseCards] = useState(false);
+  const startWithNewCard = params.get('cards') === 'new';
+  const initialCardId = startWithNewCard ? undefined : params.get('card') || undefined;
+  const collectorOpen = browseCards || startWithNewCard || !!initialCardId;
   useEffect(() => {
     const next = params.get('date');
     if (next) setDate(next);
-    if (params.get('cards') === 'new') setCollectorMode('new');
   }, [params]);
 
   function closeCollector() {
     if (quickComposer) { back(); return; }
-    setCollectorMode(null);
-    if (params.get('cards') === 'new') {
+    setBrowseCards(false);
+    if (startWithNewCard || initialCardId) {
       const next = new URLSearchParams(params);
-      next.delete('cards');
+      if (startWithNewCard) next.delete('cards');
+      next.delete('card');
       setParams(next, { replace: true });
     }
   }
 
   useRegisterBackHandler(() => {
-    if (collectorMode) return false;
+    if (collectorOpen) return false;
     back();
     return true;
-  }, [back, collectorMode]);
+  }, [back, collectorOpen]);
 
   return (
     <div className="app-container">
@@ -46,12 +49,18 @@ export default function ReflectionPage() {
       </header>
       <DayNavigator date={date} onDateChange={setDate} />
       <div className="reflection-actions">
-        <button className="btn btn-outline" onClick={() => setCollectorMode('browse')}>
+        <button className="btn btn-outline" onClick={() => setBrowseCards(true)}>
           <Layers size={18} aria-hidden="true" />卡片收集器
         </button>
       </div>
       </>}
-      {collectorMode && <KnowledgeCardCollector key={collectorMode} startWithNewCard={collectorMode === 'new'} quickComposer={quickComposer} onClose={closeCollector} />}
+      {collectorOpen && <KnowledgeCardCollector
+        key={initialCardId ? `card:${initialCardId}` : startWithNewCard ? 'new' : 'browse'}
+        initialCardId={initialCardId}
+        startWithNewCard={startWithNewCard}
+        quickComposer={quickComposer}
+        onClose={closeCollector}
+      />}
     </div>
   );
 }

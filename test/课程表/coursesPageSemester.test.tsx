@@ -27,7 +27,6 @@ vi.mock('../../src/db', () => ({
 vi.mock('../../src/hooks/usePreferences', () => ({ usePreferences: () => ({ prefs: { hourHeight: 60 } }) }));
 vi.mock('../../src/contexts/BackButtonContext', () => ({ useRegisterBackHandler: (callback: () => boolean | void) => { state.back = callback; } }));
 vi.mock('../../src/components/ConfirmDialog', () => ({ default: () => null }));
-vi.mock('../../src/components/KnowledgeMapPanel', () => ({ default: () => null }));
 vi.mock('../../src/components/CourseEditModal', () => ({
   default: () => null,
   DAY_LABELS: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
@@ -37,7 +36,6 @@ vi.mock('../../src/components/CourseEditModal', () => ({
 import CoursesPage from '../../src/pages/CoursesPage';
 import CourseEditModal from '../../src/components/CourseEditModal';
 import ConfirmDialog from '../../src/components/ConfirmDialog';
-import KnowledgeMapPanel from '../../src/components/KnowledgeMapPanel';
 
 const current: Course = {
   id: 1, name: '当前课程', teacher: '', location: '', dayOfWeek: [1],
@@ -135,13 +133,10 @@ describe('CoursesPage — 课表和本地弹窗', () => {
     expect(editor()?.props.initialSlot).toEqual({ dayOfWeek: [5], startTime: '08:10', endTime: '09:00' });
   });
 
-  it('opens edit, offers map and delete and handles local back before returning to plan', async () => {
+  it('opens course edit and handles local delete confirmation before returning to plan', async () => {
     find(render(), element => element.props.className === 'ct-course-block')!.props.onClick();
     expect(editor()?.props.course).toBe(current);
-    editor()?.props.onKnowledgeMap();
-    const map = find(render(), element => element.type === KnowledgeMapPanel)!;
-    expect(map.props.course).toBe(current);
-    map.props.onClose();
+    expect(editor()?.props).not.toHaveProperty('onKnowledgeMap');
     editor()?.props.onDelete();
     expect(find(render(), element => element.type === ConfirmDialog && element.props.open)).toBeDefined();
     state.back();

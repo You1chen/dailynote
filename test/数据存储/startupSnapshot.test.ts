@@ -21,7 +21,8 @@ const memStore: Record<string, string> = {};
 
 import { _resetForTest, initStore, flush, getStore } from '../../src/services/store';
 import * as db from '../../src/db';
-import { readSnapshot, clearSnapshot, sameNames, filesCover } from '../../src/services/snapshot';
+import { readSnapshot, clearSnapshot, sameNames, filesCover, writeSnapshot } from '../../src/services/snapshot';
+import { getCards } from '../../src/db/knowledgeCards';
 
 /** 直接往 KV 里写一条（模拟外部改动） */
 async function kvPut(key: string, value: string): Promise<void> {
@@ -92,6 +93,19 @@ describe('启动快照', () => {
     }));
     await initStore();
     expect((getStore().dailyPlans[0] as any).injected).toBeUndefined();
+  });
+
+  it('复用旧快照时仍从文件迁移地图内嵌笔记', async () => {
+    await kvPut('days/2026-03-01/plan.json', JSON.stringify({ date: '2026-03-01', timeBlocks: [], injected: true }));
+    await kvPut('knowledge-maps.json', JSON.stringify([{ id: 1, courseId: 1, nodes: [{ id: 'topic', title: '磁盘上的笔记', note: { blocks: [{ text: '正文' }] } }] }]));
+    const snapshotData = { ...getStore(), version: 1 as const, savedAt: 0, dailyPlans: [{ date: '2026-03-01', timeBlocks: [], createdAt: 1, updatedAt: 1 }] };
+    await writeSnapshot({ root: 'Documents/Ji', dates: ['2026-03-01'], files: ['knowledge-maps.json'], savedAt: 0, data: snapshotData });
+
+    await initStore();
+    expect(getStore().dailyPlans[0]).not.toHaveProperty('injected');
+    expect((await getCards())[0]).toMatchObject({ id: 'legacy:1:topic:note', title: '磁盘上的笔记', contents: [{ text: '正文' }] });
+    await flush();
+    expect((await readSnapshot('Documents/Ji'))?.data).not.toHaveProperty('knowledgeMaps');
   });
 
   it('filesCover 允许快照多列尚未创建的分类文件', () => {

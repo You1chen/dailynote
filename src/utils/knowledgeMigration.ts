@@ -1,13 +1,22 @@
-import type { KnowledgeCard, KnowledgeCardContent, KnowledgeCardLibrary, KnowledgeCardRecord, KnowledgeMap, KnowledgeNode } from '../types/knowledge';
+import type { KnowledgeCard, KnowledgeCardContent, KnowledgeCardLibrary, KnowledgeCardRecord } from '../types/knowledge';
 
 type LegacyCard = Partial<KnowledgeCard> & { text?: string; images?: string[] };
-type LegacyBlock = Partial<KnowledgeCardContent> & { id?: string; text?: string; checklist?: boolean; checked?: boolean; data?: string };
-type LegacyNode = KnowledgeNode & { cards?: LegacyCard[]; note?: { blocks?: LegacyBlock[]; updatedAt?: number; [key: string]: unknown } };
+type LegacyBlock = Partial<KnowledgeCardContent> & { text?: string; checklist?: boolean; checked?: boolean; data?: string };
+type LegacyNode = {
+  id: string;
+  title: string;
+  status?: KnowledgeCard['status'];
+  cards?: LegacyCard[];
+  note?: { blocks?: LegacyBlock[]; updatedAt?: number };
+};
 
-export interface KnowledgeMigrationInput {
-  knowledgeMaps?: KnowledgeMap[];
-  knowledgeCards?: KnowledgeCardLibrary[];
-}
+export type LegacyKnowledgeMap = {
+  id?: number;
+  courseId: number;
+  nodes?: LegacyNode[];
+  createdAt?: number;
+  updatedAt?: number;
+};
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -15,21 +24,24 @@ function clone<T>(value: T): T {
 
 function contentsFor(card: LegacyCard, id: string, createdAt: number, updatedAt: number): KnowledgeCardContent[] {
   if (Array.isArray(card.contents)) return clone(card.contents);
-  const contents: KnowledgeCardContent[] = (card.images ?? []).map((data, index) => ({
+  const contents: KnowledgeCardContent[] = (Array.isArray(card.images) ? card.images : []).map((data, index) => ({
     id: `${id}:image:${index}`, kind: 'image', data, createdAt, updatedAt,
   }));
   if (typeof card.text === 'string') contents.push({ id: `${id}:text`, kind: 'text', text: card.text, createdAt, updatedAt });
   return contents;
 }
 
-/** Pure, deterministic migration. Legacy source fields remain on the returned copies.
- * Only the database transaction may remove them after arranging durable writes.
- */
-export function normalizeKnowledgeData(input: KnowledgeMigrationInput): { knowledgeMaps: KnowledgeMap[]; knowledgeCards: KnowledgeCardLibrary[] } {
-  const knowledgeMaps = clone(input.knowledgeMaps ?? []);
-  const libraries = clone(input.knowledgeCards ?? []);
+/** Returns a new library only when archived embedded cards or note blocks need conversion. */
+export function migrateLegacyKnowledgeCards(
+  maps: readonly LegacyKnowledgeMap[],
+  libraries: readonly KnowledgeCardLibrary[],
+): KnowledgeCardLibrary[] | undefined {
   const primary = libraries.find(library => library.id === 1) ?? libraries[0];
-  const library: KnowledgeCardLibrary = { ...primary, id: 1, records: [], audioExportPath: primary?.audioExportPath ?? '', updatedAt: primary?.updatedAt ?? 0 };
+  if (!maps.length || primary?.legacyMapsMigrated) return;
+  const library: KnowledgeCardLibrary = {
+    ...primary, id: 1, records: [], audioExportPath: primary?.audioExportPath ?? '',
+    updatedAt: primary?.updatedAt ?? 0, legacyMapsMigrated: true,
+  };
   const records = new Map<string, KnowledgeCardRecord>();
   // Retain every independent record when folding old singleton copies together.
   for (const source of libraries) {
@@ -38,16 +50,18 @@ export function normalizeKnowledgeData(input: KnowledgeMigrationInput): { knowle
       if (!previous || record.updatedAt > previous.updatedAt) records.set(record.id, record);
     }
   }
-  for (const map of knowledgeMaps) {
-    for (const node of map.nodes as LegacyNode[]) {
-      node.cardIds = [...new Set(node.cardIds ?? [])];
+  let foundEmbeddedData = false;
+  for (const map of maps) {
+    for (const node of Array.isArray(map?.nodes) ? map.nodes : []) {
+      if (!node || typeof node.id !== 'string') continue;
       const scope = `legacy:${encodeURIComponent(String(map.id ?? map.courseId))}:${encodeURIComponent(node.id)}`;
       const add = (card: KnowledgeCard) => {
-        // Re-running migration must never overwrite a card edited after migration.
+        foundEmbeddedData = true;
+        // Keep the independent record, which could already have been edited.
         if (!records.has(card.id)) records.set(card.id, { id: card.id, card, createdAt: card.createdAt, updatedAt: card.updatedAt });
-        if (!node.cardIds.includes(card.id)) node.cardIds.push(card.id);
       };
-      for (const [index, old] of (node.cards ?? []).entries()) {
+      for (const [index, old] of (Array.isArray(node.cards) ? node.cards : []).entries()) {
+        if (!old || typeof old !== 'object') continue;
         const id = `${scope}:card:${index}:${encodeURIComponent(old.id ?? '')}`;
         const createdAt = old.createdAt ?? map.createdAt ?? 0;
         const updatedAt = old.updatedAt ?? map.updatedAt ?? createdAt;
@@ -71,6 +85,7 @@ export function normalizeKnowledgeData(input: KnowledgeMigrationInput): { knowle
       }
     }
   }
+  if (!foundEmbeddedData) return;
   library.records = [...records.values()];
-  return { knowledgeMaps, knowledgeCards: [library] };
+  return [library];
 }

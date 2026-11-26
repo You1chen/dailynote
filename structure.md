@@ -2,11 +2,11 @@
 
 | 项目     | 当前实现                                                                        |
 | -------- | ------------------------------------------------------------------------------- |
-| 应用     | 1.3.1，Android `versionCode 7`，包名 `com.ji.note`，独立签名                    |
+| 应用     | 1.3.2，Android `versionCode 8`，包名 `com.ji.note`，独立签名                    |
 | 前端     | React 18、TypeScript、Vite 5、React Router 6 `HashRouter`                     |
 | 平台     | Web/PWA 与 Capacitor 8 Android，共用业务代码                                    |
 | 数据     | 本地优先，无账号服务。Android 默认 `Documents/Ji/`，Web 使用 IndexedDB |
-| 回归基线 | 51 个测试文件、763 个测试通过                                                   |
+| 回归基线 | 49 个测试文件、755 个测试通过                                                   |
 
 ## 开发起步
 
@@ -53,7 +53,7 @@ APK 输出到 `android/app/build/outputs/apk/{debug,release}/记.apk`。发布�
 | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
 | `/`                    | 日计划、时间块编辑、只读课程和警报。支持 `date`、`new`、`block` 查询参数                 |
 | `/goals`               | 长期目标、地图与分层计划编辑，叶节点完成驱动递归进度                                                           |
-| `/reflection`          | 「记事」，含日期选择与卡片收集器。`cards=new` 可打开新卡片                     |
+| `/reflection`          | 「记事」，含日期选择与卡片收集器。`cards=new` 打开新卡片，`card` 打开指定卡片                     |
 | `/wander`              | 「回忆」，随机回看卡片，支持日期筛选与编辑。无卡片时提供新建入口                                         |
 | `/courses`、`/week`  | 课程表与周视图。课程表固定分栏且默认隐去周末，周视图七天同屏。两处省去左侧时间标签，时间仍可在编辑或详情中查看 |
 | `/ddl`、`/important` | 共用截止事项组件。DDL 支持课程与自定义分组关联。两类均支持备注、图片与 Android OCR                             |
@@ -75,12 +75,11 @@ APK 输出到 `android/app/build/outputs/apk/{debug,release}/记.apk`。发布�
 | TODO 层级编辑    | [taskRows.ts](src/utils/taskRows.ts)、[taskRowEditing.ts](src/utils/taskRowEditing.ts)、[taskDragLayout.ts](src/utils/taskDragLayout.ts)。使用稳定节点 ID，清单排序与树层级分离。长按拖动分支，拖动其他行时保留输入框焦点。编辑面板退出时自动保存。输入中第一次点完成结束当前行，再点完成提交。末尾保留新增空行，保存时过滤空行 |
 | 长期目标         | [GoalPlanEditor.tsx](src/components/GoalPlanEditor.tsx)、[GoalMap.tsx](src/components/GoalMap.tsx)、[goalTree.ts](src/utils/goalTree.ts)。`nodes` 是树的权威数据，只有旧记录缺该字段时才投影 `tasks`。叶节点完成后父进度按直接子节点等权递归计算                                                                            |
 | 学期与周视图     | [courseSchedule.ts](src/utils/courseSchedule.ts)、[courseTimetable.ts](src/utils/courseTimetable.ts)、[timetableImport.ts](src/utils/timetableImport.ts)。按学期归属、周次和单双周过滤。用户设置的放假与补课仍生效，内置法定节假日表已移除。切换学期保留已有课程归属                                                            |
-| 知识卡片         | [knowledgeCards.ts](src/db/knowledgeCards.ts)、[KnowledgeCardCollector.tsx](src/components/KnowledgeCardCollector.tsx)、[KnowledgeCardEditor.tsx](src/components/KnowledgeCardEditor.tsx)。卡片本体独立于知识树，内容为文字、图片、录音，评论挂在具体内容上。卡片可按日期和关键词筛选，自定义卡片类型保存在卡片库               |
-| 课程知识地图     | [KnowledgeMapPanel.tsx](src/components/KnowledgeMapPanel.tsx)、[knowledgeMap.ts](src/utils/knowledgeMap.ts)。一门课程对应一张地图，末端节点以 `cardIds` 引用卡片。移动或删除知识树节点按引用处理，删除卡片本体会清理引用。旧嵌入笔记和卡片由 [knowledgeMigration.ts](src/utils/knowledgeMigration.ts) 迁移                    |
+| 知识卡片         | [knowledgeCards.ts](src/db/knowledgeCards.ts)、[KnowledgeCardCollector.tsx](src/components/KnowledgeCardCollector.tsx)、[KnowledgeCardEditor.tsx](src/components/KnowledgeCardEditor.tsx)。卡片支持文字、图片、录音及内容评论，可按日期和关键词筛选。自定义卡片类型保存在卡片库，全局搜索可直达卡片编辑器。 |
 
 ## 本地存储与升级兼容
 
-Android 默认根目录为 `Documents/Ji/`，与旧 DailyNote 的 `Documents/DailyNote/` 分开。Web 使用 `dailynote_kv` 的同构相对路径。域类型见 [storage.ts](src/types/storage.ts)，16 张持久化表与分类文件注册见 [storeSchema.ts](src/services/storeSchema.ts)。
+Android 默认根目录为 `Documents/Ji/`，与旧 DailyNote 的 `Documents/DailyNote/` 分开。Web 使用 `dailynote_kv` 的同构相对路径。域类型见 [storage.ts](src/types/storage.ts)，15 张持久化表与分类文件注册见 [storeSchema.ts](src/services/storeSchema.ts)。
 
 ```text
 根目录/
@@ -88,12 +87,13 @@ Android 默认根目录为 `Documents/Ji/`，与旧 DailyNote 的 `Documents/Dai
 ├── goals.json          routines.json     templates.json
 ├── courses.json        semester.json       ddls.json         important.json
 ├── taskboard.json    linkGroups.json
-└── knowledge-maps.json knowledge-cards.json trash.json
+└── knowledge-cards.json trash.json
 ```
 
 - [store.ts](src/services/store.ts) 按前后指纹识别变更，串行写入脏文件。Android 写文本显式指定 UTF-8。写入前使旧快照失效，成功后防抖刷新 `dailynote_snapshot`。应用进入后台时冲刷队列。权限阻塞时不读写业务数据。
 - 快照用日期目录与分类文件名判定可复用性。多文件更新靠写序和启动修复保持一致，文件层没有跨文件事务。
 - `preferences.json` 保存日程、课程时间组合、TODO 操作确认和警报偏好。旧单文件和 Dexie 仍会在启动时迁移。退役表的已有文件留在原处。旧单文件若含退役表，迁移时会保留一份原始归档。与目标或回收站共用文件的私密记录不会出现在公开视图或搜索里。
+- 升级时，原课程知识地图中的内嵌笔记和卡片会迁入卡片库。已独立保存的卡片沿用原记录，地图分类文件留档。见 [knowledgeMigration.ts](src/utils/knowledgeMigration.ts)。
 - 原生权限与系统栏适配由 [MainActivity.java](android/app/src/main/java/com/dailynote/app/MainActivity.java) 和 [DailyNoteStoragePlugin.java](android/app/src/main/java/com/dailynote/app/DailyNoteStoragePlugin.java) 处理。中文离线识别入口见 [MlkitOcrPlugin.java](android/app/src/main/java/com/dailynote/app/MlkitOcrPlugin.java)。
 
 ## 交接与回归

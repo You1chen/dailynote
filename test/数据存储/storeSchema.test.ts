@@ -3,7 +3,7 @@ import { CATEGORY_TABLES, DEFAULT_WRITE_ORDER, NUMERIC_TABLES, emptyStore } from
 import type { AnyStoreTable, StoreShape } from '../../src/types/storage';
 
 const DAY_TABLES: AnyStoreTable[] = ['dailyPlans', 'reflections', 'harvests', 'taskItems'];
-const RETIRED_TABLES = ['backlog', 'ideas', 'gardenKeys', 'activityEvents'];
+const RETIRED_TABLES = ['backlog', 'ideas', 'gardenKeys', 'activityEvents', 'knowledgeMaps'];
 
 describe('持久化表注册定义', () => {
   it('每个非日期分类表恰好有唯一文件，并且有默认写入顺序', () => {
@@ -26,11 +26,12 @@ describe('持久化表注册定义', () => {
     );
   });
 
-  it('退役的遗留、杂念、花园密钥与活动表不再注册', () => {
+  it('退役表不再注册为活动表或分类文件', () => {
     const shape = emptyStore() as Record<string, unknown>;
     for (const table of RETIRED_TABLES) expect(shape).not.toHaveProperty(table);
     expect(CATEGORY_TABLES.map(meta => meta.file)).not.toContain('backlog.json');
     expect(CATEGORY_TABLES.map(meta => meta.file)).not.toContain('ideas.json');
     expect(CATEGORY_TABLES.map(meta => meta.file)).not.toContain('garden-keys.json');
+    expect(CATEGORY_TABLES.map(meta => meta.file)).not.toContain('knowledge-maps.json');
   });
 });

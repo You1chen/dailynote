@@ -35,7 +35,10 @@ vi.mock('react-router-dom', () => ({
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
   NavLink: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }));
-vi.mock('../src/db/knowledgeCards', () => ({ getCards: async () => state.cards }));
+vi.mock('../src/db/knowledgeCards', () => ({
+  getCards: async () => state.cards,
+  getCardAudioExportPath: async () => 'Music/Notes',
+}));
 vi.mock('../src/contexts/BackButtonContext', () => ({ useRegisterBackHandler: vi.fn() }));
 vi.mock('../src/hooks/useRouteBack', () => ({ useRouteBack: () => state.back }));
 vi.mock('../src/components/DayNavigator', () => ({ default: () => null }));
@@ -118,6 +121,45 @@ describe('记事 and 回忆 navigation', () => {
     const editor = renderPage(() => KnowledgeCardCollector(collector.props));
     expect(editor.type).toBe(KnowledgeCardEditor);
     expect(editor.props.card).toMatchObject({ title: '', contents: [] });
+  });
+
+  it('opens the exact encoded card from search and preserves the date when closing', async () => {
+    const id = '卡片 & #+/%2F';
+    const card = { id, title: '目标卡片', contents: [], createdAt: 1, updatedAt: 1 };
+    state.cards = [{ ...card, id: 'another' }, card];
+    state.params = new URLSearchParams(`date=2026-11-20&card=${encodeURIComponent(id)}`);
+    const collector = find(renderPage(ReflectionPage), el => el.type === KnowledgeCardCollector)!;
+    expect(collector.props).toMatchObject({ initialCardId: id, startWithNewCard: false });
+    state.params = new URLSearchParams('date=2026-11-20&card=another');
+    const anotherCollector = find(renderPage(ReflectionPage), el => el.type === KnowledgeCardCollector)!;
+    expect(anotherCollector.key).not.toBe(collector.key);
+
+    state.values = [];
+    const renderCollector = () => renderPage(() => KnowledgeCardCollector(collector.props));
+    renderCollector();
+    state.effects.forEach(effect => effect());
+    await vi.waitFor(() => {
+      const editor = renderCollector();
+      expect(editor.type).toBe(KnowledgeCardEditor);
+      expect(editor.props).toMatchObject({ card, audioExportPath: 'Music/Notes' });
+    });
+    renderCollector().props.onClose();
+    expect(renderCollector().type).not.toBe(KnowledgeCardEditor);
+    collector.props.onClose();
+    expect(state.setParams.mock.lastCall?.[0].toString()).toBe('date=2026-11-20');
+    expect(state.setParams.mock.lastCall?.[1]).toEqual({ replace: true });
+  });
+
+  it('shows a missing card message and keeps the collector available', async () => {
+    const renderCollector = () => renderPage(() => KnowledgeCardCollector({ initialCardId: 'missing', onClose: vi.fn() }));
+    renderCollector();
+    state.effects.forEach(effect => effect());
+    await vi.waitFor(() => {
+      const collector = renderCollector();
+      expect(collector.type).not.toBe(KnowledgeCardEditor);
+      expect(find(collector, el => el.props.role === 'alert')?.props.children).toBe('未找到这张卡片。');
+      expect(find(collector, withLabel('建立第一张卡片'))).toBeDefined();
+    });
   });
 
   it('continues to show saved cards in the recall deck', async () => {

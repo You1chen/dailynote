@@ -143,12 +143,10 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
     ));
   }
 
-  // ---- 卡片（卡片库归属记事页，节点只引用卡片 ID） ----
-  const cardLibrary = data.knowledgeCards?.[0];
+  // ---- 记事卡片 ----
+  const cardLibrary = data.knowledgeCards?.find(library => library.id === 1) ?? data.knowledgeCards?.[0];
   if (cardLibrary) {
     for (const record of cardLibrary.records) {
-      const owner = (data.knowledgeMaps ?? []).find(map => map.nodes.some(node => node.cardIds?.includes(record.id)));
-      const node = owner?.nodes.find(item => item.cardIds?.includes(record.id));
       const textParts = record.card.contents.flatMap(content =>
         content.kind === 'text' ? [content.text] : content.kind === 'audio' ? [content.fileName] : [],
       );
@@ -157,10 +155,8 @@ export function searchStore(data: StoreShape, rawQuery: string, limit = 60): Sea
         `knowledge-card:${record.id}`,
         record.card.title || '未命名卡片',
         [record.card.title, ...textParts],
-        owner && node
-          ? `卡片 · ${owner.courseName} · ${node.title}`
-          : '卡片 · 记事收集器',
-        owner ? `/courses?knowledgeCourse=${owner.courseId}&knowledgeNode=${node?.id ?? ''}` : '/reflection',
+        '卡片 · 记事收集器',
+        `/reflection?card=${encodeURIComponent(record.id)}`,
       ));
     }
   }

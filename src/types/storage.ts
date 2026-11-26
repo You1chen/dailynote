@@ -1,4 +1,4 @@
-import type { KnowledgeMap, KnowledgeCardLibrary } from './knowledge';
+import type { KnowledgeCardLibrary } from './knowledge';
 import type { PreferencesPatch } from './preferences';
 import type {
   DailyPlan, LongTermGoal, Reflection, Harvest, FixedRoutine, TaskItem,
@@ -22,7 +22,6 @@ export interface StoreShape {
   important: ImportantItem[];
   taskBoard: TaskBoard[];
   linkGroups: LinkGroup[];
-  knowledgeMaps: KnowledgeMap[];
   knowledgeCards: KnowledgeCardLibrary[];
 }
 

@@ -48,11 +48,6 @@ function Boot() {
         setPhase('storagePermission');
         return;
       }
-      if (result.count > 0) {
-        // Move legacy embedded cards to the independent collector before rendering.
-        const { initializeKnowledgeCards } = await import('./db/knowledgeCards');
-        await initializeKnowledgeCards();
-      }
       setPhase('ready');
     } catch (error) {
       console.error('读取启动数据失败:', error);

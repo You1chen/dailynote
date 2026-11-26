@@ -36,25 +36,6 @@ export interface KnowledgeCardLibrary {
   audioExportPath: string;
   customTypes?: string[];
   updatedAt: number;
-}
-
-export interface KnowledgeNode {
-  id: string;
-  parentId?: string;
-  title: string;
-  page?: string;
-  depth: number;
-  status: KnowledgeStatus;
-  children: string[];
-  cardIds: string[];
-}
-
-export interface KnowledgeMap {
-  id?: number;
-  courseId: number;
-  courseName: string;
-  sourceMarkdown: string;
-  nodes: KnowledgeNode[];
-  createdAt: number;
-  updatedAt: number;
+  /** Prevents archived embedded cards from reappearing after deletion. */
+  legacyMapsMigrated?: true;
 }
