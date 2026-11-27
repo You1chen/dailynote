@@ -108,6 +108,32 @@ describe('confirmed tags', () => {
   });
 });
 
+describe('inline page references', () => {
+  it('turns [[卡片标题]] into a confirmed reference edge', () => {
+    const cards = [
+      cardWithText('a', '玻尔兹曼', '他是[[德国]]人。'),
+      makeCard('b', { title: '德国' }),
+      makeCard('c', { title: '康德' }),
+    ];
+    const graph = buildCardGraph(cards);
+
+    expect(graph.edges).toHaveLength(1);
+    expect(findEdge(graph, 'a', 'b')).toMatchObject({ kind: 'reference', kinds: ['reference'], weight: 2.5 });
+    expect(findEdge(graph, 'a', 'c')).toBeUndefined();
+  });
+
+  it('merges references with manual links and ignores unresolved titles', () => {
+    const cards = [
+      cardWithText('a', '甲', '[[乙]] 和 [[幽灵]]', { links: ['b'] }),
+      makeCard('b', { title: '乙' }),
+    ];
+    const graph = buildCardGraph(cards);
+
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.edges[0]).toMatchObject({ kind: 'manual', kinds: ['manual', 'reference'] });
+  });
+});
+
 describe('discoveries do not become edges', () => {
   it('does not connect cards just because their text is similar', () => {
     const cards = [

@@ -1,10 +1,12 @@
 import type { KnowledgeCard } from '../../types/knowledge';
+import { resolvedCardReferencePairs } from './cardLinks';
 
 /**
  * Confirmed-relationship graph for the knowledge-card network.
  *
  * Only explicit anchors create edges:
  *  - a card link (`links`) = a block reference;
+ *  - a `[[标题]]` page reference in text = an inline page link;
  *  - a shared keyword = a page reference;
  *  - a shared tag = a page reference.
  *
@@ -14,7 +16,7 @@ import type { KnowledgeCard } from '../../types/knowledge';
  * the writer confirms them. This keeps the written graph clean and reversible.
  */
 
-export type CardEdgeKind = 'manual' | 'keyword' | 'tag';
+export type CardEdgeKind = 'manual' | 'reference' | 'keyword' | 'tag';
 
 export interface CardGraphNode {
   id: string;
@@ -43,11 +45,12 @@ export interface BuildCardGraphOptions {
 }
 
 /** Strongest-first ordering used for `kinds` and edge styling. */
-const KIND_ORDER: readonly CardEdgeKind[] = ['manual', 'keyword', 'tag'];
+const KIND_ORDER: readonly CardEdgeKind[] = ['manual', 'reference', 'keyword', 'tag'];
 
 /** Base line weight of the strongest reason on an edge. */
 const BASE_EDGE_WEIGHT: Record<CardEdgeKind, number> = {
   manual: 3,
+  reference: 2.5,
   keyword: 2,
   tag: 1.5,
 };
@@ -191,7 +194,12 @@ export function buildCardGraph(cards: KnowledgeCard[], options: BuildCardGraphOp
     }
   }
 
-  // 2. Explicit keywords: a shared page name is a confirmed link.
+  // 2. Inline Logseq-style page references: [[卡片标题]] in card text.
+  for (const reference of resolvedCardReferencePairs(nodes.map(node => node.card))) {
+    addReason(reference.source, reference.target, 'reference');
+  }
+
+  // 3. Explicit keywords: a shared page name is a confirmed link.
   const keywordGroups = new Map<string, string[]>();
   for (const node of nodes) {
     for (const keyword of normalizeTerms(node.card.keywords)) {
@@ -204,7 +212,7 @@ export function buildCardGraph(cards: KnowledgeCard[], options: BuildCardGraphOp
     for (const [left, right] of timeOrderedLinks(group, createdAt)) addReason(left, right, 'keyword');
   }
 
-  // 3. Tags are page references too; they are explicit, unlike inferred topics.
+  // 4. Tags are page references too; they are explicit, unlike inferred topics.
   if (options.includeTags !== false) {
     const tagGroups = new Map<string, string[]>();
     for (const node of nodes) {

@@ -1,4 +1,5 @@
 import type { KnowledgeCard } from '../../types/knowledge';
+import { resolvedCardReferencePairs } from './cardLinks';
 import { cardKeywords } from './cardGraph';
 
 /**
@@ -118,6 +119,10 @@ function confirmedPairs(cards: readonly KnowledgeCard[]): Set<string> {
 
   for (const card of cards) {
     for (const linked of card.links ?? []) mark(card.id, linked);
+  }
+
+  for (const reference of resolvedCardReferencePairs(cards)) {
+    mark(reference.source, reference.target);
   }
 
   for (const field of ['keywords', 'tags'] as const) {

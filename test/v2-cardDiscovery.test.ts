@@ -55,6 +55,12 @@ describe('literal discovery', () => {
     expect(buildCardLinkSuggestions(keyworded)).toEqual([]);
   });
 
+  it('does not suggest a pair that is already an inline [[reference]]', () => {
+    const target = makeCard('target', { title: '数据库索引优化' });
+    const source = cardWithText('source', '复盘', '今天读了 [[数据库索引优化]]。');
+    expect(buildCardLinkSuggestions([source, target])).toEqual([]);
+  });
+
   it('honours negative feedback in either direction', () => {
     const target = makeCard('target', { title: '数据库索引优化' });
     const source = cardWithText('source', '复盘', '数据库索引优化');

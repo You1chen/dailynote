@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  Check,
+  ArrowLeft,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
   Image as ImageIcon,
-  Link2,
   Plus,
   Trash2,
   X,
 } from 'lucide-react';
-import Sheet from './Sheet';
-import CardLinkPicker from './CardLinkPicker';
+import { useRegisterBackHandler } from '../../contexts/BackButtonContext';
 import {
   DEFAULT_CARD_TYPES,
   deleteCard,
@@ -17,18 +20,19 @@ import {
   saveCard,
 } from '../../db/knowledgeCards';
 import { fileToCompressedDataURL } from '../../utils/avatarCrop';
-import type { KnowledgeCard, KnowledgeCardContent } from '../../types/knowledge';
+import { exportCardData } from '../../utils/knowledgeCards';
+import { KNOWLEDGE_STATUS_LABEL } from '../../utils/knowledgeMap';
+import type { KnowledgeCard, KnowledgeCardContent, KnowledgeStatus } from '../../types/knowledge';
 import { useData, effectiveCourseIds } from '../state/DataProvider';
 import { useUi } from '../state/ui';
 import {
+  cardSnippet,
   cardTitle,
   imageContent,
   normalizeCard,
-  summarizeContents,
   textContent,
-  typeMeta,
 } from '../utils/cards';
-import { cardDateKey, dateGroupLabel } from '../../utils/knowledgeCards';
+import { normalizeCardRef, replaceCardReferenceTitle } from '../utils/cardLinks';
 
 interface Props {
   open: boolean;
@@ -37,6 +41,18 @@ interface Props {
   onClose: () => void;
   onSaved?: (card: KnowledgeCard) => void;
 }
+
+interface RefPickerState {
+  contentId: string;
+  start: number;
+  end: number;
+  query: string;
+}
+
+const STATUS_OPTIONS: Array<{ value: '' | KnowledgeStatus; label: string }> = [
+  { value: '', label: '无状态' },
+  ...(['todo', 'debt', 'learned'] as KnowledgeStatus[]).map(value => ({ value, label: KNOWLEDGE_STATUS_LABEL[value] })),
+];
 
 function cloneCard(card: KnowledgeCard): KnowledgeCard {
   return {
@@ -50,36 +66,35 @@ function cloneCard(card: KnowledgeCard): KnowledgeCard {
   };
 }
 
-function parseTags(value: string): string[] {
-  return value
-    .split(/[,，、\n]/)
-    .map(tag => tag.trim())
-    .filter(Boolean)
-    .slice(0, 12);
-}
-
+/** Minimal full-screen card editor modelled on the pre-redesign page. */
 export default function CardEditorSheet({ open, card, isNew, onClose, onSaved }: Props) {
   const ui = useUi();
-  const { cards, courses, legacyCardCourses, reloadCards } = useData();
-  const [draft, setDraft] = useState<KnowledgeCard | null>(null);
-  const [tagInput, setTagInput] = useState('');
+  const { cards, legacyCardCourses, reloadCards } = useData();
+  const [draftState, setDraft] = useState<KnowledgeCard | null>(null);
   const [customTypes, setCustomTypes] = useState<string[]>([]);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [refPicker, setRefPicker] = useState<RefPickerState | null>(null);
+  const initial = useRef('');
+  const titleRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open || !card) return;
     const next = cloneCard(card);
     next.courseIds = effectiveCourseIds(card, legacyCardCourses);
-    if (isNew && !next.contents.length) next.contents = [textContent('')];
     setDraft(next);
-    setTagInput('');
+    initial.current = JSON.stringify(next);
+    setCurrentIndex(next.contents.length ? 0 : -1);
+    setBusy(false);
     setError('');
-    setLinkOpen(false);
     setLightbox(null);
+    setMenuOpen(false);
+    setRefPicker(null);
   }, [open, card, isNew, legacyCardCourses]);
 
   useEffect(() => {
@@ -91,45 +106,113 @@ export default function CardEditorSheet({ open, card, isNew, onClose, onSaved }:
     return () => { alive = false; };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [open]);
+
   const types = useMemo(() => {
     const set = new Set<string>([...DEFAULT_CARD_TYPES, ...customTypes]);
     for (const item of cards) if (item.type) set.add(item.type);
-    if (draft?.type) set.add(draft.type);
+    if (draftState?.type) set.add(draftState.type);
     return [...set];
-  }, [cards, customTypes, draft?.type]);
+  }, [cards, customTypes, draftState?.type]);
 
-  const linkedCards = useMemo(() => {
-    if (!draft) return [];
-    return (draft.links ?? [])
-      .map(id => cards.find(item => item.id === id))
-      .filter((item): item is KnowledgeCard => !!item);
-  }, [draft, cards]);
+  const dirty = !!draftState && !!open && JSON.stringify(draftState) !== initial.current;
 
-  if (!draft) return null;
+  function requestClose() {
+    if (busy) return;
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    void ui.confirm({
+      title: '放弃这次修改？',
+      message: '卡片还没有保存。',
+      confirmLabel: '放弃',
+      cancelLabel: '继续编辑',
+      danger: true,
+    }).then(ok => { if (ok) onClose(); });
+  }
+
+  useRegisterBackHandler(() => {
+    if (!open) return false;
+    if (document.querySelector('.v-sheet')) return false;
+    requestClose();
+    return true;
+  }, [open, dirty, busy, onClose], 'overlay');
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (menuOpen) {
+        setMenuOpen(false);
+        return;
+      }
+      if (refPicker) {
+        setRefPicker(null);
+        return;
+      }
+      if (document.querySelector('.v-sheet')) return;
+      event.preventDefault();
+      requestClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, menuOpen, refPicker, dirty, busy, onClose]);
+
+  const refMatches = useMemo(() => {
+    if (!refPicker || !draftState) return [];
+    const query = normalizeCardRef(refPicker.query);
+    return cards
+      .filter(item => item.id !== draftState.id)
+      .filter(item => {
+        if (!query) return true;
+        return [item.title, ...(item.keywords ?? []), ...(item.tags ?? [])]
+          .some(value => normalizeCardRef(value).includes(query));
+      })
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 6);
+  }, [refPicker, cards, draftState]);
+
+  if (!open || !draftState) return null;
+  const draft = draftState;
+
+  const count = draft.contents.length;
+  const safeIndex = count ? Math.min(Math.max(currentIndex, 0), count - 1) : -1;
+  const current: KnowledgeCardContent | undefined = safeIndex >= 0 ? draft.contents[safeIndex] : undefined;
 
   function patch(changes: Partial<KnowledgeCard>) {
-    setDraft(current => current ? { ...current, ...changes } : current);
+    setDraft(currentDraft => currentDraft ? { ...currentDraft, ...changes } : currentDraft);
   }
 
   function patchContent(id: string, text: string) {
-    setDraft(current => current ? {
-      ...current,
-      contents: current.contents.map(content => content.id === id && content.kind === 'text'
+    patch({
+      contents: draft.contents.map(content => content.id === id && content.kind === 'text'
         ? { ...content, text, updatedAt: Date.now() }
         : content),
-    } : current);
+    });
   }
 
-  function removeContent(id: string) {
-    setDraft(current => current ? { ...current, contents: current.contents.filter(content => content.id !== id) } : current);
+  function selectIndex(next: number) {
+    setCurrentIndex(next);
+    setRefPicker(null);
   }
 
   function addText() {
-    setDraft(current => current ? { ...current, contents: [...current.contents, textContent('')] } : current);
+    const block = textContent('');
+    patch({ contents: [...draft.contents, block] });
+    selectIndex(draft.contents.length);
+    window.setTimeout(() => {
+      textareaRef.current?.focus({ preventScroll: true });
+    }, 80);
   }
 
   async function addImages(files: File[]) {
-    if (!files.length || !draft) return;
+    if (!files.length) return;
     const existing = draft.contents.filter(content => content.kind === 'image').length;
     const room = Math.max(0, 9 - existing);
     if (!room) {
@@ -145,7 +228,11 @@ export default function CardEditorSheet({ open, card, isNew, onClose, onSaved }:
         const data = await fileToCompressedDataURL(file, 1600, 0.84);
         if (data) additions.push(imageContent(data));
       }
-      setDraft(current => current ? { ...current, contents: [...current.contents, ...additions] } : current);
+      if (additions.length) {
+        const start = draft.contents.length;
+        patch({ contents: [...draft.contents, ...additions] });
+        selectIndex(start);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '添加图片失败，请重试。');
     } finally {
@@ -153,56 +240,70 @@ export default function CardEditorSheet({ open, card, isNew, onClose, onSaved }:
     }
   }
 
-  function commitTags() {
-    const additions = parseTags(tagInput);
-    if (!additions.length) {
-      setTagInput('');
+  function removeCurrent() {
+    if (!current) return;
+    const contents = draft.contents.filter(content => content.id !== current.id);
+    patch({ contents });
+    selectIndex(Math.min(safeIndex, contents.length - 1));
+  }
+
+  function updateRefPicker(textarea: HTMLTextAreaElement, contentId: string) {
+    const caret = textarea.selectionStart ?? 0;
+    const before = textarea.value.slice(0, caret);
+    const match = /\[\[([^\[\]\n]{0,60})$/.exec(before);
+    if (!match) {
+      setRefPicker(null);
       return;
     }
-    setDraft(current => current
-      ? { ...current, tags: [...new Set([...(current.tags ?? []), ...additions])].slice(0, 12) }
-      : current);
-    setTagInput('');
+    const start = caret - match[0].length;
+    setRefPicker({ contentId, start, end: caret, query: match[1] });
+  }
+
+  function chooseRef(title: string) {
+    if (!refPicker) return;
+    const block = draft.contents.find(content => content.id === refPicker.contentId);
+    if (!block || block.kind !== 'text') return;
+    const insertion = `[[${title}]]`;
+    const next = block.text.slice(0, refPicker.start) + insertion + block.text.slice(refPicker.end);
+    const caret = refPicker.start + insertion.length;
+    patchContent(block.id, next);
+    setRefPicker(null);
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(caret, caret);
+    });
   }
 
   async function save() {
-    if (!draft || busy) return;
-    commitTags();
-    const pendingTags = parseTags(tagInput);
+    if (busy) return;
+    const oldTitle = (card?.title ?? '').trim();
     const contents = draft.contents.filter(content => content.kind !== 'text' || content.text.trim());
     const title = draft.title.trim()
       || contents.find(content => content.kind === 'text')?.text.trim().slice(0, 40)
       || '未命名卡片';
-    const next = normalizeCard({
-      ...draft,
-      title,
-      contents,
-      tags: [...new Set([...(draft.tags ?? []), ...pendingTags])],
-      updatedAt: Date.now(),
-    });
-    // A card the writer linked manually is no longer a rejected suggestion.
-    const linkedIds = new Set(next.links ?? []);
-    next.ignoredLinks = (next.ignoredLinks ?? []).filter(id => !linkedIds.has(id));
+    const next = normalizeCard({ ...draft, title, contents, updatedAt: Date.now() });
     setBusy(true);
     setError('');
     try {
       await saveCard(next);
-      // Keep manual links symmetric so either side can remove the relation.
-      const fresh = await getCards();
-      const nextLinks = new Set(next.links ?? []);
-      for (const other of fresh) {
-        if (other.id === next.id) continue;
-        const has = (other.links ?? []).includes(next.id);
-        const should = nextLinks.has(other.id);
-        const wasIgnored = (other.ignoredLinks ?? []).includes(next.id);
-        if (has === should && (!should || !wasIgnored)) continue;
-        const links = should
-          ? [...new Set([...(other.links ?? []), next.id])]
-          : (other.links ?? []).filter(id => id !== next.id);
-        const ignoredLinks = should
-          ? (other.ignoredLinks ?? []).filter(id => id !== next.id)
-          : other.ignoredLinks;
-        await saveCard({ ...other, links, ignoredLinks });
+      // Renaming a page in Logseq updates its inline references. Keep that
+      // promise here so links never silently rot when a card title changes.
+      if (!isNew && oldTitle && oldTitle !== title) {
+        const fresh = await getCards();
+        for (const other of fresh) {
+          if (other.id === next.id) continue;
+          let changed = false;
+          const nextContents = other.contents.map(content => {
+            if (content.kind !== 'text') return content;
+            const text = replaceCardReferenceTitle(content.text, oldTitle, title);
+            if (text === content.text) return content;
+            changed = true;
+            return { ...content, text, updatedAt: Date.now() };
+          });
+          if (changed) await saveCard({ ...other, contents: nextContents, updatedAt: Date.now() });
+        }
       }
       await reloadCards();
       ui.toast(isNew ? '卡片已创建' : '卡片已保存');
@@ -210,14 +311,23 @@ export default function CardEditorSheet({ open, card, isNew, onClose, onSaved }:
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '保存失败，请重试。');
-    } finally {
       setBusy(false);
     }
   }
 
-  async function remove() {
-    const id = draft?.id;
-    if (!id || busy) return;
+  async function exportCurrent() {
+    setMenuOpen(false);
+    try {
+      const result = await exportCardData(draft);
+      ui.toast(result.native ? `已导出到 ${result.path}` : '卡片已导出');
+    } catch (cause) {
+      ui.toast(cause instanceof Error ? cause.message : '导出失败，请重试');
+    }
+  }
+
+  async function removeCard() {
+    setMenuOpen(false);
+    if (isNew) return;
     const ok = await ui.confirm({
       title: '删除这张卡片？',
       message: '卡片内容、图片以及关系网里的连线会一起删除，无法恢复。',
@@ -227,7 +337,7 @@ export default function CardEditorSheet({ open, card, isNew, onClose, onSaved }:
     if (!ok) return;
     setBusy(true);
     try {
-      await deleteCard(id);
+      await deleteCard(draft.id);
       await reloadCards();
       ui.toast('卡片已删除');
       onClose();
@@ -237,246 +347,189 @@ export default function CardEditorSheet({ open, card, isNew, onClose, onSaved }:
     }
   }
 
-  const textBlocks = draft.contents.filter(content => content.kind === 'text');
-  const imageBlocks = draft.contents.filter(content => content.kind === 'image');
-  const audioBlocks = draft.contents.filter(content => content.kind === 'audio');
-  const meta = typeMeta(draft.type);
+  const contentNode = current ? (
+    current.kind === 'text' ? (
+      <textarea
+        ref={textareaRef}
+        className="v-editor-textarea"
+        value={current.text}
+        onChange={event => {
+          patchContent(current.id, event.target.value);
+          updateRefPicker(event.target, current.id);
+        }}
+        onClick={event => updateRefPicker(event.currentTarget, current.id)}
+        onKeyUp={event => updateRefPicker(event.currentTarget, current.id)}
+        onSelect={event => updateRefPicker(event.currentTarget, current.id)}
+        placeholder="写点什么… 输入 [[ 可以链接另一张卡片"
+        aria-label="卡片正文"
+        spellCheck={false}
+      />
+    ) : current.kind === 'image' ? (
+      <div className="v-editor-image-page">
+        <button type="button" className="v-editor-image-open" onClick={() => setLightbox(current.data)} aria-label="查看图片">
+          <img src={current.data} alt="卡片图片" />
+        </button>
+      </div>
+    ) : (
+      <div className="v-editor-audio-page">
+        <div className="v-tiny">录音 · {Math.max(1, Math.round(current.durationMs / 1000))} 秒</div>
+        <audio controls preload="metadata" src={current.data} />
+      </div>
+    )
+  ) : (
+    <button type="button" className="v-editor-empty" onClick={addText} aria-label="添加文字内容">
+      <Plus size={38} />
+    </button>
+  );
 
-  return (
-    <>
-      <Sheet
-        open={open}
-        onClose={onClose}
-        busy={busy}
-        title={isNew ? '新建卡片' : '编辑卡片'}
-        subtitle={`${dateGroupLabel(cardDateKey(draft.createdAt))} · ${summarizeContents(draft)}`}
-        footer={(
-          <>
-            {!isNew && (
-              <button type="button" className="v-btn v-btn--ghost" onClick={() => void remove()} disabled={busy}>
-                <Trash2 size={15} /> 删除
-              </button>
-            )}
-            <span className="v-grow" />
-            <button type="button" className="v-btn v-btn--ghost" onClick={onClose} disabled={busy}>取消</button>
-            <button type="button" className="v-btn v-btn--primary" onClick={() => void save()} disabled={busy}>
-              {busy ? '保存中…' : '保存'}
-            </button>
-          </>
-        )}
-      >
-        <input
-          className="v-card-editor-title"
-          value={draft.title}
-          onChange={event => patch({ title: event.target.value })}
-          placeholder="卡片标题"
-          maxLength={80}
-          aria-label="卡片标题"
-        />
-        <div className="v-editor-meta">
-          <span>{dateGroupLabel(cardDateKey(draft.createdAt))}</span>
-          <span>·</span>
-          <span style={{ color: meta.color }}>{meta.label}</span>
-          <span>·</span>
-          <span>{draft.contents.length} 条内容</span>
-        </div>
-
-        <div className="v-form-group">
-          <span className="v-label">类型</span>
-          <div className="v-type-chips">
-            {types.map(type => (
-              <button
-                key={type}
-                type="button"
-                className={`v-chip ${draft.type === type || (!draft.type && type === '知识') ? 'v-chip--on' : ''}`}
-                onClick={() => patch({ type })}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="v-form-group">
-          <span className="v-label">标签</span>
-          <div className="v-tag-input">
-            {(draft.tags ?? []).map(tag => (
-              <span key={tag} className="v-chip v-chip--soft">
-                {tag}
-                <button
-                  type="button"
-                  className="v-chip-x"
-                  aria-label={`移除标签 ${tag}`}
-                  onClick={() => patch({ tags: (draft.tags ?? []).filter(item => item !== tag) })}
-                >
-                  <X size={10} />
-                </button>
-              </span>
-            ))}
-            <input
-              value={tagInput}
-              onChange={event => setTagInput(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Enter' || event.key === ',' || event.key === '，') {
-                  event.preventDefault();
-                  commitTags();
-                }
-              }}
-              onBlur={commitTags}
-              placeholder={draft.tags?.length ? '再加一个…' : '如：线代、旅行、灵感'}
-              aria-label="添加标签"
-            />
-          </div>
-          <p className="v-tiny" style={{ margin: '5px 2px 0' }}>共享标签会直接连成确认连线。</p>
-        </div>
-
-        {!!courses.length && (
-          <div className="v-form-group">
-            <span className="v-label">关联课程</span>
-            <div className="v-type-chips">
-              {courses.map(course => {
-                const id = course.id ?? -1;
-                const on = (draft.courseIds ?? []).includes(id);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className={`v-chip ${on ? 'v-chip--course' : ''}`}
-                    onClick={() => patch({
-                      courseIds: on
-                        ? (draft.courseIds ?? []).filter(item => item !== id)
-                        : [...(draft.courseIds ?? []), id],
-                    })}
-                  >
-                    {on && <Check size={12} />}
-                    {course.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="v-form-group">
-          <span className="v-label">内容</span>
-          {textBlocks.map(content => (
-            <div className="v-content-block" key={content.id}>
-              <textarea
-                className="v-textarea"
-                value={content.text}
-                onChange={event => patchContent(content.id, event.target.value)}
-                placeholder="写一点内容…"
-                rows={4}
-              />
-              {textBlocks.length + imageBlocks.length > 1 && (
-                <button type="button" className="v-content-block-remove" aria-label="删除这段文字" onClick={() => removeContent(content.id)}>
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-
-          {!!imageBlocks.length && (
-            <div
-              className={`v-content-images${imageBlocks.length === 1 ? ' v-content-images--single' : ''}`}
-              style={{ padding: 0, marginBottom: 10 }}
+  const page = (
+    <div className="v-card-editor" role="dialog" aria-modal="true" aria-label={isNew ? '新建卡片' : '编辑卡片'}>
+      <header className="v-editor-bar">
+        <button type="button" className="v-editor-icon" aria-label="返回" onClick={requestClose} disabled={busy}>
+          <ArrowLeft size={22} />
+        </button>
+        <h1>卡片</h1>
+        <div className="v-editor-bar-right">
+          <label className="v-editor-type">
+            <select
+              value={draft.type?.trim() || '知识'}
+              onChange={event => patch({ type: event.target.value })}
+              aria-label="卡片类型"
             >
-              {imageBlocks.map(content => content.kind === 'image' ? (
-                <div className="v-content-image" key={content.id}>
-                  <button type="button" className="v-content-image-open" aria-label="查看图片" onClick={() => setLightbox(content.data)}>
-                    <img src={content.data} alt="卡片图片" />
-                  </button>
-                  <button type="button" className="v-content-image-x" aria-label="删除图片" onClick={() => removeContent(content.id)}>
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : null)}
-            </div>
-          )}
-
-          {!textBlocks.length && !!imageBlocks.length && (
-            <p className="v-tiny" style={{ margin: '0 2px 10px' }}>
-              图片已保存；点下面的「文字」就能补一段备注。
-            </p>
-          )}
-
-          {audioBlocks.map(content => content.kind === 'audio' ? (
-            <div className="v-content-block" key={content.id} style={{ padding: 12, marginBottom: 10 }}>
-              <div className="v-tiny" style={{ marginBottom: 6 }}>录音 · {Math.max(1, Math.round(content.durationMs / 1000))} 秒</div>
-              <audio controls preload="metadata" src={content.data} style={{ width: '100%' }} />
-            </div>
-          ) : null)}
-
-          <div className="v-add-bar">
-            <button type="button" className="v-btn" onClick={addText} disabled={busy}>
-              <Plus size={15} /> 文字
-            </button>
-            <button type="button" className="v-btn" onClick={() => fileRef.current?.click()} disabled={busy}>
-              <ImageIcon size={15} /> 图片
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              hidden
-              onChange={event => {
-                void addImages(Array.from(event.currentTarget.files ?? []));
-                event.currentTarget.value = '';
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="v-form-group">
-          <span className="v-label">关联卡片</span>
-          {linkedCards.length ? (
-            <div className="v-type-chips" style={{ marginBottom: 8 }}>
-              {linkedCards.map(linked => (
-                <span key={linked.id} className="v-chip v-chip--soft">
-                  {cardTitle(linked)}
-                  <button
-                    type="button"
-                    className="v-chip-x"
-                    aria-label={`取消关联 ${cardTitle(linked)}`}
-                    onClick={() => patch({ links: (draft.links ?? []).filter(id => id !== linked.id) })}
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="v-tiny" style={{ margin: '0 2px 8px' }}>还没有已确认关联的卡片。</p>
-          )}
-          <button type="button" className="v-btn v-btn--soft v-btn--sm" onClick={() => setLinkOpen(true)}>
-            <Link2 size={14} /> 选择关联卡片
+              {types.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
+            <ChevronDown size={13} aria-hidden="true" />
+          </label>
+          <button type="button" className="v-editor-icon" aria-label="导出或删除" onClick={() => setMenuOpen(value => !value)}>
+            <Download size={19} />
+          </button>
+          <button type="button" className="v-editor-save" onClick={() => void save()} disabled={busy}>
+            {busy ? '保存中' : '保存'}
           </button>
         </div>
+      </header>
 
-        {error && <p role="alert" style={{ margin: '2px 0 10px', color: 'var(--v-red)', fontSize: 12.5 }}>{error}</p>}
-        <p className="v-tiny" style={{ margin: '4px 2px 0', lineHeight: 1.6 }}>
-          相同关键词或标签会直接连成实线；系统在正文里发现的相关卡片，会先进入「关联建议」，确认后才写入关联。
-        </p>
-      </Sheet>
+      <main className="v-editor-main">
+        <div className="v-editor-title-row">
+          <input
+            ref={titleRef}
+            className="v-editor-title"
+            value={draft.title}
+            onChange={event => patch({ title: event.target.value })}
+            placeholder="卡片名称"
+            maxLength={80}
+            aria-label="卡片名称"
+          />
+          <label className="v-editor-status">
+            <select
+              value={draft.status ?? ''}
+              onChange={event => patch({ status: (event.target.value || undefined) as KnowledgeStatus | undefined })}
+              aria-label="卡片状态"
+            >
+              {STATUS_OPTIONS.map(option => <option key={option.value || 'none'} value={option.value}>{option.label}</option>)}
+            </select>
+            <ChevronDown size={14} aria-hidden="true" />
+          </label>
+        </div>
 
-      <CardLinkPicker
-        open={linkOpen}
-        currentId={draft.id}
-        selected={draft.links ?? []}
-        onClose={() => setLinkOpen(false)}
-        onConfirm={ids => {
-          patch({ links: ids });
-          setLinkOpen(false);
-        }}
-      />
+        <div className={`v-editor-content${current ? '' : ' is-empty'}`}>
+          {contentNode}
+        </div>
+
+        {refPicker && (
+          <div className="v-ref-picker" role="listbox" aria-label="链接卡片">
+            <div className="v-ref-picker-head">{refPicker.query ? '链接到卡片' : '选择一张卡片'}</div>
+            {refMatches.length ? refMatches.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                className="v-ref-picker-row"
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => chooseRef(cardTitle(item))}
+              >
+                <span className="v-ref-picker-title">{cardTitle(item)}</span>
+                <span className="v-ref-picker-sub">{cardSnippet(item, 28) || '空白卡片'}</span>
+              </button>
+            )) : (
+              <div className="v-ref-picker-empty">没有匹配的卡片，仍然可以保留为未链接引用</div>
+            )}
+          </div>
+        )}
+
+        {!!error && <p className="v-editor-error" role="alert">{error}</p>}
+        {current?.kind === 'text' && !current.text && !refPicker && (
+          <p className="v-editor-hint">输入 [[ 可以链接另一张卡片</p>
+        )}
+      </main>
+
+      <div className="v-editor-pager">
+        <button
+          type="button"
+          aria-label="上一项"
+          disabled={safeIndex <= 0}
+          onClick={() => selectIndex(safeIndex - 1)}
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <span>{count ? `${safeIndex + 1} / ${count}` : '暂无内容'}</span>
+        <button
+          type="button"
+          aria-label="下一项"
+          disabled={safeIndex < 0 || safeIndex >= count - 1}
+          onClick={() => selectIndex(safeIndex + 1)}
+        >
+          <ChevronRight size={20} />
+        </button>
+        <span className="v-editor-pager-gap" />
+        <button type="button" aria-label="删除当前内容" disabled={!current || busy} onClick={removeCurrent}>
+          <Trash2 size={18} />
+        </button>
+      </div>
+
+      <div className="v-editor-actions">
+        <button type="button" className="v-editor-add-text" onClick={addText} disabled={busy}>
+          <Plus size={19} /> 文字
+        </button>
+        <button type="button" className="v-editor-add-image" onClick={() => fileRef.current?.click()} disabled={busy}>
+          <ImageIcon size={19} /> 图片
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={event => {
+            void addImages(Array.from(event.currentTarget.files ?? []));
+            event.currentTarget.value = '';
+          }}
+        />
+      </div>
+
+      {menuOpen && (
+        <>
+          <button type="button" className="v-editor-menu-backdrop" aria-label="关闭菜单" onClick={() => setMenuOpen(false)} />
+          <div className="v-editor-menu" role="menu">
+            <button type="button" role="menuitem" onClick={() => void exportCurrent()}>
+              <Download size={15} /> 导出卡片
+            </button>
+            {!isNew && (
+              <button type="button" role="menuitem" className="is-danger" onClick={() => void removeCard()}>
+                <Trash2 size={15} /> 删除卡片
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       {lightbox && (
         <div className="v-lightbox" role="dialog" aria-label="查看图片" onClick={() => setLightbox(null)}>
           <button type="button" aria-label="关闭" onClick={() => setLightbox(null)}><X size={20} /></button>
-          <img src={lightbox} alt="卡片图片大图" onClick={event => event.stopPropagation()} />
+          <img src={lightbox} alt="卡片图片" onClick={event => event.stopPropagation()} />
         </div>
       )}
-    </>
+    </div>
   );
+
+  return createPortal(page, document.body);
 }

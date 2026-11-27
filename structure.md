@@ -8,7 +8,7 @@
 | 前端 | React 18、TypeScript、Vite 5、React Router 6 `HashRouter` |
 | 平台 | Web/PWA 与 Capacitor 8 Android，共用业务代码 |
 | 数据 | 本地优先，无账号服务。Android 默认 `Documents/DailyNote/`，Web 使用 IndexedDB |
-| 回归基线 | 70 个测试文件、969 个测试通过 |
+| 回归基线 | 71 个测试文件、979 个测试通过 |
 
 ## 开发起步
 

@@ -299,7 +299,7 @@ export default function CardGraphView({ nodes, edges, suggestions = [], onOpen, 
   return (
     <div className="v-graph-card v-graph-card--logseq" ref={host} aria-label="卡片关系网">
       <div className="v-graph-hint">
-        <span>拖动节点 · 长按打开菜单 · 虚线是待确认建议</span>
+        <span>拖动 · 长按菜单 · 正文 [[标题]] 连成实线</span>
       </div>
       <svg
         ref={svg}

@@ -1,5 +1,6 @@
 import type { KnowledgeCard, KnowledgeCardContent } from '../../types/knowledge';
 import { genId } from '../../types';
+import { stripCardReferences } from './cardLinks';
 
 export interface CardTypeMeta {
   label: string;
@@ -56,7 +57,7 @@ export function cardText(card: Pick<KnowledgeCard, 'contents'>): string {
 }
 
 export function cardSnippet(card: KnowledgeCard, max = 92): string {
-  const text = cardText(card).replace(/\s+/g, ' ').trim();
+  const text = stripCardReferences(cardText(card)).replace(/\s+/g, ' ').trim();
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
